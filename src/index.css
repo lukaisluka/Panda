@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@theme {
+  /* Panda palette: near-black canvas, warm white text, bamboo accent */
+  --color-bg: #0e1013;
+  --color-surface: #15181d;
+  --color-raised: #1c2027;
+  --color-border: #242831;
+  --color-fg: #e8eaf0;
+  --color-muted: #9aa3b2;
+  --color-faint: #5d6474;
+  --color-accent: #86c98f;
+  --color-warn: #e3b341;
+  --color-danger: #e06c6c;
+  --color-diff-add: #17251b;
+  --color-diff-del: #2b1d1c;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------------------------------------------------------------------
+ * Markdown body — agent/user message typography.
+ * react-markdown emits native elements, so styling lives here instead of
+ * wrapping every element in components.
+ * ------------------------------------------------------------------------- */
+.md-body {
+  font-size: 15px;
+  line-height: 1.7;
+}
+.md-body > :first-child { margin-top: 0; }
+.md-body > :last-child { margin-bottom: 0; }
+.md-body p { margin: 0.6em 0; }
+.md-body strong { font-weight: 600; color: var(--color-fg); }
+.md-body em { color: var(--color-muted); }
+.md-body ul { margin: 0.6em 0; padding-left: 1.5em; list-style: disc; }
+.md-body li { margin: 0.25em 0; }
+.md-body li::marker { color: var(--color-faint); }
+.md-body code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--color-raised);
+  border: 1px solid var(--color-border);
+  padding: 0.1em 0.35em;
+  border-radius: 5px;
+}
+.md-body pre {
+  margin: 0.75em 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  overflow-x: auto;
+}
+.md-body pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
