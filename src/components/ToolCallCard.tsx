@@ -27,6 +27,7 @@ import type {
   ToolCallState,
   ToolCallStatus,
 } from '../protocol/types';
+import { markdownComponents } from './CodeBlock';
 import { DiffView } from './DiffView';
 import { MessageImage } from './MessageImage';
 import { PermissionCard } from './PermissionCard';
@@ -102,17 +103,17 @@ export function ToolCallCard({ call, permission, onResolvePermission }: {
   const hasDetails = (call.rawInput && Object.keys(call.rawInput).length > 0) || call.content.length > 0;
 
   return (
-    <div className="my-1.5">
+    <div className="my-3">
       <div className={`rounded-lg border border-border bg-surface transition-colors ${CARD_EDGE[call.status] ?? ''}`}>
         <button
           onClick={() => setOpen((o) => !o)}
           className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-raised/40"
         >
           <Icon size={14} className="shrink-0 text-muted" />
-          <span className="min-w-0 truncate text-[13px] text-fg/90">{call.title}</span>
+          <span className="min-w-0 truncate text-xs text-fg/90">{call.title}</span>
           {stats && (
             <span className="shrink-0 font-mono text-[11px]">
-              <span className="text-accent">+{stats.additions}</span>{' '}
+              <span className="text-add">+{stats.additions}</span>{' '}
               <span className="text-danger">−{stats.deletions}</span>
             </span>
           )}
@@ -138,7 +139,7 @@ export function ToolCallCard({ call, permission, onResolvePermission }: {
               <summary className="cursor-pointer select-none px-3 py-1.5 text-[11px] font-medium text-faint transition-colors group-open:text-muted hover:text-fg">
                 Input
               </summary>
-              <pre className="overflow-x-auto px-3 pb-2.5 font-mono text-[11.5px] leading-relaxed text-muted">
+              <pre className="overflow-x-auto px-3 pb-2.5 font-mono text-[11px] leading-relaxed text-muted">
                 {JSON.stringify(call.rawInput, null, 2)}
               </pre>
             </details>
@@ -150,15 +151,15 @@ export function ToolCallCard({ call, permission, onResolvePermission }: {
             }
             if (item.type === 'content' && item.content.type === 'text') {
               return (
-                <div key={i} className="md-body rounded-lg border border-border/70 bg-surface/60 px-3.5 py-2.5 text-[13px] text-muted">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.content.text}</ReactMarkdown>
+                <div key={i} className="md-body md-body--sm rounded-lg border border-border/70 bg-surface/60 px-3.5 py-2.5 text-muted">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{item.content.text}</ReactMarkdown>
                 </div>
               );
             }
             return null;
           })}
           {call.status === 'in_progress' && call.content.length === 0 && (
-            <div className="flex items-center gap-2 px-1 py-0.5 text-[12px] text-faint">
+            <div className="flex items-center gap-2 px-1 py-0.5 text-xs text-faint">
               <Loader2 size={12} className="animate-spin" /> 等待输出…
             </div>
           )}

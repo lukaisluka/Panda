@@ -11,7 +11,7 @@ export function PlanCard({ entries }: { entries: AcpPlanEntry[] }) {
       </div>
       <ol className="space-y-1.5">
         {entries.map((entry, i) => (
-          <li key={i} className="flex items-start gap-2.5 text-[13px] leading-6">
+          <li key={i} className="flex items-start gap-2.5 text-xs leading-relaxed">
             {entry.status === 'completed' ? (
               <Check size={15} className="mt-1 shrink-0 text-accent" />
             ) : entry.status === 'in_progress' ? (

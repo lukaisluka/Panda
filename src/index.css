@@ -1,19 +1,21 @@
 @import "tailwindcss";
 
 @theme {
-  /* Panda palette: near-black canvas, warm white text, bamboo accent */
-  --color-bg: #0e1013;
-  --color-surface: #15181d;
-  --color-raised: #1c2027;
-  --color-border: #242831;
-  --color-fg: #e8eaf0;
-  --color-muted: #9aa3b2;
-  --color-faint: #5d6474;
-  --color-accent: #86c98f;
-  --color-warn: #e3b341;
-  --color-danger: #e06c6c;
-  --color-diff-add: #17251b;
-  --color-diff-del: #2b1d1c;
+  /* Panda palette: warm paper canvas, ink text, black accent — the panda's
+   * white fur carries the surfaces, its black patches carry emphasis. */
+  --color-bg: #f6f5f1;
+  --color-surface: #ffffff;
+  --color-raised: #edebe6;
+  --color-border: #e3e1da;
+  --color-fg: #1b1b1f;
+  --color-muted: #64646c;
+  --color-faint: #a2a2aa;
+  --color-accent: #1b1b1f;
+  --color-warn: #b45309;
+  --color-danger: #d14343;
+  --color-add: #3f9146;
+  --color-diff-add: #e9f4e9;
+  --color-diff-del: #faeae8;
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
@@ -24,6 +26,7 @@ html, body, #root {
 }
 
 body {
+  color-scheme: light;
   background-color: var(--color-bg);
   color: var(--color-fg);
   font-family: var(--font-sans);
@@ -34,6 +37,12 @@ body {
 :where(button, input, select, textarea, summary, [tabindex]):focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+/* Opt-out for text entry nested inside a focus-styled surface (e.g. the
+ * composer box, whose own border is the focus affordance). Unlayered, like
+ * the rule above — a layered utility could not override it. */
+.focus-outline-none:focus-visible {
+  outline: none;
 }
 
 /* The virtualized stream owns the scrollbar. With classic (space-taking)
@@ -57,17 +66,73 @@ body {
  * wrapping every element in components.
  * ------------------------------------------------------------------------- */
 .md-body {
-  font-size: 15px;
-  line-height: 1.7;
+  /* 13px / 1.55 — terminal-client density (ZCode-style). Secondary surfaces
+   * (tool calls, thoughts) step down to 12px via --sm. */
+  font-size: 13px;
+  line-height: 1.55;
+}
+/* Secondary markdown surfaces (thought bodies, tool results) sit one step
+ * below primary messages in the type scale. This must be its own class:
+ * .md-body is unlayered CSS, which beats Tailwind's layered utilities — a
+ * utility like text-[13px] on the same element would never apply. */
+.md-body--sm {
+  font-size: 12px;
 }
 .md-body > :first-child { margin-top: 0; }
 .md-body > :last-child { margin-bottom: 0; }
-.md-body p { margin: 0.6em 0; }
+.md-body p { margin: 0.5em 0; }
 .md-body strong { font-weight: 600; color: var(--color-fg); }
 .md-body em { color: var(--color-muted); }
-.md-body ul { margin: 0.6em 0; padding-left: 1.5em; list-style: disc; }
-.md-body li { margin: 0.25em 0; }
+.md-body ul { margin: 0.5em 0; padding-left: 1.5em; list-style: disc; }
+.md-body ol { margin: 0.5em 0; padding-left: 1.5em; list-style: decimal; }
+.md-body li { margin: 0.2em 0; }
 .md-body li::marker { color: var(--color-faint); }
+
+.md-body h1, .md-body h2, .md-body h3,
+.md-body h4, .md-body h5, .md-body h6 {
+  margin: 1em 0 0.4em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.md-body h1 { font-size: 1.3em; }
+.md-body h2 { font-size: 1.2em; }
+.md-body h3 { font-size: 1.1em; }
+.md-body h4, .md-body h5, .md-body h6 { font-size: 1em; }
+
+.md-body blockquote {
+  margin: 0.5em 0;
+  padding-left: 0.75em;
+  border-left: 2px solid var(--color-border);
+  color: var(--color-muted);
+}
+
+.md-body a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--color-faint);
+  text-underline-offset: 2px;
+}
+.md-body a:hover { text-decoration-color: var(--color-fg); }
+
+.md-body img { max-width: 100%; border-radius: 8px; }
+
+.md-body hr { margin: 1em 0; border: 0; border-top: 1px solid var(--color-border); }
+
+.md-body table {
+  display: block;
+  max-width: 100%;
+  margin: 0.6em 0;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+.md-body th, .md-body td {
+  border: 1px solid var(--color-border);
+  padding: 0.25em 0.6em;
+  text-align: left;
+}
+.md-body th { background: var(--color-raised); font-weight: 600; }
+
 .md-body code {
   font-family: var(--font-mono);
   font-size: 0.85em;
@@ -76,18 +141,69 @@ body {
   padding: 0.1em 0.35em;
   border-radius: 5px;
 }
-.md-body pre {
-  margin: 0.75em 0;
+/* Fenced blocks render through CodeBlock (header + shiki tokens, below).
+ * This stays as the fallback for bare <pre> edges; direct child only so
+ * CodeBlock's inner <pre> is styled by .md-codeblock instead. */
+.md-body > pre {
+  margin: 0.6em 0;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 10px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
 }
-.md-body pre code {
+.md-body > pre code {
   background: none;
   border: none;
   padding: 0;
-  font-size: 0.85rem;
+  font-size: inherit;
+}
+
+/* CodeBlock: language tag + copy button header over shiki token spans. */
+.md-codeblock {
+  margin: 0.6em 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.md-codeblock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 5px 3px 10px;
+  background: var(--color-raised);
+  border-bottom: 1px solid var(--color-border);
+}
+.md-codeblock-lang {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-faint);
+}
+.md-codeblock-copy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  width: 22px;
+  border-radius: 5px;
+  color: var(--color-faint);
+  transition: color 0.15s, background-color 0.15s;
+}
+.md-codeblock-copy:hover {
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+.md-codeblock pre {
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
   line-height: 1.6;
 }

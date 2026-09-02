@@ -62,19 +62,22 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
         <span className="text-[11px] font-medium uppercase tracking-wider text-faint">
           Sessions
         </span>
-        {live && connected && connection.cwd && (
-          <button
-            onClick={() => {
-              onNewSession(connection.cwd!);
-              onMobileClose();
-            }}
-            className="flex h-5 w-5 items-center justify-center rounded text-faint transition-colors hover:bg-raised hover:text-accent"
-            aria-label="新建会话"
-            title="新建会话（session/new）"
-          >
-            <Plus size={13} />
-          </button>
-        )}
+        <button
+          onClick={() => {
+            onNewSession(connection.cwd!);
+            onMobileClose();
+          }}
+          disabled={!live || !connected || !connection.cwd}
+          className="flex h-5 w-5 items-center justify-center rounded text-faint transition-colors enabled:hover:bg-raised enabled:hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="新建会话"
+          title={
+            live && connected && connection.cwd
+              ? '新建会话（session/new）'
+              : '连接 agent 后可新建会话'
+          }
+        >
+          <Plus size={13} />
+        </button>
       </div>
       <div className="px-3">
         {!live ? (
@@ -85,7 +88,7 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
         ) : (
           <div className="space-y-0.5">
             {ordered.length === 0 && (
-              <div className="px-3 py-2 text-[12px] text-faint">暂无已知会话</div>
+              <div className="px-3 py-2 text-xs text-faint">暂无已知会话</div>
             )}
             {ordered.map((entry) => {
               const isActive = entry.sessionId === activeId;

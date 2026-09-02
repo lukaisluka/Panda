@@ -2,6 +2,7 @@ import { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Block } from '../protocol/types';
+import { markdownComponents } from './CodeBlock';
 import { MessageImage } from './MessageImage';
 
 type AgentMessageBlock = Extract<Block, { kind: 'agent_message' }>;
@@ -35,7 +36,7 @@ export function splitTopLevel(md: string): string[] {
  * everything except the streaming tail on each chunk.
  */
 const Paragraph = memo(function Paragraph({ md }: { md: string }) {
-  return <ReactMarkdown remarkPlugins={[remarkGfm]}>{md}</ReactMarkdown>;
+  return <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{md}</ReactMarkdown>;
 });
 
 /** One text part of a message: its own frozen-paragraph sequence. */

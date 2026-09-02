@@ -9,7 +9,17 @@ import type { HighlighterCore } from 'shiki/core';
 
 export type TokenSpan = { value: string; color?: string };
 
-const THEME = 'vitesse-dark';
+const THEME = 'vitesse-light';
+
+/** Markdown fence tag → shiki language id; unmapped tags render unhighlighted. */
+const LANG_ALIASES: Record<string, string> = {
+  js: 'javascript', mjs: 'javascript', cjs: 'javascript',
+  ts: 'typescript', mts: 'typescript', cts: 'typescript',
+  py: 'python', rb: 'ruby', rs: 'rust', golang: 'go',
+  sh: 'bash', shell: 'bash', zsh: 'bash',
+  yml: 'yaml', md: 'markdown', 'c++': 'cpp', h: 'c',
+  cs: 'csharp', kt: 'kotlin',
+};
 
 /** Per-language async imports; the set we are willing to bundle as chunks. */
 const LANG_IMPORTS: Record<string, () => Promise<unknown>> = {
@@ -78,7 +88,7 @@ function getHighlighter(): Promise<HighlighterCore> {
       import('shiki/engine/javascript'),
     ]);
     return createHighlighterCore({
-      themes: [import('shiki/themes/vitesse-dark.mjs')],
+      themes: [import('shiki/themes/vitesse-light.mjs')],
       langs: [],
       engine: createJavaScriptRegexEngine(),
     });
@@ -88,13 +98,26 @@ function getHighlighter(): Promise<HighlighterCore> {
 
 /**
  * Highlights `code` (whole file) into one TokenSpan[] per line, or null when
- * the extension is unknown, the code is empty, or highlighting fails.
+ * the language is unknown, the code is empty, or highlighting fails.
  */
 export async function highlightLines(path: string, code: string): Promise<TokenSpan[][] | null> {
   const ext = path.split('.').pop()?.toLowerCase() ?? '';
   const lang = LANG_BY_EXT[ext];
-  const importLang = lang ? LANG_IMPORTS[lang] : undefined;
-  if (!lang || !importLang || code === '') return null;
+  return lang ? highlightWithLang(lang, code) : null;
+}
+
+/**
+ * Highlights a markdown fenced code block addressed by its info-string tag
+ * (e.g. `ts` from ```ts). Same cache and lazy language loading as diffs.
+ */
+export async function highlightCode(fenceLang: string, code: string): Promise<TokenSpan[][] | null> {
+  const tag = fenceLang.toLowerCase();
+  return highlightWithLang(LANG_ALIASES[tag] ?? tag, code);
+}
+
+async function highlightWithLang(lang: string, code: string): Promise<TokenSpan[][] | null> {
+  const importLang = LANG_IMPORTS[lang];
+  if (!importLang || code === '') return null;
 
   const cacheKey = `${lang}\u0000${code}`;
   const cached = cache.get(cacheKey);
@@ -117,7 +140,7 @@ export async function highlightLines(path: string, code: string): Promise<TokenS
     cache.set(cacheKey, lines);
     return lines;
   } catch (err) {
-    console.error(`[panda/highlight] failed to highlight ${path} as ${lang}`, err);
+    console.error(`[panda/highlight] failed to highlight as ${lang}`, err);
     return null;
   }
 }

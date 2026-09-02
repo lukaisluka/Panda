@@ -193,6 +193,16 @@ const messageFinal = `测试全绿（3 passed）。这次重构总结：
 - 修复 \`refreshToken\` 对空 token 抛异常的隐藏 bug
 - 后续加过期时间、黑名单等规则，只需要动一个函数
 
+现在的核心实现长这样：
+
+\`\`\`ts
+export function verifySession(token: string, secret: string): boolean {
+  if (!token || token.length < 32) return false;
+  const expected = createHmac('sha256', secret).update(token).digest();
+  return timingSafeEqual(Buffer.from(token), expected);
+}
+\`\`\`
+
 还有想调整的地方随时说。`;
 
 const usageFinal = updateStep(

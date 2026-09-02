@@ -47,12 +47,12 @@ export function DiffView({ diff }: { diff: DiffPart }) {
       <div className="flex items-center justify-between border-b border-border bg-raised/40 px-3.5 py-2">
         <span className="font-mono text-xs text-muted">{diff.path}</span>
         <span className="font-mono text-xs">
-          <span className="text-accent">+{stats.additions}</span>{' '}
+          <span className="text-add">+{stats.additions}</span>{' '}
           <span className="text-danger">−{stats.deletions}</span>
         </span>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse font-mono text-[12.5px] leading-[1.6]">
+        <table className="w-full border-collapse font-mono text-xs leading-[1.6]">
           <tbody>
             {rows.map((row, i) => (
               <tr key={i} className={ROW_BG[row.type]}>
@@ -60,7 +60,7 @@ export function DiffView({ diff }: { diff: DiffPart }) {
                 <td className="w-10 select-none px-2 text-right align-top text-faint/70">{row.newNo ?? ''}</td>
                 <td
                   className={`w-4 select-none text-center align-top ${
-                    row.type === 'add' ? 'text-accent' : row.type === 'del' ? 'text-danger' : 'text-transparent'
+                    row.type === 'add' ? 'text-add' : row.type === 'del' ? 'text-danger' : 'text-transparent'
                   }`}
                 >
                   {row.type === 'add' ? '+' : row.type === 'del' ? '−' : '·'}
@@ -99,11 +99,11 @@ function LineContent({ row, tokens }: { row: DiffRow; tokens: TokenSpan[] | null
           key={i}
           style={seg.color ? { color: seg.color } : undefined}
           className={
-            seg.changed
-              ? row.type === 'add'
-                ? 'rounded-[2px] bg-accent/25'
-                : 'rounded-[2px] bg-danger/30'
-              : undefined
+              seg.changed
+                ? row.type === 'add'
+                  ? 'rounded-[2px] bg-add/25'
+                  : 'rounded-[2px] bg-danger/30'
+                : undefined
           }
         >
           {seg.value}

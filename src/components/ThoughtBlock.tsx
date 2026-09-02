@@ -3,6 +3,7 @@ import { Brain, ChevronDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Block } from '../protocol/types';
+import { markdownComponents } from './CodeBlock';
 import { MessageImage } from './MessageImage';
 
 type ThoughtBlockModel = Extract<Block, { kind: 'thought' }>;
@@ -15,7 +16,7 @@ export function ThoughtBlock({ block }: { block: ThoughtBlockModel }) {
     firstText?.type === 'text' ? (firstText.text.split('\n')[0]?.slice(0, 60) ?? '') : '';
 
   return (
-    <div className="my-2 rounded-lg border border-border/70 bg-surface/60">
+    <div className="my-3 rounded-lg border border-border/70 bg-surface/60">
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-muted transition-colors hover:text-fg"
@@ -28,12 +29,12 @@ export function ThoughtBlock({ block }: { block: ThoughtBlockModel }) {
         />
       </button>
       {open && (
-        <div className="md-body border-t border-border/70 px-3.5 py-2.5 text-[13px] italic text-muted">
+        <div className="md-body md-body--sm border-t border-border/70 px-3.5 py-2.5 italic text-muted">
           {block.parts.map((part, i) =>
             part.type === 'image' ? (
               <MessageImage key={i} image={part} />
             ) : (
-              <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>
+              <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={markdownComponents}>{part.text}</ReactMarkdown>
             ),
           )}
         </div>

@@ -105,7 +105,7 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
                     </button>
                   </div>
                   {item.error && (
-                    <p className="mt-1 text-center text-[10px] leading-3 text-danger">
+                    <p className="mt-1 text-center text-[11px] leading-3 text-danger">
                       {item.error}
                     </p>
                   )}
@@ -149,7 +149,7 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
               onChange={(e) => setValue(e.target.value)}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
-              className="max-h-40 flex-1 resize-none bg-transparent text-[14px] leading-6 outline-none placeholder:text-faint"
+              className="focus-outline-none max-h-40 flex-1 resize-none bg-transparent py-1.5 text-[13px] leading-[1.55] outline-none placeholder:text-faint"
             />
             {stopping ? (
               <button
