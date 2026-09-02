@@ -68,6 +68,33 @@ describe('reducer content parts', () => {
     });
   });
 
+  it('opens a new assistant block after a later user turn when live chunks omit messageId', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: '你好' }] },
+      textChunk(undefined, '你好！'),
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: '你会哪些工具调用？' }] },
+      textChunk(undefined, '我可以调用 ls、read_file 等工具。'),
+    ]);
+
+    expect(doc.turns).toHaveLength(2);
+    expect(doc.turns[0]!.blocks).toEqual([
+      { kind: 'user_message', content: [{ type: 'text', text: '你好' }] },
+      {
+        kind: 'agent_message',
+        messageId: 'msg-2',
+        parts: [{ type: 'text', text: '你好！' }],
+      },
+    ]);
+    expect(doc.turns[1]!.blocks).toEqual([
+      { kind: 'user_message', content: [{ type: 'text', text: '你会哪些工具调用？' }] },
+      {
+        kind: 'agent_message',
+        messageId: 'msg-4',
+        parts: [{ type: 'text', text: '我可以调用 ls、read_file 等工具。' }],
+      },
+    ]);
+  });
+
   it('preserves mixed content in user_message blocks', () => {
     const doc = fold([
       {

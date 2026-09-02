@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import aiosqlite
-from acp.schema import SessionMode, SessionModeState
+from acp.schema import SessionInfoUpdate, SessionMode, SessionModeState, TextContentBlock
 from deepagents import create_deep_agent
 from deepagents.backends import CompositeBackend, LocalShellBackend, StateBackend
 from langchain.agents.middleware import TodoListMiddleware
@@ -20,6 +20,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from deepagents_acp.server import AgentServerACP, AgentSessionContext
 
 from panda_test_agent.models import FAKE_MODEL_ID, build_model_registry
+from panda_test_agent.session_titles import title_from_first_user_text
 
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
@@ -62,6 +63,73 @@ MODES = SessionModeState(
     ],
 )
 
+_SESSION_TITLE_METADATA_KEY = "panda_session_title"
+
+
+class PandaTestAgentServer(AgentServerACP):
+    """Adds durable, deterministic titles to the upstream ACP server.
+
+    `deepagents-acp` owns the agent protocol flow. This narrow subclass only
+    supplies the optional ``session_info_update`` metadata that Panda already
+    understands, without coupling the browser client to this test agent.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._session_titles: dict[str, str] = {}
+
+    def _session_config(self, session_id: str) -> dict[str, Any]:
+        config = super()._session_config(session_id)
+        title = self._session_titles.get(session_id)
+        if title is not None:
+            config["metadata"][_SESSION_TITLE_METADATA_KEY] = title
+        return config
+
+    async def _send_session_title(self, session_id: str, title: str) -> None:
+        await self._conn.session_update(
+            session_id=session_id,
+            update=SessionInfoUpdate(
+                session_update="session_info_update",
+                title=title,
+            ),
+            source="PandaTestAgent",
+        )
+
+    async def prompt(
+        self,
+        prompt: list[Any],
+        session_id: str,
+        **kwargs: Any,
+    ) -> Any:
+        if session_id not in self._session_titles:
+            for block in prompt:
+                if not isinstance(block, TextContentBlock):
+                    continue
+                title = title_from_first_user_text(block.text)
+                if title is None:
+                    continue
+                self._session_titles[session_id] = title
+                if self._load_sessions:
+                    await self._persist_session(session_id)
+                await self._send_session_title(session_id, title)
+                break
+        return await super().prompt(prompt, session_id, **kwargs)
+
+    async def load_session(
+        self,
+        cwd: str,
+        session_id: str,
+        **kwargs: Any,
+    ) -> Any:
+        response = await super().load_session(cwd, session_id, **kwargs)
+        agent = self._checkpointed_agent(session_id)
+        metadata = (await agent.aget_state(self._session_config(session_id))).metadata or {}
+        title = metadata.get(_SESSION_TITLE_METADATA_KEY)
+        if isinstance(title, str):
+            self._session_titles[session_id] = title
+            await self._send_session_title(session_id, title)
+        return response
+
 
 async def _make_checkpointer(state_dir: Path) -> AsyncSqliteSaver:
     """SQLite checkpointer:会话状态跨连接、跨进程重启持久化。
@@ -83,7 +151,7 @@ async def _make_checkpointer(state_dir: Path) -> AsyncSqliteSaver:
     return saver
 
 
-async def create_acp_agent(sandbox_dir: Path, state_dir: Path) -> AgentServerACP:
+async def create_acp_agent(sandbox_dir: Path, state_dir: Path) -> PandaTestAgentServer:
     """构建 ACP agent:模型清单来自注册表,文件/命令都落在 sandbox_dir。"""
     models_list, registry = build_model_registry()
     checkpointer = await _make_checkpointer(state_dir)
@@ -117,7 +185,7 @@ async def create_acp_agent(sandbox_dir: Path, state_dir: Path) -> AgentServerACP
             interrupt_on=interrupt_config,
         )
 
-    return AgentServerACP(
+    return PandaTestAgentServer(
         agent=build_agent,
         modes=MODES,
         models=models_list,

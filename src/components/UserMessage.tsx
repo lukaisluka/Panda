@@ -32,7 +32,7 @@ export function UserMessage({ block }: { block: UserMessageBlock }) {
 
   return (
     <div className="my-6 flex justify-end">
-      <div className="md-body max-w-[70%] rounded-2xl rounded-tr-md border border-border/50 bg-raised/70 px-4 py-3">
+      <div className="md-body max-w-[70%] rounded-2xl rounded-tr-md bg-danger/20 px-4 py-3 text-fg">
         {children}
       </div>
     </div>
