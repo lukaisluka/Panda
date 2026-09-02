@@ -1,4 +1,4 @@
-import { Bot, MessagesSquare, Plus, Trash2 } from 'lucide-react';
+import { Bot, MessagesSquare, Plus, Trash2, X } from 'lucide-react';
 import type {
   AgentCapabilityInfo,
   ConnectionInfo,
@@ -11,7 +11,7 @@ import { ConnectPanel } from './ConnectPanel';
 
 const basename = (cwd: string) => cwd.split('/').filter(Boolean).at(-1) ?? cwd;
 
-export function Sidebar({ mode, connection, capabilities, sessions, busy, onConnect, onSelectProfile, onDisconnect, onNewSession, onLoadSession, onDeleteSession, onReplayDemo }: {
+export function Sidebar({ mode, connection, capabilities, sessions, busy, onConnect, onSelectProfile, onDisconnect, onNewSession, onLoadSession, onDeleteSession, onReplayDemo, mobileOpen, onMobileClose }: {
   mode: SessionMode;
   connection: ConnectionInfo;
   capabilities: AgentCapabilityInfo;
@@ -25,6 +25,8 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
   onLoadSession(sessionId: string, cwd: string): void;
   onDeleteSession(sessionId: string): void;
   onReplayDemo(): void;
+  mobileOpen: boolean;
+  onMobileClose(): void;
 }) {
   const live = mode === 'live';
   const activeId = live ? connection.sessionId : null;
@@ -38,10 +40,22 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
   });
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-surface/40">
+    <aside
+      className={`fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r border-border bg-surface/95 shadow-2xl transition-transform duration-200 ease-out md:static md:z-auto md:shrink-0 md:translate-x-0 md:bg-surface/40 md:shadow-none ${
+        mobileOpen ? 'visible translate-x-0' : 'invisible -translate-x-full md:visible'
+      }`}
+    >
       <div className="flex items-center gap-2.5 px-5 py-5 text-[15px] font-semibold tracking-tight">
         <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-raised text-base">🐼</span>
         Panda
+        <button
+          type="button"
+          className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-raised hover:text-fg md:hidden"
+          aria-label="关闭导航"
+          onClick={onMobileClose}
+        >
+          <X size={16} />
+        </button>
       </div>
 
       <div className="flex items-center justify-between px-5 pb-2">
@@ -50,7 +64,10 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
         </span>
         {live && connected && connection.cwd && (
           <button
-            onClick={() => onNewSession(connection.cwd!)}
+            onClick={() => {
+              onNewSession(connection.cwd!);
+              onMobileClose();
+            }}
             className="flex h-5 w-5 items-center justify-center rounded text-faint transition-colors hover:bg-raised hover:text-accent"
             aria-label="新建会话"
             title="新建会话（session/new）"
@@ -78,7 +95,10 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
                 <div key={entry.sessionId} className="group relative">
                   <button
                     disabled={isActive || !canSwitch}
-                    onClick={() => onLoadSession(entry.sessionId, entry.cwd)}
+                    onClick={() => {
+                      onLoadSession(entry.sessionId, entry.cwd);
+                      onMobileClose();
+                    }}
                     title={
                       isActive
                         ? undefined
@@ -121,7 +141,10 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
           onConnect={onConnect}
           onSelectProfile={onSelectProfile}
           onDisconnect={onDisconnect}
-          onReplayDemo={onReplayDemo}
+          onReplayDemo={() => {
+            onReplayDemo();
+            onMobileClose();
+          }}
         />
         <div className="flex items-center gap-2 border-t border-border px-5 py-3.5 text-xs text-muted">
           <Bot size={14} className="shrink-0 text-accent" />

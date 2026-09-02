@@ -7,6 +7,7 @@ import {
   type ImageAttachment,
 } from '../attachments';
 import type { AcpContentBlock } from '../protocol/types';
+import { ContentColumn } from './ContentColumn';
 
 export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onStop }: {
   onSend: (content: AcpContentBlock[]) => void;
@@ -67,8 +68,7 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
   const classified = classifyAttachments(attachments);
 
   return (
-    <div className="px-6 pb-4">
-      <div className="mx-auto max-w-3xl">
+    <ContentColumn className="pb-4">
         <div
           className={`rounded-2xl border bg-surface px-4 py-3 transition-colors ${
             disabled
@@ -184,7 +184,6 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
             Enter 发送，Shift+Enter 换行 · 可粘贴或选择图片
           </p>
         )}
-      </div>
-    </div>
+    </ContentColumn>
   );
 }

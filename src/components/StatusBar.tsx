@@ -14,7 +14,7 @@ export function StatusBar({ doc, connection, mode }: {
   const pct = usage.size > 0 ? Math.min(100, (usage.used / usage.size) * 100) : 0;
 
   return (
-    <div className="flex items-center justify-between border-t border-border px-6 py-2 text-xs">
+    <div className="flex flex-col gap-1.5 border-t border-border px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between sm:px-6">
       <div className="flex items-center gap-3">
         {mode === 'live' && (
           <span className="flex items-center gap-1.5">
@@ -61,8 +61,8 @@ export function StatusBar({ doc, connection, mode }: {
       </div>
 
       {usage.size > 0 && (
-        <div className="flex items-center gap-3 text-faint">
-          <div className="h-1 w-36 overflow-hidden rounded-full bg-raised">
+        <div className="flex items-center gap-2 self-end whitespace-nowrap text-faint sm:gap-3">
+          <div className="hidden h-1 w-36 overflow-hidden rounded-full bg-raised sm:block">
             <div
               className="h-full rounded-full bg-accent/70 transition-[width] duration-500"
               style={{ width: `${pct}%` }}
