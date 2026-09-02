@@ -123,10 +123,10 @@ function appendUserMessage(doc: SessionDocument, content: AcpContentBlock[]): Se
 }
 
 /**
- * Appends a streaming chunk (text or image) to the last matching block of the
- * current conversation. messageId matches continue that message; a mismatched
- * or new id opens a new one. Without an id the chunk continues the last open
- * block (v1 makes the id optional for exactly this reason).
+ * Appends a streaming chunk (text or image) to the immediately preceding,
+ * matching block in the current turn. A live ACP stream may omit messageId;
+ * in that case only an adjacent block can be the same message. Looking across
+ * turns would attach a later response to an earlier user prompt.
  */
 function appendChunk(
   doc: SessionDocument,
@@ -134,8 +134,11 @@ function appendChunk(
   messageId: string | undefined,
   chunk: AcpContentBlock,
 ): SessionDocument {
-  const lastBlock = lastMessageBlock(doc, blockKind);
-  if (lastBlock && (messageId === undefined || lastBlock.messageId === messageId)) {
+  const lastBlock = currentTurn(doc)?.blocks.at(-1);
+  if (
+    lastBlock?.kind === blockKind &&
+    (messageId === undefined || lastBlock.messageId === messageId)
+  ) {
     const turn = currentTurn(doc)!;
     const blocks: Block[] = turn.blocks.map((b) => {
       if ((b.kind === 'agent_message' || b.kind === 'thought') && b === lastBlock) {
@@ -163,19 +166,6 @@ function appendPart(parts: AcpContentBlock[], chunk: AcpContentBlock): AcpConten
     return [...parts.slice(0, -1), { type: 'text', text: last.text + chunk.text }];
   }
   return [...parts, chunk];
-}
-
-type MessageBlock = Extract<Block, { kind: 'agent_message' } | { kind: 'thought' }>;
-
-function lastMessageBlock(doc: SessionDocument, kind: 'agent_message' | 'thought'): MessageBlock | undefined {
-  for (let i = doc.turns.length - 1; i >= 0; i--) {
-    const blocks = doc.turns[i]!.blocks;
-    for (let j = blocks.length - 1; j >= 0; j--) {
-      const block = blocks[j]!;
-      if (block.kind === kind) return block;
-    }
-  }
-  return undefined;
 }
 
 /** Deterministic fallback id (wire events without messageId) to keep the reducer replayable. */
