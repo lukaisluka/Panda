@@ -56,9 +56,13 @@ uv sync --project test-agent --group real-llm
 ```
 
 编辑 `.env` 中的 `PANDA_TEST_AGENT_REAL_MODELS`。它是 JSON 数组，每项必须包含
-`value`、`name`、`model`、`base_url` 和 `api_key`。启动后，真实模型会和
-`fake:scripted` 一起出现在 ACP 模型配置中。配置有误或缺少 `langchain-openai`
-会直接启动失败，不会静默退回假模型。
+`value`、`name`、`model`、`base_url` 和 `api_key`；可选的请求参数为
+`temperature`、`top_p`、`reasoning_effort`、`streaming` 与 `extra_body`，会原样且
+显式地传给 OpenAI 兼容客户端。设置 `PANDA_TEST_AGENT_DEFAULT_MODEL` 为某项的
+`value`，可让新会话默认使用该真实模型；未设置时仍默认 `fake:scripted`。配置有误、
+默认模型不存在或缺少 `langchain-openai` 时会直接启动失败，不会静默回退假模型。
+
+集成测试会明确屏蔽开发者本机的 `.env` 真实模型配置，以保持离线、免费且可复现。
 
 ## 集成测试
 

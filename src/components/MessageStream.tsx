@@ -23,6 +23,7 @@ import { ThoughtBlock } from './ThoughtBlock';
 import { ToolCallCard } from './ToolCallCard';
 import { UserMessage } from './UserMessage';
 import { ContentColumn } from './ContentColumn';
+import { PermissionCard } from './PermissionCard';
 
 /**
  * Scroll-following policy: stick to the bottom while the user is already
@@ -51,12 +52,21 @@ const STICK_INTERVAL_MS = 40;
 
 const DETACH_DISTANCE_PX = 48;
 
-type FlatItem = {
+type BlockFlatItem = {
   key: string;
+  kind: 'block';
   block: Block;
   streaming: boolean;
   permission: PermissionRequest | null;
 };
+
+type StandalonePermissionItem = {
+  key: string;
+  kind: 'permission';
+  request: PermissionRequest;
+};
+
+export type FlatItem = BlockFlatItem | StandalonePermissionItem;
 
 // Stable identities — changing component types in `components` remounts the
 // scroller and resets the scroll position.
@@ -195,16 +205,25 @@ export function MessageStream({ doc, permission, onResolvePermission }: {
         className="h-full"
         increaseViewportBy={{ top: 600, bottom: 600 }}
         computeItemKey={(_, item) => item.key}
-        itemContent={(_, item) => (
-          <ContentColumn>
-            <BlockView
-              block={item.block}
-              streaming={item.streaming}
-              permission={item.permission}
-              onResolvePermission={onResolvePermission}
-            />
-          </ContentColumn>
-        )}
+        itemContent={(_, item) => {
+          if (item.kind === 'permission') {
+            return (
+              <ContentColumn>
+                <PermissionCard request={item.request} onResolve={onResolvePermission} />
+              </ContentColumn>
+            );
+          }
+          return (
+            <ContentColumn>
+              <BlockView
+                block={item.block}
+                streaming={item.streaming}
+                permission={item.permission}
+                onResolvePermission={onResolvePermission}
+              />
+            </ContentColumn>
+          );
+        }}
         components={components}
       />
 
@@ -221,7 +240,7 @@ export function MessageStream({ doc, permission, onResolvePermission }: {
   );
 }
 
-function flatten(
+export function flatten(
   doc: SessionDocument,
   permission: PermissionRequest | null,
   streamingBlock: Block | null,
@@ -231,15 +250,50 @@ function flatten(
     turn.blocks.forEach((block, i) => {
       items.push({
         key: `${turn.id}-${i}`,
+        kind: 'block',
         block,
         streaming: block === streamingBlock,
-        permission:
-          block.kind === 'tool_call' && permission?.toolCallId === block.call.id
-            ? permission
-            : null,
+        permission: null,
       });
     });
   }
+
+  if (!permission) return items;
+
+  const exactMatch = items.find(
+    (item): item is BlockFlatItem =>
+      item.kind === 'block' &&
+      item.block.kind === 'tool_call' &&
+      item.block.call.id === permission.toolCallId,
+  );
+  if (exactMatch) {
+    exactMatch.permission = permission;
+    return items;
+  }
+
+  // Some ACP bridges emit an interrupt ID for request_permission instead of
+  // the preceding tool_call ID. Attach only when the current turn leaves no
+  // doubt about the operation; otherwise render an independent card below.
+  const currentTurn = doc.turns.at(-1);
+  const pendingCalls = currentTurn?.blocks.filter(
+    (block): block is Extract<Block, { kind: 'tool_call' }> =>
+      block.kind === 'tool_call' && block.call.status === 'pending',
+  ) ?? [];
+  if (pendingCalls.length === 1) {
+    const fallbackMatch = items.find(
+      (item): item is BlockFlatItem => item.kind === 'block' && item.block === pendingCalls[0],
+    );
+    if (fallbackMatch) {
+      fallbackMatch.permission = permission;
+      return items;
+    }
+  }
+
+  items.push({
+    key: `permission-${permission.toolCallId}`,
+    kind: 'permission',
+    request: permission,
+  });
   return items;
 }
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { createWebSocketStream } from '@agentclientprotocol/sdk/experimental/ws-client';
 import { LiveAcpClient } from './acp/LiveAcpClient';
+import { createBrowserWebSocketStream } from './acp/browserWebSocketStream';
 import type { AcpContentBlock, PermissionOptionKind } from './protocol/types';
 import { usePanda, type SessionEntry } from './store';
 import { updateProfileFields, type AgentProfile } from './profiles';
@@ -167,7 +167,7 @@ export function useLiveSession() {
       // endpoint's visible list rather than combining unrelated histories.
       restoreEndpointSessions(trimmedUrl, store.replaceSessions);
       await acpClient.connect(
-        createWebSocketStream(trimmedUrl),
+        createBrowserWebSocketStream(trimmedUrl),
         trimmedCwd,
         resumeSessionId ? { sessionId: resumeSessionId } : undefined,
       );

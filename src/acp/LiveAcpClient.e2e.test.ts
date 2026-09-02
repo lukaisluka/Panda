@@ -143,7 +143,17 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
         '--state-dir',
         stateDir,
       ],
-      { detached: true, stdio: ['ignore', 'pipe', 'pipe'] },
+      {
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        // Developer-local test-agent/.env may opt into a billable real model.
+        // E2E assertions must stay deterministic and never consume that key.
+        env: {
+          ...process.env,
+          PANDA_TEST_AGENT_REAL_MODELS: '',
+          PANDA_TEST_AGENT_DEFAULT_MODEL: 'fake:scripted',
+        },
+      },
     );
     agentProcess.stdout?.on('data', (d) => (serverLog += d));
     agentProcess.stderr?.on('data', (d) => (serverLog += d));
