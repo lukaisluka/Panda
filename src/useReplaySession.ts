@@ -4,7 +4,7 @@ import { ReplayDriver } from './replay/ReplayDriver';
 import { followUpScenario, longScenario, mainScenario } from './replay/fixtures';
 import type { PermissionOptionKind } from './protocol/types';
 
-/** `?demo=long` streams a 120-turn session instead — the virtualization calibration sample. */
+/** `?demo=long` streams an 80-turn session instead — the virtualization calibration sample. */
 const demoScenario = () =>
   typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === 'long'
     ? longScenario()

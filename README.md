@@ -4,6 +4,8 @@
 
 Panda speaks [ACP (Agent Client Protocol)](https://agentclientprotocol.com) — the standard that 40+ coding agents (Claude Code, Gemini CLI, Codex, Cursor, Goose, Copilot…) expose to editors. Panda is an independent, conversation-first client: not an IDE plugin, but a place where talking to an agent is the primary experience.
 
+📖 **使用指南（中文）**：[docs/user-guide.md](docs/user-guide.md) — 快速上手、连接 agent、界面指南、能力矩阵、故障排查与 FAQ。
+
 ## Status: Phase 2 — sessions, recovery, content polish
 
 Panda is a **pure protocol client**: it never spawns or manages agent processes. Connect it to an ACP service you have already started, and the whole message stream is live:
