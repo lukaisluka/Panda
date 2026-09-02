@@ -9,7 +9,7 @@ import type { HighlighterCore } from 'shiki/core';
 
 export type TokenSpan = { value: string; color?: string };
 
-const THEME = 'vitesse-dark';
+const THEME = 'vitesse-light';
 
 /** Per-language async imports; the set we are willing to bundle as chunks. */
 const LANG_IMPORTS: Record<string, () => Promise<unknown>> = {
@@ -78,7 +78,7 @@ function getHighlighter(): Promise<HighlighterCore> {
       import('shiki/engine/javascript'),
     ]);
     return createHighlighterCore({
-      themes: [import('shiki/themes/vitesse-dark.mjs')],
+      themes: [import('shiki/themes/vitesse-light.mjs')],
       langs: [],
       engine: createJavaScriptRegexEngine(),
     });

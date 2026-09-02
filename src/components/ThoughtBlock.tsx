@@ -15,7 +15,7 @@ export function ThoughtBlock({ block }: { block: ThoughtBlockModel }) {
     firstText?.type === 'text' ? (firstText.text.split('\n')[0]?.slice(0, 60) ?? '') : '';
 
   return (
-    <div className="my-2 rounded-lg border border-border/70 bg-surface/60">
+    <div className="my-3 rounded-lg border border-border/70 bg-surface/60">
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-muted transition-colors hover:text-fg"
@@ -28,7 +28,7 @@ export function ThoughtBlock({ block }: { block: ThoughtBlockModel }) {
         />
       </button>
       {open && (
-        <div className="md-body border-t border-border/70 px-3.5 py-2.5 text-[13px] italic text-muted">
+        <div className="md-body md-body--sm border-t border-border/70 px-3.5 py-2.5 italic text-muted">
           {block.parts.map((part, i) =>
             part.type === 'image' ? (
               <MessageImage key={i} image={part} />

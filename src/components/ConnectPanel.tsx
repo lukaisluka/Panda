@@ -98,11 +98,11 @@ export function ConnectPanel({ connection, mode, onConnect, onSelectProfile, onD
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
               <span className="truncate">{connection.agentName}</span>
             </span>
-            <span className="shrink-0 font-mono text-[10px] text-faint">
+            <span className="shrink-0 font-mono text-[11px] text-faint">
               v{connection.protocolVersion}
             </span>
           </div>
-          <div className="mt-1 truncate font-mono text-[10px] text-faint" title={connection.url ?? undefined}>
+          <div className="mt-1 truncate font-mono text-[11px] text-faint" title={connection.url ?? undefined}>
             {connection.url}
           </div>
           <div className="mt-2.5 flex gap-2">
@@ -124,7 +124,7 @@ export function ConnectPanel({ connection, mode, onConnect, onSelectProfile, onD
               <select
                 value={selectedId ?? ''}
                 onChange={(e) => selectProfile(e.target.value)}
-                className={`${inputClass} text-xs`}
+                className={`${inputClass} text-[13px]`}
                 aria-label="Agent 配置"
                 title="选择一条保存的配置；连接成功后地址/目录的改动会写回该配置"
               >
@@ -152,14 +152,14 @@ export function ConnectPanel({ connection, mode, onConnect, onSelectProfile, onD
             onChange={(e) => setUrl(e.target.value)}
             placeholder="ws://host:port/acp"
             spellCheck={false}
-            className={`${inputClass} font-mono text-[11px] ${profiles.length > 0 ? 'mt-2' : ''}`}
+            className={`${inputClass} font-mono text-[13px] ${profiles.length > 0 ? 'mt-2' : ''}`}
           />
           <input
             value={cwd}
             onChange={(e) => setCwd(e.target.value)}
             placeholder="/absolute/path/to/project"
             spellCheck={false}
-            className={`${inputClass} mt-2 font-mono text-[11px]`}
+            className={`${inputClass} mt-2 font-mono text-[13px]`}
           />
           {connection.status === 'error' && connection.error && (
             <p className="mt-2 break-words text-[11px] leading-4 text-danger" title={connection.error}>

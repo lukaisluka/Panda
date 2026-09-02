@@ -15,7 +15,7 @@ export function PermissionCard({ request, onResolve }: {
         <ShieldAlert size={14} />
         Agent 请求批准
       </div>
-      <p className="mt-2 text-[13px] text-fg/90">{request.title}</p>
+      <p className="mt-2 text-xs text-fg/90">{request.title}</p>
       <div className="mt-3 flex flex-wrap gap-2">
         {request.options.map((option) => (
           <button

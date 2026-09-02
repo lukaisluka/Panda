@@ -7,7 +7,7 @@ import { MessageImage } from './MessageImage';
 type UserMessageBlock = Extract<Block, { kind: 'user_message' }>;
 
 /**
- * Left-aligned soft block — full-width layout, no chat bubbles. Consecutive
+ * Right-aligned chat bubble, capped at 70% of the content column. Consecutive
  * text blocks render as one markdown document, images render in place, order
  * preserved.
  */
@@ -30,8 +30,8 @@ export function UserMessage({ block }: { block: UserMessageBlock }) {
   flush();
 
   return (
-    <div className="my-4">
-      <div className="md-body max-w-[85%] rounded-2xl rounded-tl-md border border-border/50 bg-raised/70 px-4 py-3">
+    <div className="my-6 flex justify-end">
+      <div className="md-body max-w-[70%] rounded-2xl rounded-tr-md border border-border/50 bg-raised/70 px-4 py-3">
         {children}
       </div>
     </div>
