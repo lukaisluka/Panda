@@ -4,3 +4,9 @@ dist
 .DS_Store
 .zcode
 scripts/.mock-sessions.json
+test-agent/.env
+test-agent/.venv/
+test-agent/.state/
+test-agent/sandbox/
+test-agent/__pycache__/
+test-agent/panda_test_agent/__pycache__/

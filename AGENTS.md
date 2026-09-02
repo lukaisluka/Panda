@@ -17,3 +17,12 @@ Label strings are identical to role names. See `docs/agents/triage-labels.md`.
 
 Single-context: `CONTEXT.md` and `docs/adr/` at the repo root, created
 lazily by `/domain-modeling`. See `docs/agents/domain.md`.
+
+### Test ACP agent
+
+`test-agent/` is an isolated Python 3.11+ project managed by `uv`. It runs the
+real deepagents/deepagents-acp stack behind Panda's WebSocket transport; only
+the default chat model is deterministic. Keep the pinned ACP dependency trio in
+`test-agent/pyproject.toml` aligned, because deepagents-acp 0.0.11 imports APIs
+removed by newer agent-client-protocol releases. Runtime sandboxes and SQLite
+state belong under ignored `test-agent/sandbox/` and `test-agent/.state/`.

@@ -25,6 +25,7 @@ Panda is a **pure protocol client**: it never installs, spawns, or manages agent
 ```sh
 pnpm install && pnpm dev            # http://localhost:5173 — opens on the scripted demo
 node scripts/mock-acp-server.mjs    # dev-only mock agent → ws://localhost:8765/acp
+uv run --project test-agent python -m panda_test_agent serve  # real deepagents stack → :8766/acp
 ```
 
 In the sidebar's ACP panel, point Panda at the mock endpoint, pick a working directory, and connect. Any service speaking ACP over WebSocket — one JSON-RPC message per text frame, the convention shared by the official TypeScript SDK and mainstream bridges — works the same way. To expose an agent you already run, community bridges such as [acpremote](https://github.com/vcoderun/acpkit), [@flutur/acp-http-bridge](https://github.com/Alemusica/acp-http-bridge) and [acp-bridge](https://github.com/vezaynk/acp-bridge) wrap stdio ACP agents in a WebSocket endpoint.
@@ -39,9 +40,12 @@ ACP is an event stream, but the UI needs a document. A pure reduction layer fold
 
 ```sh
 pnpm typecheck    # tsc --noEmit
-pnpm test         # vitest — reducer, diff utils, LiveAcpClient against a scripted SDK agent
+pnpm test         # vitest — includes the deepagents WebSocket e2e when uv is available
 pnpm build        # typecheck + vite build
 ```
+
+The deterministic test agent, its OpenAI-compatible model switch, and known ACP
+session limitations are documented in [test-agent/README.md](test-agent/README.md).
 
 Domain terminology lives in [CONTEXT.md](CONTEXT.md), significant decisions in [docs/adr/](docs/adr/).
 
