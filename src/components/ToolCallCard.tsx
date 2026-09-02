@@ -27,6 +27,7 @@ import type {
   ToolCallState,
   ToolCallStatus,
 } from '../protocol/types';
+import { markdownComponents } from './CodeBlock';
 import { DiffView } from './DiffView';
 import { MessageImage } from './MessageImage';
 import { PermissionCard } from './PermissionCard';
@@ -151,7 +152,7 @@ export function ToolCallCard({ call, permission, onResolvePermission }: {
             if (item.type === 'content' && item.content.type === 'text') {
               return (
                 <div key={i} className="md-body md-body--sm rounded-lg border border-border/70 bg-surface/60 px-3.5 py-2.5 text-muted">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.content.text}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{item.content.text}</ReactMarkdown>
                 </div>
               );
             }

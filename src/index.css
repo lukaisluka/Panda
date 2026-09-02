@@ -84,8 +84,55 @@ body {
 .md-body strong { font-weight: 600; color: var(--color-fg); }
 .md-body em { color: var(--color-muted); }
 .md-body ul { margin: 0.5em 0; padding-left: 1.5em; list-style: disc; }
+.md-body ol { margin: 0.5em 0; padding-left: 1.5em; list-style: decimal; }
 .md-body li { margin: 0.2em 0; }
 .md-body li::marker { color: var(--color-faint); }
+
+.md-body h1, .md-body h2, .md-body h3,
+.md-body h4, .md-body h5, .md-body h6 {
+  margin: 1em 0 0.4em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.md-body h1 { font-size: 1.3em; }
+.md-body h2 { font-size: 1.2em; }
+.md-body h3 { font-size: 1.1em; }
+.md-body h4, .md-body h5, .md-body h6 { font-size: 1em; }
+
+.md-body blockquote {
+  margin: 0.5em 0;
+  padding-left: 0.75em;
+  border-left: 2px solid var(--color-border);
+  color: var(--color-muted);
+}
+
+.md-body a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--color-faint);
+  text-underline-offset: 2px;
+}
+.md-body a:hover { text-decoration-color: var(--color-fg); }
+
+.md-body img { max-width: 100%; border-radius: 8px; }
+
+.md-body hr { margin: 1em 0; border: 0; border-top: 1px solid var(--color-border); }
+
+.md-body table {
+  display: block;
+  max-width: 100%;
+  margin: 0.6em 0;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+.md-body th, .md-body td {
+  border: 1px solid var(--color-border);
+  padding: 0.25em 0.6em;
+  text-align: left;
+}
+.md-body th { background: var(--color-raised); font-weight: 600; }
+
 .md-body code {
   font-family: var(--font-mono);
   font-size: 0.85em;
@@ -94,18 +141,69 @@ body {
   padding: 0.1em 0.35em;
   border-radius: 5px;
 }
-.md-body pre {
+/* Fenced blocks render through CodeBlock (header + shiki tokens, below).
+ * This stays as the fallback for bare <pre> edges; direct child only so
+ * CodeBlock's inner <pre> is styled by .md-codeblock instead. */
+.md-body > pre {
   margin: 0.6em 0;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 10px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
 }
-.md-body pre code {
+.md-body > pre code {
   background: none;
   border: none;
   padding: 0;
-  font-size: 0.85rem;
+  font-size: inherit;
+}
+
+/* CodeBlock: language tag + copy button header over shiki token spans. */
+.md-codeblock {
+  margin: 0.6em 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.md-codeblock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 5px 3px 10px;
+  background: var(--color-raised);
+  border-bottom: 1px solid var(--color-border);
+}
+.md-codeblock-lang {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-faint);
+}
+.md-codeblock-copy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  width: 22px;
+  border-radius: 5px;
+  color: var(--color-faint);
+  transition: color 0.15s, background-color 0.15s;
+}
+.md-codeblock-copy:hover {
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+.md-codeblock pre {
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
   line-height: 1.6;
 }

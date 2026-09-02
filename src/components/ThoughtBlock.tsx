@@ -3,6 +3,7 @@ import { Brain, ChevronDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Block } from '../protocol/types';
+import { markdownComponents } from './CodeBlock';
 import { MessageImage } from './MessageImage';
 
 type ThoughtBlockModel = Extract<Block, { kind: 'thought' }>;
@@ -33,7 +34,7 @@ export function ThoughtBlock({ block }: { block: ThoughtBlockModel }) {
             part.type === 'image' ? (
               <MessageImage key={i} image={part} />
             ) : (
-              <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>
+              <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={markdownComponents}>{part.text}</ReactMarkdown>
             ),
           )}
         </div>

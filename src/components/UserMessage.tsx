@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Block } from '../protocol/types';
+import { markdownComponents } from './CodeBlock';
 import { MessageImage } from './MessageImage';
 
 type UserMessageBlock = Extract<Block, { kind: 'user_message' }>;
@@ -17,7 +18,7 @@ export function UserMessage({ block }: { block: UserMessageBlock }) {
   const flush = () => {
     if (textBuffer.length === 0) return;
     const md = textBuffer.join('\n\n');
-    children.push(<ReactMarkdown key={`t-${children.length}`} remarkPlugins={[remarkGfm]}>{md}</ReactMarkdown>);
+    children.push(<ReactMarkdown key={`t-${children.length}`} remarkPlugins={[remarkGfm]} components={markdownComponents}>{md}</ReactMarkdown>);
     textBuffer = [];
   };
   for (const c of block.content) {

@@ -331,7 +331,11 @@ function createMockAgent() {
         size: 200000,
         cost: { amount: 0.34, currency: 'USD' },
       });
-      for (const chunk of ['已抽取 `verifySession()`，两处调用点都已委托。', '测试我这边模拟全部通过（mock）。']) {
+      for (const chunk of [
+        '已抽取 `verifySession()`，两处调用点都已委托。\n\n',
+        '现在的核心实现：\n\n```ts\nexport function verifySession(token: string, secret: string): boolean {\n  if (!token || token.length < 32) return false;\n  const expected = createHmac("sha256", secret).update(token).digest();\n  return timingSafeEqual(Buffer.from(token), expected);\n}\n```\n\n',
+        '测试我这边模拟全部通过（mock）。',
+      ]) {
         await update({
           sessionUpdate: 'agent_message_chunk',
           messageId: 'msg-3',
