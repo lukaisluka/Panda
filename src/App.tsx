@@ -78,6 +78,7 @@ export default function App() {
           onSend={send}
           disabled={composerDisabled}
           hint={hint}
+          canAttachImages={!liveActive || capabilities.image}
           canStop={liveActive && connected && doc.status === 'running'}
           onStop={live.cancel}
         />

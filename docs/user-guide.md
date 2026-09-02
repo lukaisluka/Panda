@@ -30,7 +30,7 @@ node scripts/mock-acp-server.mjs          # ws://localhost:8765/acp
 PORT=9000 node scripts/mock-acp-server.mjs   # 自定义端口
 ```
 
-mock agent 声明了全部会话能力（list / load / resume / delete），会话**磁盘持久化**（`scripts/.mock-sessions.json`），进程重启也不丢——是演练断线恢复、会话切换的最好目标。它的第一轮对话包含思考、计划、读文件、权限请求、代码 diff 和图片，之后每轮简短回应。
+mock agent 声明了全部会话能力（list / load / resume / delete）和图片输入能力，会话**磁盘持久化**（`scripts/.mock-sessions.json`），进程重启也不丢——是演练断线恢复、会话切换、图片发送的最好目标。它的第一轮对话包含思考、计划、读文件、权限请求、代码 diff 和图片，之后每轮简短回应。
 
 然后：
 
@@ -73,7 +73,9 @@ Panda 连接后依次执行：`initialize`（协商协议版本、读取能力�
 
 ### 输入框
 
-`Enter` 发送，`Shift+Enter` 换行。一轮对话进行中，发送按钮变成红色**停止**按钮——点击即发 `session/cancel`，agent 停止当前轮次，未答复的权限请求按规范自动以 cancelled 回复。
+`Enter` 发送，`Shift+Enter` 换行。agent 声明 `promptCapabilities.image` 后，可用回形针选择图片，或直接粘贴剪贴板截图；缩略图显示在输入框上方，可单独移除，也可以不写文字只发图片。图片保持原 MIME 类型与原始字节，不转码、不压缩；每张上限 5MB，每条消息最多 4 张，超限项会红字标注且不发送，其余内容照常发送。
+
+一轮对话进行中，发送按钮变成红色**停止**按钮——点击即发 `session/cancel`，agent 停止当前轮次，未答复的权限请求按规范自动以 cancelled 回复。
 
 ### 断线恢复
 
@@ -94,7 +96,7 @@ Panda 的功能跟随 agent 在 `initialize` 时声明的能力走，**未声明
 | 恢复会话（断线重连） | `sessionCapabilities.resume` | 降级为 `session/load` 重放；再不行则新会话 |
 | 删除会话 | `sessionCapabilities.delete` | 删除按钮不出现 |
 | 收图片 | 无需声明（agent 发什么渲染什么） | — |
-| 发图片 | `promptCapabilities.image` | 尚未实现（见 issue #1） |
+| 发图片 | `promptCapabilities.image` | 图片入口保留但禁用，并说明 agent 未声明图片输入能力 |
 | 终端类工具内容 | 客户端须声明 terminal 能力 | **跳过并在控制台告警**——浏览器聊天客户端不执行 agent 机器上的命令，这是 v1 协议的语义 |
 
 浏览器控制台（DevTools）里 `[panda/acp]` 前缀的日志记录了每个门控决策，排查时先看那里。
@@ -139,7 +141,7 @@ Panda 目前只协商 **v1**（`PROTOCOL_VERSION = 1`），不匹配时 fail fas
 切换会话（`session/load`）会把界面重置成目标会话的完整历史重放，你切走前的界面只是被目标会话的历史替换了，数据都在 agent 侧，切回来即可。
 
 **支持发图片吗？**
-暂不支持发送，接收和内联渲染已支持；发送能力在开发中（issue #1），届时会要求 agent 声明 `promptCapabilities.image`。
+支持。agent 声明 `promptCapabilities.image` 后，可粘贴截图或用文件选择器添加任意 `image/*`；每张不超过 5MB、每条消息最多 4 张，也支持纯图片消息。未声明能力时入口可见但禁用。
 
 **支持哪些 agent？**
 任何说 ACP v1 的服务。40+ 主流 coding agent（Claude Code、Gemini CLI、Codex、Cursor、Goose、Copilot……）都可通过 ACP 或 bridge 暴露。

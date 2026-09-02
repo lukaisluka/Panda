@@ -33,7 +33,7 @@ type Records = {
   connected: { agentName: string; protocolVersion: number }[];
   sessionIds: string[];
   disconnected: (string | null)[];
-  capabilities: { loadSession: boolean; list: boolean; resume: boolean; delete: boolean }[];
+  capabilities: { image: boolean; loadSession: boolean; list: boolean; resume: boolean; delete: boolean }[];
   sessions: { sessionId: string; cwd: string; title: string | null; updatedAt: string | null }[][];
   sessionInfos: { sessionId: string; title?: string | null; updatedAt?: string | null }[];
   replays: number[];
@@ -57,7 +57,7 @@ type Harness = Records & {
 type FakeAgentOptions = {
   protocolVersion?: number;
   /** Capability gates advertised at initialize. */
-  capabilities?: { loadSession?: boolean; list?: boolean; resume?: boolean; delete?: boolean };
+  capabilities?: { image?: boolean; loadSession?: boolean; list?: boolean; resume?: boolean; delete?: boolean };
   /** Entries returned by session/list. */
   listSessions?: { sessionId: string; cwd: string; title?: string | null; updatedAt?: string | null }[];
   /** Per-session replay history served by session/load. */
@@ -133,6 +133,7 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
       agentInfo: { name: 'fake-agent', title: 'Fake Agent', version: '0.0.0' },
       agentCapabilities: {
         ...(caps.loadSession ? { loadSession: true } : {}),
+        ...(caps.image ? { promptCapabilities: { image: true } } : {}),
         ...(Object.keys(sessionCaps).length > 0 ? { sessionCapabilities: sessionCaps } : {}),
       },
     }))
@@ -210,6 +211,58 @@ function askPermission(ctx: PromptCtx, h: Harness) {
 }
 
 describe('LiveAcpClient', () => {
+  it('advertises the image prompt capability and sends images before text', async () => {
+    const prompts: PromptRequest['prompt'][] = [];
+    const h = await setup({
+      capabilities: { image: true },
+      onPrompt: async (ctx) => {
+        prompts.push(ctx.params.prompt);
+        return { stopReason: 'end_turn' };
+      },
+    });
+
+    expect(h.capabilities).toEqual([
+      { image: true, loadSession: false, list: false, resume: false, delete: false },
+    ]);
+
+    const content = [
+      { type: 'image' as const, data: 'aGk=', mimeType: 'image/png' },
+      { type: 'text' as const, text: 'describe this' },
+    ];
+    await h.acpClient.send(content);
+
+    expect(prompts).toEqual([content]);
+    expect(h.updates[0]).toEqual({ sessionUpdate: 'user_message', content });
+    h.closeAll();
+  });
+
+  it('allows a pure-image prompt', async () => {
+    const prompts: PromptRequest['prompt'][] = [];
+    const h = await setup({
+      capabilities: { image: true },
+      onPrompt: async (ctx) => {
+        prompts.push(ctx.params.prompt);
+        return { stopReason: 'end_turn' };
+      },
+    });
+
+    const image = { type: 'image' as const, data: 'aGk=', mimeType: 'image/png' };
+    await h.acpClient.send([image]);
+
+    expect(prompts).toEqual([[image]]);
+    h.closeAll();
+  });
+
+  it('reports image prompt capability as disabled when the agent omits it', async () => {
+    const h = await setup();
+    expect(h.capabilities[0]?.image).toBe(false);
+    await expect(
+      h.acpClient.send([{ type: 'image', data: 'aGk=', mimeType: 'image/png' }]),
+    ).rejects.toThrow('agent 未声明 promptCapabilities.image');
+    expect(h.updates).toEqual([]);
+    h.closeAll();
+  });
+
   it('connects (v1 handshake, agent identity, session) and runs a full turn', async () => {
     const onPrompt: PromptHandler = async (ctx) => {
       await notifyUpdate(ctx, {
@@ -238,7 +291,7 @@ describe('LiveAcpClient', () => {
     expect(h.sessionIds).toEqual(['s-1']);
     expect(h.disconnected).toEqual([]);
 
-    await h.acpClient.send('hi');
+    await h.acpClient.send([{ type: 'text', text: 'hi' }]);
 
     // The user's own message is echoed locally, opening the turn.
     expect(h.updates[0]).toEqual({
@@ -280,7 +333,7 @@ describe('LiveAcpClient', () => {
     const h = await setup({ onPrompt });
     harnessRef.h = h;
 
-    const turn = h.acpClient.send('edit it');
+    const turn = h.acpClient.send([{ type: 'text', text: 'edit it' }]);
     await waitFor(() => h.permissions.length > 0 && h.permissions[0] !== null);
 
     expect(h.statuses).toContain('requires_action');
@@ -314,7 +367,7 @@ describe('LiveAcpClient', () => {
     const h = await setup({ onPrompt });
     harnessRef.h = h;
 
-    const turn = h.acpClient.send('edit it');
+    const turn = h.acpClient.send([{ type: 'text', text: 'edit it' }]);
     await waitFor(() => h.permissions.length > 0 && h.permissions[0] !== null);
 
     h.acpClient.resolvePermission('reject_once');
@@ -336,7 +389,7 @@ describe('LiveAcpClient', () => {
     const h = await setup({ onPrompt });
     harnessRef.h = h;
 
-    const turn = h.acpClient.send('edit it');
+    const turn = h.acpClient.send([{ type: 'text', text: 'edit it' }]);
     await waitFor(() => h.permissions.length > 0 && h.permissions[0] !== null);
 
     h.acpClient.cancel();
@@ -362,7 +415,7 @@ describe('LiveAcpClient', () => {
     const onPrompt: PromptHandler = () => new Promise(() => {}); // hangs forever
     const h = await setup({ onPrompt });
 
-    const turn = h.acpClient.send('hi');
+    const turn = h.acpClient.send([{ type: 'text', text: 'hi' }]);
     await waitFor(() => h.statuses.includes('running'));
 
     h.killTransport(); // the "ACP service" dies mid-turn
@@ -388,7 +441,7 @@ describe('LiveAcpClient', () => {
       return { stopReason: 'end_turn' };
     };
     const h = await setup({ onPrompt });
-    await h.acpClient.send('hi');
+    await h.acpClient.send([{ type: 'text', text: 'hi' }]);
 
     expect(h.updates).toEqual([
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }] },
@@ -432,7 +485,7 @@ describe('LiveAcpClient', () => {
       return { stopReason: 'end_turn' };
     };
     const h = await setup({ onPrompt });
-    await h.acpClient.send('go');
+    await h.acpClient.send([{ type: 'text', text: 'go' }]);
 
     expect(h.updates).toContainEqual({
       sessionUpdate: 'user_message',
@@ -488,7 +541,7 @@ describe('LiveAcpClient', () => {
       ],
     });
     expect(h.capabilities).toEqual([
-      { loadSession: true, list: true, resume: true, delete: true },
+      { image: false, loadSession: true, list: true, resume: true, delete: true },
     ]);
     expect(h.sessions).toEqual([
       [
@@ -589,7 +642,7 @@ describe('LiveAcpClient', () => {
       return { stopReason: 'end_turn' };
     };
     const h = await setup({ onPrompt });
-    await h.acpClient.send('go');
+    await h.acpClient.send([{ type: 'text', text: 'go' }]);
     expect(h.sessionInfos).toEqual([{ sessionId: 's-1', title: '重构 token 校验' }]);
     expect(h.updates.some((u) => (u.sessionUpdate as string) === 'session_info_update')).toBe(false);
     h.closeAll();

@@ -93,6 +93,7 @@ function createMockAgent() {
       agentInfo: { name: 'mock-agent', title: 'Mock Agent', version: '0.0.0' },
       agentCapabilities: {
         loadSession: true,
+        promptCapabilities: { image: true },
         sessionCapabilities: { list: {}, resume: {}, delete: {} },
       },
     }))
@@ -164,6 +165,7 @@ function createMockAgent() {
         return ctx.client.notify(methods.client.session.update, { sessionId, update: updateObj });
       };
       const text = ctx.params.prompt.find((block) => block.type === 'text')?.text ?? '';
+      const images = ctx.params.prompt.filter((block) => block.type === 'image');
 
       const finish = (stopReason) => {
         cancelledSessions.delete(sessionId);
@@ -182,9 +184,13 @@ function createMockAgent() {
 
       entry.turns += 1;
       touch(entry);
-      console.log(`[mock] prompt on ${sessionId} (turn ${entry.turns}): ${text.slice(0, 50)}`);
+      console.log(
+        `[mock] prompt on ${sessionId} (turn ${entry.turns}, images=${images.length}): ${text.slice(0, 50)}`,
+      );
       // Replay must include the user's turn (v1: user_message_chunk).
-      record({ sessionUpdate: 'user_message_chunk', content: { type: 'text', text } });
+      for (const content of ctx.params.prompt) {
+        record({ sessionUpdate: 'user_message_chunk', content });
+      }
 
       if (entry.turns > 1) {
         for (const chunk of ['收到：「', text.slice(0, 40), '」。', '这是 mock agent 的简短回应。']) {

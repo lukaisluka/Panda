@@ -31,7 +31,7 @@ export function applyUpdate(
 ): SessionDocument {
   switch (update.sessionUpdate) {
     case 'user_message':
-      return appendBlock(doc, { kind: 'user_message', content: update.content }, true);
+      return appendUserMessage(doc, update.content);
 
     case 'agent_message_chunk':
       return appendChunk(doc, 'agent_message', update.messageId, update.content);
@@ -102,6 +102,24 @@ function appendBlock(doc: SessionDocument, block: Block, newTurn: boolean): Sess
   }
   const turn = currentTurn(doc)!;
   return replaceLastTurn(doc, { ...turn, blocks: [...turn.blocks, block] });
+}
+
+/**
+ * ACP replays a multipart prompt as adjacent `user_message_chunk` events.
+ * Keep those parts in one user block; a chunk arriving after any agent-side
+ * block starts the next turn.
+ */
+function appendUserMessage(doc: SessionDocument, content: AcpContentBlock[]): SessionDocument {
+  const turn = currentTurn(doc);
+  const last = turn?.blocks.at(-1);
+  if (turn && last?.kind === 'user_message') {
+    const blocks: Block[] = [
+      ...turn.blocks.slice(0, -1),
+      { ...last, content: [...last.content, ...content] },
+    ];
+    return replaceLastTurn(doc, { ...turn, blocks });
+  }
+  return appendBlock(doc, { kind: 'user_message', content }, true);
 }
 
 /**
