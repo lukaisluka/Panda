@@ -13,6 +13,7 @@ Panda is a **pure protocol client**: it never installs, spawns, or manages agent
 - **Live conversations** — streaming messages, tool-call cards, plans, usage and cost, rendered as they arrive
 - **Inline permission cards** — Allow / Reject answers the pending `session/request_permission` RPC; a stop button sends `session/cancel` and auto-cancels pending permissions per spec
 - **Sessions & history** — browse past sessions (`session/list`), switch by replaying history (`session/load`), live-updating titles
+- **Saved agent profiles** — name, endpoint and default working directory per browser; connect-time edits write back to the profile
 - **Disconnect recovery** — an unexpected drop keeps the transcript and offers *reconnect & resume* (`session/resume`, `session/load` fallback), all capability-gated with visible fallbacks
 - **Polished diffs** — Shiki syntax highlighting plus word-level changed spans
 - **Images both ways** — paste or pick images for capable agents; render images in user/agent messages, thoughts and tool results
@@ -46,8 +47,7 @@ Domain terminology lives in [CONTEXT.md](CONTEXT.md), significant decisions in [
 
 ## Roadmap
 
-- **Done** — live ACP client, session lifecycle & recovery, image sending, diff polish, virtualized streams, [user guide](docs/user-guide.md)
-- **In progress** — [#2](https://github.com/lukaisluka/Panda/issues/2) saved agent profiles (one active connection)
+- **Done** — live ACP client, session lifecycle & recovery, image sending, diff polish, virtualized streams, saved agent profiles (one active connection, [ADR 0001](docs/adr/0001-single-active-connection.md)), [user guide](docs/user-guide.md)
 - **Later** — desktop shell
 
 Consciously out of scope: *terminal* tool content — in v1 that means the client executes commands on the agent's behalf, which a browser chat client doesn't declare; Panda skips such blocks with a warning.

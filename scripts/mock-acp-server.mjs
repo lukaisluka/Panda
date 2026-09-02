@@ -101,7 +101,10 @@ function createMockAgent() {
       // Random suffix like a real agent's UUIDs — a restart must never
       // recycle ids that clients still remember locally.
       const sessionId = `mock-session-${globalThis.crypto.randomUUID().slice(0, 8)}`;
+      // The value must carry sessionId too — session/list reads it from there,
+      // and the disk-restore path already restores the field onto the entry.
       sessions.set(sessionId, {
+        sessionId,
         cwd: ctx.params.cwd,
         title: null,
         updatedAt: new Date().toISOString(),
