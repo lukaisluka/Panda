@@ -3,7 +3,7 @@ import { createWebSocketStream } from '@agentclientprotocol/sdk/experimental/ws-
 import { LiveAcpClient } from './acp/LiveAcpClient';
 import type { AcpContentBlock, PermissionOptionKind } from './protocol/types';
 import { usePanda, type SessionEntry } from './store';
-import { updateProfileFields } from './profiles';
+import { updateProfileFields, type AgentProfile } from './profiles';
 
 /**
  * Phase 1+2 session driver: wires the live ACP client into the store exactly
@@ -42,14 +42,32 @@ export function lastConnectionDefaults(): { url: string; cwd: string } {
 /** Live-connect options; `profileId` routes the on-success write-back. */
 export type ConnectOptions = { resume?: boolean; profileId?: string | null };
 
-function loadPersistedSessions(url: string): SessionEntry[] {
+export interface SessionStorage {
+  getItem(key: string): string | null;
+}
+
+function loadPersistedSessions(url: string, storage: SessionStorage = localStorage): SessionEntry[] {
   try {
-    const raw = localStorage.getItem(SESSIONS_KEY_PREFIX + url);
+    const raw = storage.getItem(SESSIONS_KEY_PREFIX + url);
     return raw ? (JSON.parse(raw) as SessionEntry[]) : [];
   } catch (err) {
     console.warn('[panda] could not read persisted sessions', err);
     return [];
   }
+}
+
+/**
+ * Restores the remembered sidebar entries for one endpoint. This is a
+ * replacement, never a merge: the visible list belongs to one connection
+ * target at a time, so entries from the previously selected endpoint must not
+ * bleed into it.
+ */
+export function restoreEndpointSessions(
+  url: string,
+  replaceSessions: (entries: SessionEntry[]) => void,
+  storage: SessionStorage = localStorage,
+): void {
+  replaceSessions(loadPersistedSessions(url, storage));
 }
 
 function persistSessions(url: string, sessions: SessionEntry[]): void {
@@ -145,8 +163,9 @@ export function useLiveSession() {
         sessionId: resumeSessionId,
       });
       // Seed the sidebar with sessions remembered for this service; the
-      // server list (if any) merges on top.
-      store.mergeSessions(loadPersistedSessions(trimmedUrl));
+      // server list (if any) merges on top. A new endpoint replaces the old
+      // endpoint's visible list rather than combining unrelated histories.
+      restoreEndpointSessions(trimmedUrl, store.replaceSessions);
       await acpClient.connect(
         createWebSocketStream(trimmedUrl),
         trimmedCwd,
@@ -159,6 +178,35 @@ export function useLiveSession() {
   const disconnect = useCallback(() => {
     acpClient.disconnect();
   }, [acpClient]);
+
+  /**
+   * Previews a saved Agent 配置 while disconnected. In live mode this abandons
+   * a resumable session from the previous endpoint and shows only the new
+   * endpoint's remembered sessions before the user connects.
+   */
+  const selectProfile = useCallback((profile: AgentProfile) => {
+    const url = profile.url.trim();
+    const cwd = profile.cwd.trim();
+    if (!url || !cwd) {
+      console.error(`[panda/profiles] selected profile ${profile.id} has an empty url or cwd`);
+      return;
+    }
+    const store = usePanda.getState();
+    restoreEndpointSessions(url, store.replaceSessions);
+    if (store.mode !== 'live') return;
+
+    store.resetDocument();
+    store.setCapabilities({ image: false, loadSession: false, list: false, resume: false, delete: false });
+    store.setConnection({
+      status: 'disconnected',
+      url,
+      cwd,
+      agentName: null,
+      protocolVersion: null,
+      sessionId: null,
+      error: null,
+    });
+  }, []);
 
   const newSession = useCallback(
     async (cwd: string) => {
@@ -207,6 +255,7 @@ export function useLiveSession() {
   return {
     connect,
     disconnect,
+    selectProfile,
     newSession,
     loadSession,
     deleteSession,

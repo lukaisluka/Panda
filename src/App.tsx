@@ -57,6 +57,7 @@ export default function App() {
         sessions={sessions}
         busy={busy}
         onConnect={live.connect}
+        onSelectProfile={live.selectProfile}
         onDisconnect={live.disconnect}
         onNewSession={live.newSession}
         onLoadSession={live.loadSession}

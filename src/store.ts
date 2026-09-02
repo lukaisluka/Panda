@@ -69,6 +69,8 @@ interface PandaState {
   setCapabilities(caps: AgentCapabilityInfo): void;
   /** Upserts entries by sessionId; locally-known sessions are preserved. */
   mergeSessions(entries: SessionEntry[]): void;
+  /** Replaces the visible list when the selected connection target changes. */
+  replaceSessions(entries: SessionEntry[]): void;
   /** Registers local knowledge of a session; known title/updatedAt survive. */
   upsertSession(entry: SessionUpsert): void;
   /** Applies a live session_info_update; undefined fields are untouched. */
@@ -123,6 +125,7 @@ export const usePanda = create<PandaState>((set) => ({
   resetDocument: () => set({ doc: emptySession(), permission: null }),
   setCapabilities: (caps) => set({ capabilities: caps }),
   mergeSessions: (entries) => set((s) => ({ sessions: upsertEntries(s.sessions, entries) })),
+  replaceSessions: (entries) => set({ sessions: upsertEntries([], entries) }),
   upsertSession: (entry) =>
     set((s) => {
       const existing = s.sessions.find((e) => e.sessionId === entry.sessionId);

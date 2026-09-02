@@ -5,12 +5,13 @@ import type {
   SessionEntry,
   SessionMode,
 } from '../store';
+import type { AgentProfile } from '../profiles';
 import type { ConnectOptions } from '../useLiveSession';
 import { ConnectPanel } from './ConnectPanel';
 
 const basename = (cwd: string) => cwd.split('/').filter(Boolean).at(-1) ?? cwd;
 
-export function Sidebar({ mode, connection, capabilities, sessions, busy, onConnect, onDisconnect, onNewSession, onLoadSession, onDeleteSession, onReplayDemo }: {
+export function Sidebar({ mode, connection, capabilities, sessions, busy, onConnect, onSelectProfile, onDisconnect, onNewSession, onLoadSession, onDeleteSession, onReplayDemo }: {
   mode: SessionMode;
   connection: ConnectionInfo;
   capabilities: AgentCapabilityInfo;
@@ -18,6 +19,7 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
   /** A turn in flight — switching sessions mid-turn would orphan the prompt. */
   busy: boolean;
   onConnect(url: string, cwd: string, opts?: ConnectOptions): void;
+  onSelectProfile(profile: AgentProfile): void;
   onDisconnect(): void;
   onNewSession(cwd: string): void;
   onLoadSession(sessionId: string, cwd: string): void;
@@ -117,6 +119,7 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
           connection={connection}
           mode={mode}
           onConnect={onConnect}
+          onSelectProfile={onSelectProfile}
           onDisconnect={onDisconnect}
           onReplayDemo={onReplayDemo}
         />

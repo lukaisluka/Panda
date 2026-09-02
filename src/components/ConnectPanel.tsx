@@ -17,10 +17,11 @@ import { loadProfiles, newProfileId, saveProfiles, type AgentProfile } from '../
  * delete, no edit dialog. With zero profiles saved the form behaves
  * exactly like the pre-profile one.
  */
-export function ConnectPanel({ connection, mode, onConnect, onDisconnect, onReplayDemo }: {
+export function ConnectPanel({ connection, mode, onConnect, onSelectProfile, onDisconnect, onReplayDemo }: {
   connection: ConnectionInfo;
   mode: SessionMode;
   onConnect(url: string, cwd: string, opts?: ConnectOptions): void;
+  onSelectProfile(profile: AgentProfile): void;
   onDisconnect(): void;
   onReplayDemo(): void;
 }) {
@@ -50,6 +51,7 @@ export function ConnectPanel({ connection, mode, onConnect, onDisconnect, onRepl
     setSelectedId(id);
     setUrl(profile.url);
     setCwd(profile.cwd);
+    onSelectProfile(profile);
   };
 
   const saveAsProfile = () => {
