@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { Menu } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { MessageStream } from './components/MessageStream';
 import { StatusBar } from './components/StatusBar';
@@ -7,6 +9,7 @@ import { useReplaySession } from './useReplaySession';
 import { useLiveSession } from './useLiveSession';
 
 export default function App() {
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const mode = usePanda((s) => s.mode);
   const doc = usePanda((s) => s.doc);
   const permission = usePanda((s) => s.permission);
@@ -49,7 +52,15 @@ export default function App() {
   const headerMeta = liveActive ? (connection.url ?? 'acp') : 'acp://claude-code · demo replay';
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen overflow-hidden">
+      {mobileNavigationOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-20 bg-bg/70 md:hidden"
+          aria-label="关闭导航"
+          onClick={() => setMobileNavigationOpen(false)}
+        />
+      )}
       <Sidebar
         mode={mode}
         connection={connection}
@@ -63,11 +74,23 @@ export default function App() {
         onLoadSession={live.loadSession}
         onDeleteSession={live.deleteSession}
         onReplayDemo={demo.replayDemo}
+        mobileOpen={mobileNavigationOpen}
+        onMobileClose={() => setMobileNavigationOpen(false)}
       />
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-6">
-          <span className="text-[13px] font-medium">{headerTitle}</span>
-          <span className="font-mono text-[11px] text-faint">{headerMeta}</span>
+        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-raised hover:text-fg md:hidden"
+              aria-label="打开导航"
+              onClick={() => setMobileNavigationOpen(true)}
+            >
+              <Menu size={18} />
+            </button>
+            <span className="truncate text-[13px] font-medium">{headerTitle}</span>
+          </div>
+          <span className="hidden shrink-0 font-mono text-[11px] text-faint md:block">{headerMeta}</span>
         </header>
         <MessageStream
           doc={doc}

@@ -22,6 +22,7 @@ import { PlanCard } from './PlanCard';
 import { ThoughtBlock } from './ThoughtBlock';
 import { ToolCallCard } from './ToolCallCard';
 import { UserMessage } from './UserMessage';
+import { ContentColumn } from './ContentColumn';
 
 /**
  * Scroll-following policy: stick to the bottom while the user is already
@@ -102,10 +103,11 @@ export function MessageStream({ doc, permission, onResolvePermission }: {
   const components = useMemo(() => {
     const Scroller = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
       function StreamScroller(props, ref) {
-        const { onScroll, ...rest } = props;
+        const { onScroll, className, ...rest } = props;
         return (
           <div
             {...rest}
+            className={`message-scroller ${className ?? ''}`}
             onScroll={(event) => {
               onScroll?.(event);
               handleScroll();
@@ -194,14 +196,14 @@ export function MessageStream({ doc, permission, onResolvePermission }: {
         increaseViewportBy={{ top: 600, bottom: 600 }}
         computeItemKey={(_, item) => item.key}
         itemContent={(_, item) => (
-          <div className="mx-auto max-w-3xl px-6">
+          <ContentColumn>
             <BlockView
               block={item.block}
               streaming={item.streaming}
               permission={item.permission}
               onResolvePermission={onResolvePermission}
             />
-          </div>
+          </ContentColumn>
         )}
         components={components}
       />
