@@ -52,6 +52,7 @@ type Records = {
   permissions: PermissionRequest[];
   capabilities: AgentCaps[];
   sessionIds: string[];
+  sessionInfos: { sessionId: string; title?: string | null; updatedAt?: string | null }[];
   replayStarts: number;
 };
 
@@ -114,6 +115,7 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
     permissions: [],
     capabilities: [],
     sessionIds: [],
+    sessionInfos: [],
     replayStarts: 0,
   };
   /** 已批准的权限请求游标(权限请求会跨用例累积,按游标推进) */
@@ -179,7 +181,7 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
       onDisconnected: () => {},
       onCapabilities: (capabilities) => records.capabilities.push(capabilities),
       onSessions: () => {},
-      onSessionInfo: () => {},
+      onSessionInfo: (sessionId, info) => records.sessionInfos.push({ sessionId, ...info }),
       onReplayStart: () => records.replayStarts++,
       onSessionDeleted: () => {},
     };
@@ -267,6 +269,10 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
 
       // 回合结束回到 idle
       expect(records.statuses.at(-1)).toBe('idle');
+      expect(records.sessionInfos).toContainEqual({
+        sessionId: records.sessionIds.at(-1),
+        title: '重构 auth 校验',
+      });
 
       // 思考块与消息块都真实流过
       const thoughts = records.updates.filter((u) => u.sessionUpdate === 'agent_thought_chunk');
@@ -353,6 +359,10 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
 
     expect(records.replayStarts).toBe(1);
     expect(records.sessionIds.at(-1)).toBe(sessionId);
+    expect(records.sessionInfos.at(-1)).toEqual({
+      sessionId,
+      title: '重构 auth 校验',
+    });
     expect(records.updates.length).toBeGreaterThan(updateCountBefore);
     expect(
       records.updates

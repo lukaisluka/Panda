@@ -46,6 +46,10 @@ stdio 的 stdout 只承载逐行 JSON-RPC，日志全部写到 stderr。
 固定短回复，用于测试追加消息和滚动。也可以通过 ACP 会话配置切到
 `accept_edits` 或 `accept_everything`。
 
+会话的首条文本消息会被压缩为最多 48 个字符的标题，并通过 ACP 的
+`session_info_update` 推送给 Panda。这个标题不额外调用模型，因此不会增加等待时间
+或真实模型费用；SQLite 持久化会话在 `session/load` 后也会重新推送它。
+
 ## 切换 OpenAI 兼容真实模型
 
 复制环境变量模板并安装可选依赖：
