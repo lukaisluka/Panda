@@ -4,77 +4,53 @@
 
 Panda speaks [ACP (Agent Client Protocol)](https://agentclientprotocol.com) — the standard that 40+ coding agents (Claude Code, Gemini CLI, Codex, Cursor, Goose, Copilot…) expose to editors. Panda is an independent, conversation-first client: not an IDE plugin, but a place where talking to an agent is the primary experience.
 
-📖 **使用指南（中文）**：[docs/user-guide.md](docs/user-guide.md) — 快速上手、连接 agent、界面指南、能力矩阵、故障排查与 FAQ。
+Panda is a **pure protocol client**: it never installs, spawns, or manages agent processes. Connect it to an ACP service you already run, and the whole message stream is live. Panda negotiates ACP **v1** today, failing fast on version mismatch.
 
-## Status: Phase 2 — sessions, recovery, content polish
+📖 **中文使用指南**：[docs/user-guide.md](docs/user-guide.md) — 快速上手、连接 agent、界面指南、能力矩阵、故障排查与 FAQ。
 
-Panda is a **pure protocol client**: it never spawns or manages agent processes. Connect it to an ACP service you have already started, and the whole message stream is live:
+## Features
 
-- Real `session/prompt` turns: streaming messages, tool-call cards, plans, usage/cost
-- Inline permission cards wired to `session/request_permission` — Allow / Reject answers the pending RPC with the exact option id
-- Stop button → `session/cancel` (pending permissions answered with `cancelled`, per spec)
-- v1 turn lifecycle synthesized client-side: running → requires_action → idle
-- **Session list & history**: `session/list` in the sidebar (paginated), click to switch via `session/load` history replay; `session_info_update` keeps titles live
-- **Disconnect recovery**: an unexpected drop keeps the transcript and offers *reconnect & resume* — `session/resume` when the agent declares it, `session/load` replay as fallback, all capability-gated with visible fallbacks
-- **Diff polish**: Shiki syntax highlighting (lazy-loaded per language) + word-level changed-span highlighting
-- **Images** in agent messages, thoughts and tool results render inline
-- **Long sessions**: react-virtuoso virtualization with stick-to-bottom that follows streaming growth yet detaches only on genuine user scroll
-- Sessions are remembered per endpoint in localStorage and merged with the server list on connect
+- **Live conversations** — streaming messages, tool-call cards, plans, usage and cost, rendered as they arrive
+- **Inline permission cards** — Allow / Reject answers the pending `session/request_permission` RPC; a stop button sends `session/cancel` and auto-cancels pending permissions per spec
+- **Sessions & history** — browse past sessions (`session/list`), switch by replaying history (`session/load`), live-updating titles
+- **Disconnect recovery** — an unexpected drop keeps the transcript and offers *reconnect & resume* (`session/resume`, `session/load` fallback), all capability-gated with visible fallbacks
+- **Polished diffs** — Shiki syntax highlighting plus word-level changed spans
+- **Images inline** — in agent messages, thoughts and tool results
+- **Long sessions** — a virtualized message list that follows streaming growth yet detaches only on genuine user scroll
+- **Offline demo replay** — the same UI driven by a scripted agent; `?demo=long` streams an 80-turn session for scroll calibration
 
-The scripted replay from Phase 0 stays available as an offline demo and visual-calibration mode (sidebar → "重放 demo"), exercising exactly the same store actions as the live client. Open `http://localhost:5173/?demo=long` for an 80-turn stream used to calibrate the virtualized list's scroll behavior.
-
-Try it:
+## Quick start
 
 ```sh
-pnpm install && pnpm dev            # opens on the scripted demo replay
-node scripts/mock-acp-server.mjs    # dev-only mock ACP service → ws://localhost:8765/acp
+pnpm install && pnpm dev            # http://localhost:5173 — opens on the scripted demo
+node scripts/mock-acp-server.mjs    # dev-only mock agent → ws://localhost:8765/acp
 ```
 
-Then in the sidebar's "ACP 连接" panel point Panda at `ws://localhost:8765/acp` (or your own service), pick an absolute working directory, and connect.
+In the sidebar's ACP panel, point Panda at the mock endpoint, pick a working directory, and connect. Any service speaking ACP over WebSocket — one JSON-RPC message per text frame, the convention shared by the official TypeScript SDK and mainstream bridges — works the same way. To expose an agent you already run, community bridges such as [acpremote](https://github.com/vcoderun/acpkit), [@flutur/acp-http-bridge](https://github.com/Alemusica/acp-http-bridge) and [acp-bridge](https://github.com/vezaynk/acp-bridge) wrap stdio ACP agents in a WebSocket endpoint.
 
-## Connecting to an agent
+Note: the working directory is sent in `session/new` and interpreted by the service — for a remote service that's a server-side path. The full walkthrough (UI tour, capability matrix, troubleshooting, FAQ) lives in the [user guide](docs/user-guide.md).
 
-Any endpoint that speaks ACP over **WebSocket with one JSON-RPC message per text frame** works — the convention shared by the official TypeScript SDK, the ACP remote-transport draft, and mainstream bridges:
+## How it works
 
-- **Dev smoke**: `node scripts/mock-acp-server.mjs` in this repo serves a scripted agent at `ws://localhost:8765/acp`, with durable sessions (disk-persisted; supports `session/list`, `session/load`, `session/resume`, `session/delete`) for trying the recovery flows.
-- **Expose an agent you already run**: community bridges wrap a stdio ACP agent in a WebSocket endpoint — e.g. [acpremote](https://github.com/vcoderun/acpkit) (`expose`), [@flutur/acp-http-bridge](https://github.com/Alemusica/acp-http-bridge), [acp-bridge](https://github.com/vezaynk/acp-bridge). See each tool's README for the exact command; the service lifecycle is yours, Panda only connects.
+ACP is an event stream, but the UI needs a document. A pure reduction layer folds `session/update` notifications into a stable `SessionDocument`; React renders only that document, and protocol-version differences are absorbed below the components. Session drivers — the live WebSocket client and the scripted replay — feed the same store actions, so the offline demo exercises exactly the code paths a live connection uses.
 
-The working directory you enter is sent in `session/new` and interpreted by the service — for a remote service that's a server-side path.
+## Development
 
-## Architecture
-
-The core idea: **ACP is an event stream, but the UI needs a document.** A pure reduction layer folds `session/update` notifications into a stable `SessionDocument`; React only ever renders that document. Protocol version differences (v1's blocking prompt vs v2's `running/idle/requires_action` state machine and messageId upserts) are absorbed below the components, never inside them.
-
-```
-┌──────────────── React UI ────────────────┐
-│  MessageStream · Composer · StatusBar    │
-└──────────────────┬───────────────────────┘
-                   │ reads SessionDocument only
-┌──────────────────┴───────────────────────┐
-│  Reduction layer: applyUpdate(doc, event)│  pure, replayable, testable
-└──────────────────┬───────────────────────┘
-┌──────────────────┴───────────────────────┐
-│ Session drivers — same handler contract: │
-│  · LiveAcpClient: v1 ACP over WebSocket  │
-│    (@agentclientprotocol/sdk)            │
-│  · ReplayDriver: scripted demo/fixtures  │
-└──────────────────┬───────────────────────┘
-                   │ one JSON-RPC message per WS text frame
-        an ACP service you start and own
+```sh
+pnpm typecheck    # tsc --noEmit
+pnpm test         # vitest — reducer, diff utils, LiveAcpClient against a scripted SDK agent
+pnpm build        # typecheck + vite build
 ```
 
-Both drivers feed the same three store actions (`update` / `setStatus` / `setPermission`). `LiveAcpClient`'s unit tests drive the full JSON-RPC layer against a scripted SDK `agent()` app — no network, real protocol — and the replay fixtures double as visual-calibration samples (later: snapshot tests).
-
-Panda negotiates v1 today (`PROTOCOL_VERSION = 1`, failing fast on a mismatch); the reducer is already shaped for v2's state machine and messageId upserts.
-
-## Stack
-
-Vite · React 19 · TypeScript (strict) · Tailwind CSS v4 · Zustand · react-markdown · react-virtuoso · diff · shiki · [@agentclientprotocol/sdk](https://github.com/agentclientprotocol/typescript-sdk) · Vitest
+Domain terminology lives in [CONTEXT.md](CONTEXT.md), significant decisions in [docs/adr/](docs/adr/).
 
 ## Roadmap
 
-- **Phase 2** — done: reconnect with `session/resume` / `session/load`, session list/history, diff polish (Shiki highlight + word-level spans), image content display, long-session virtualization. Consciously out of scope: *terminal* tool content (in v1 that means the client executes commands on the agent's behalf — a browser chat client doesn't declare the capability and skips such blocks with a warning); image *sending* moves to Phase 3.
-- **Phase 3** — multi-agent configuration, image sending, desktop shell
+- **Done** — live ACP client, session lifecycle & recovery, diff polish, virtualized streams, [user guide](docs/user-guide.md)
+- **In progress** — [#1](https://github.com/lukaisluka/Panda/issues/1) image sending · [#2](https://github.com/lukaisluka/Panda/issues/2) saved agent profiles (one active connection)
+- **Later** — desktop shell
+
+Consciously out of scope: *terminal* tool content — in v1 that means the client executes commands on the agent's behalf, which a browser chat client doesn't declare; Panda skips such blocks with a warning.
 
 ## License
 
