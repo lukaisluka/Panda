@@ -1,0 +1,5 @@
+{
+  "name": "sandbox-project",
+  "private": true,
+  "description": "Panda 测试 agent 的沙箱种子项目(存在仅为了让 agent 有东西可读可改)"
+}

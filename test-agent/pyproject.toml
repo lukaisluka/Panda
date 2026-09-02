@@ -1,0 +1,34 @@
+[project]
+name = "panda-test-agent"
+version = "0.1.0"
+description = "Test-dedicated ACP agent for Panda, built on deepagents"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+dependencies = [
+    # 版本组合与 langchain-ai/deepagents 仓库 libs/acp/uv.lock 一致:
+    # deepagents-acp 0.0.11 从 acp 顶层导入 start_tool_call/text_block 等辅助函数,
+    # agent-client-protocol 0.12 起已移除这些导出,必须锁 0.10.x。
+    "deepagents==0.7.12",
+    "deepagents-acp==0.0.11",
+    "agent-client-protocol==0.10.1",
+    "websockets>=13",
+    "langgraph-checkpoint-sqlite>=2.0",
+    "aiosqlite>=0.20",
+    "python-dotenv>=1.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+real-llm = [
+    "langchain-openai>=1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["panda_test_agent"]
