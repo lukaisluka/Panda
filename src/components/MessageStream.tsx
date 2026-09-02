@@ -1,4 +1,15 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import {
+  forwardRef,
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type HTMLAttributes,
+} from 'react';
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { ArrowDown } from 'lucide-react';
 import type {
   Block,
@@ -14,59 +25,186 @@ import { UserMessage } from './UserMessage';
 
 /**
  * Scroll-following policy: stick to the bottom while the user is already
- * there; a scroll of more than 48px away detaches and floats the
- * "jump to latest" button.
+ * there; scrolling away detaches and floats the "jump to latest" button.
+ *
+ * Long sessions are virtualized (react-virtuoso); the reducer preserves
+ * untouched block identities so memoized rows skip re-renders on every
+ * streamed chunk.
+ *
+ * `pinned` semantics: unpinning requires USER intent (wheel/touch/key/
+ * pointer input opens a short window in which scroll events may detach);
+ * programmatic scrolls — our bottom-sticks and Virtuoso's size-recalc
+ * position restores — can only ever re-pin. The bottom-stick itself goes
+ * through Virtuoso's scrollToIndex (coordinated with its recalc machinery)
+ * on every content change while pinned, rate-limited so burst replays
+ * (session/load) don't choke it.
  */
+/**
+ * Bottom-stick rate limit: at burst frequency (session/load replays emit
+ * hundreds of updates back-to-back) per-event scrolling chokes Virtuoso's
+ * internal recalculation machinery and the view freezes behind the content.
+ * Sticking at most every 40ms (leading + trailing) keeps normal streaming
+ * effectively per-chunk while capping bursts at ~25Hz, which stays healthy.
+ */
+const STICK_INTERVAL_MS = 40;
+
 const DETACH_DISTANCE_PX = 48;
+
+type FlatItem = {
+  key: string;
+  block: Block;
+  streaming: boolean;
+  permission: PermissionRequest | null;
+};
+
+// Stable identities — changing component types in `components` remounts the
+// scroller and resets the scroll position.
+const StreamHeader = () => <div className="h-7" />;
+const StreamFooter = () => <div className="h-[6.75rem]" />;
 
 export function MessageStream({ doc, permission, onResolvePermission }: {
   doc: SessionDocument;
   permission: PermissionRequest | null;
   onResolvePermission: (kind: PermissionOptionKind) => void;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
   const [pinned, setPinned] = useState(true);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const pinnedRef = useRef(pinned);
+  pinnedRef.current = pinned;
 
-  const handleScroll = () => {
-    const el = scrollRef.current;
+  const items = useMemo(
+    () => flatten(doc, permission, findStreamingBlock(doc)),
+    [doc, permission],
+  );
+
+  // Unpin is USER-intent only. Wheel/touch/key/pointer-down open a short
+  // "user is scrolling" window; scroll events inside that window may unpin,
+  // events outside it (our own sticks, Virtuoso's size-recalc position
+  // restores) can only re-pin. Without this, recalc restore steps read as
+  // upward scrolls and permanently detach the stream.
+  const userScrollUntil = useRef(0);
+  const markUserScroll = useCallback(() => {
+    userScrollUntil.current = performance.now() + 350;
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollerRef.current;
     if (!el) return;
-    setPinned(el.scrollHeight - el.scrollTop - el.clientHeight < DETACH_DISTANCE_PX);
-  };
+    const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (gap < DETACH_DISTANCE_PX) setPinned(true);
+    else if (performance.now() < userScrollUntil.current) setPinned(false);
+  }, []);
 
-  // Runs after every render (every streamed chunk); only scrolls when pinned.
+  // The Scroller component is created once per instance so it can capture
+  // scrollerRef/handleScroll; identity must stay stable across renders
+  // (changing component types in `components` remounts the scroller).
+  const components = useMemo(() => {
+    const Scroller = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+      function StreamScroller(props, ref) {
+        const { onScroll, ...rest } = props;
+        return (
+          <div
+            {...rest}
+            onScroll={(event) => {
+              onScroll?.(event);
+              handleScroll();
+            }}
+            onWheel={markUserScroll}
+            onTouchMove={markUserScroll}
+            onKeyDown={markUserScroll}
+            onPointerDown={markUserScroll}
+            ref={(el) => {
+              scrollerRef.current = el;
+              if (typeof ref === 'function') ref(el);
+              else if (ref) ref.current = el;
+            }}
+          />
+        );
+      },
+    );
+    return { Scroller, Header: StreamHeader, Footer: StreamFooter };
+  }, [handleScroll, markUserScroll]);
+
+  // Stick to the bottom on every content change (new items AND last-item
+  // growth) while pinned, rate-limited so burst replays don't churn the
+  // scroll system. See runStick for why both scroll paths are used.
+  const lastStickAt = useRef(0);
+  const trailingTimer = useRef<number | null>(null);
+
+  const runStick = useCallback(() => {
+    lastStickAt.current = performance.now();
+    // scrollToIndex stays coordinated with Virtuoso's recalc machinery during
+    // bursts, but it relies on the last item's REGISTERED size — stale after
+    // the item grew mid-stream, leaving a deterministic shortfall. Land on
+    // the true bottom directly as well; recalc may revert the direct write
+    // mid-burst (harmless, retried), while at rest it is exact.
+    virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'auto' });
+    const el = scrollerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, []);
+
+  const stickToBottom = useCallback(() => {
+    const elapsed = performance.now() - lastStickAt.current;
+    if (elapsed >= STICK_INTERVAL_MS) {
+      runStick();
+      return;
+    }
+    if (trailingTimer.current !== null) return;
+    trailingTimer.current = window.setTimeout(() => {
+      trailingTimer.current = null;
+      if (pinnedRef.current) runStick();
+    }, STICK_INTERVAL_MS - elapsed);
+  }, [runStick]);
+
   useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (el && pinned) el.scrollTop = el.scrollHeight;
-  });
+    if (pinned) stickToBottom();
+  }, [items, pinned, stickToBottom]);
+
+  useEffect(
+    () => () => {
+      if (trailingTimer.current !== null) clearTimeout(trailingTimer.current);
+    },
+    [],
+  );
+
+  // Settling janitor: scrollToIndex can land short while Virtuoso's size
+  // measurements are still settling (burst replays, late image loads, recalc
+  // position restores). While pinned, close any residual gap on a slow cadence.
+  useEffect(() => {
+    if (!pinned) return undefined;
+    const id = window.setInterval(() => {
+      const el = scrollerRef.current;
+      if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 8) runStick();
+    }, 300);
+    return () => clearInterval(id);
+  }, [pinned, runStick]);
 
   const jumpToBottom = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
     setPinned(true);
+    virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' });
   };
-
-  // The last agent message gets the streaming cursor while the turn runs.
-  const streamingBlock = findStreamingBlock(doc);
 
   return (
     <div className="relative min-h-0 flex-1">
-      <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-6 py-7">
-          {doc.turns.map((turn) =>
-            turn.blocks.map((block, i) => (
-              <BlockView
-                key={`${turn.id}-${i}`}
-                block={block}
-                streaming={block === streamingBlock}
-                permission={block.kind === 'tool_call' && permission?.toolCallId === block.call.id ? permission : null}
-                onResolvePermission={onResolvePermission}
-              />
-            )),
-          )}
-          <div className="h-20" />
-        </div>
-      </div>
+      <Virtuoso
+        ref={virtuosoRef}
+        data={items}
+        className="h-full"
+        increaseViewportBy={{ top: 600, bottom: 600 }}
+        computeItemKey={(_, item) => item.key}
+        itemContent={(_, item) => (
+          <div className="mx-auto max-w-3xl px-6">
+            <BlockView
+              block={item.block}
+              streaming={item.streaming}
+              permission={item.permission}
+              onResolvePermission={onResolvePermission}
+            />
+          </div>
+        )}
+        components={components}
+      />
 
       {!pinned && (
         <button
@@ -81,6 +219,28 @@ export function MessageStream({ doc, permission, onResolvePermission }: {
   );
 }
 
+function flatten(
+  doc: SessionDocument,
+  permission: PermissionRequest | null,
+  streamingBlock: Block | null,
+): FlatItem[] {
+  const items: FlatItem[] = [];
+  for (const turn of doc.turns) {
+    turn.blocks.forEach((block, i) => {
+      items.push({
+        key: `${turn.id}-${i}`,
+        block,
+        streaming: block === streamingBlock,
+        permission:
+          block.kind === 'tool_call' && permission?.toolCallId === block.call.id
+            ? permission
+            : null,
+      });
+    });
+  }
+  return items;
+}
+
 function findStreamingBlock(doc: SessionDocument): Block | null {
   if (doc.status !== 'running') return null;
   const lastTurn = doc.turns.at(-1);
@@ -92,7 +252,11 @@ function findStreamingBlock(doc: SessionDocument): Block | null {
   return null;
 }
 
-function BlockView({ block, streaming, permission, onResolvePermission }: {
+/**
+ * Shallow-compare memo: the reducer keeps untouched block identities, so only
+ * the block a chunk landed in re-renders.
+ */
+const BlockView = memo(function BlockView({ block, streaming, permission, onResolvePermission }: {
   block: Block;
   streaming: boolean;
   permission: PermissionRequest | null;
@@ -116,4 +280,4 @@ function BlockView({ block, streaming, permission, onResolvePermission }: {
         />
       );
   }
-}
+});

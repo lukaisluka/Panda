@@ -9,15 +9,19 @@
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "^1.4.0",
     "diff": "^9.0.0",
     "lucide-react": "^1.37.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
+    "react-virtuoso": "^4.18.12",
     "remark-gfm": "^4.0.1",
+    "shiki": "^4.4.3",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
@@ -27,6 +31,8 @@
     "@vitejs/plugin-react": "^6.1.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
-    "vite": "^8.2.2"
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11",
+    "ws": "^8.21.3"
   }
 }

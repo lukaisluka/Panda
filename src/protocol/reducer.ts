@@ -34,10 +34,10 @@ export function applyUpdate(
       return appendBlock(doc, { kind: 'user_message', content: update.content }, true);
 
     case 'agent_message_chunk':
-      return appendTextChunk(doc, 'agent_message', update.messageId, update.content);
+      return appendChunk(doc, 'agent_message', update.messageId, update.content);
 
     case 'agent_thought_chunk':
-      return appendTextChunk(doc, 'thought', update.messageId, update.content);
+      return appendChunk(doc, 'thought', update.messageId, update.content);
 
     case 'tool_call':
       return upsertToolCall(doc, {
@@ -105,25 +105,23 @@ function appendBlock(doc: SessionDocument, block: Block, newTurn: boolean): Sess
 }
 
 /**
- * Appends a streaming text chunk to the last matching block of the current
- * conversation. messageId matches continue that message; a mismatched or new
- * id opens a new one. Without an id the chunk continues the last open block
- * (v1 makes the id optional for exactly this reason).
+ * Appends a streaming chunk (text or image) to the last matching block of the
+ * current conversation. messageId matches continue that message; a mismatched
+ * or new id opens a new one. Without an id the chunk continues the last open
+ * block (v1 makes the id optional for exactly this reason).
  */
-function appendTextChunk(
+function appendChunk(
   doc: SessionDocument,
   blockKind: 'agent_message' | 'thought',
   messageId: string | undefined,
   chunk: AcpContentBlock,
 ): SessionDocument {
-  if (chunk.type !== 'text') return doc;
-
-  const lastBlock = lastTextBlock(doc, blockKind);
+  const lastBlock = lastMessageBlock(doc, blockKind);
   if (lastBlock && (messageId === undefined || lastBlock.messageId === messageId)) {
     const turn = currentTurn(doc)!;
     const blocks: Block[] = turn.blocks.map((b) => {
       if ((b.kind === 'agent_message' || b.kind === 'thought') && b === lastBlock) {
-        return { ...b, md: b.md + chunk.text };
+        return { ...b, parts: appendPart(b.parts, chunk) };
       }
       return b;
     });
@@ -132,14 +130,26 @@ function appendTextChunk(
 
   const block: Block =
     blockKind === 'agent_message'
-      ? { kind: 'agent_message', messageId: messageId ?? autoMessageId(doc, 'msg'), md: chunk.text }
-      : { kind: 'thought', messageId: messageId ?? autoMessageId(doc, 'thought'), md: chunk.text };
+      ? { kind: 'agent_message', messageId: messageId ?? autoMessageId(doc, 'msg'), parts: [chunk] }
+      : { kind: 'thought', messageId: messageId ?? autoMessageId(doc, 'thought'), parts: [chunk] };
   return appendBlock(doc, block, false);
 }
 
-type TextBlock = Extract<Block, { kind: 'agent_message' } | { kind: 'thought' }>;
+/**
+ * Text chunks merge into the adjacent trailing text part (streaming concat);
+ * images are atomic and always open a new part.
+ */
+function appendPart(parts: AcpContentBlock[], chunk: AcpContentBlock): AcpContentBlock[] {
+  const last = parts.at(-1);
+  if (chunk.type === 'text' && last?.type === 'text') {
+    return [...parts.slice(0, -1), { type: 'text', text: last.text + chunk.text }];
+  }
+  return [...parts, chunk];
+}
 
-function lastTextBlock(doc: SessionDocument, kind: 'agent_message' | 'thought'): TextBlock | undefined {
+type MessageBlock = Extract<Block, { kind: 'agent_message' } | { kind: 'thought' }>;
+
+function lastMessageBlock(doc: SessionDocument, kind: 'agent_message' | 'thought'): MessageBlock | undefined {
   for (let i = doc.turns.length - 1; i >= 0; i--) {
     const blocks = doc.turns[i]!.blocks;
     for (let j = blocks.length - 1; j >= 0; j--) {

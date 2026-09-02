@@ -19,7 +19,9 @@
 // ACP wire types (v1 subset used by Phase 0)
 // ---------------------------------------------------------------------------
 
-export type AcpContentBlock = { type: 'text'; text: string };
+export type AcpContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; data: string; mimeType: string };
 
 export type AcpToolKind =
   | 'read'
@@ -30,6 +32,7 @@ export type AcpToolKind =
   | 'execute'
   | 'think'
   | 'fetch'
+  | 'switch_mode'
   | 'other';
 
 export type AcpToolCallStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
@@ -109,8 +112,8 @@ export type ToolCallState = {
 
 export type Block =
   | { kind: 'user_message'; content: AcpContentBlock[] }
-  | { kind: 'agent_message'; messageId: string; md: string }
-  | { kind: 'thought'; messageId: string; md: string }
+  | { kind: 'agent_message'; messageId: string; parts: AcpContentBlock[] }
+  | { kind: 'thought'; messageId: string; parts: AcpContentBlock[] }
   | { kind: 'tool_call'; call: ToolCallState }
   | { kind: 'plan'; entries: AcpPlanEntry[] };
 
@@ -130,10 +133,15 @@ export type SessionDocument = {
 
 // ---------------------------------------------------------------------------
 // Permission requests (session/request_permission, mirrored from the client
-// side of the wire; the replay driver emits them during Phase 0)
+// side of the wire; the replay driver emits them during Phase 0, the live
+// client during Phase 1). The four kinds are the exact ACP wire set.
 // ---------------------------------------------------------------------------
 
-export type PermissionOptionKind = 'allow_once' | 'allow_always' | 'reject';
+export type PermissionOptionKind =
+  | 'allow_once'
+  | 'allow_always'
+  | 'reject_once'
+  | 'reject_always';
 
 export type PermissionOption = {
   id: string;

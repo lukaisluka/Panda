@@ -3,13 +3,16 @@ import { Brain, ChevronDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Block } from '../protocol/types';
+import { MessageImage } from './MessageImage';
 
 type ThoughtBlockModel = Extract<Block, { kind: 'thought' }>;
 
-/** Collapsed by default; the header peeks at the first line while streaming. */
+/** Collapsed by default; the header peeks at the first text line while streaming. */
 export function ThoughtBlock({ block }: { block: ThoughtBlockModel }) {
   const [open, setOpen] = useState(false);
-  const preview = block.md.split('\n')[0]?.slice(0, 60) ?? '';
+  const firstText = block.parts.find((part) => part.type === 'text');
+  const preview =
+    firstText?.type === 'text' ? (firstText.text.split('\n')[0]?.slice(0, 60) ?? '') : '';
 
   return (
     <div className="my-2 rounded-lg border border-border/70 bg-surface/60">
@@ -26,7 +29,13 @@ export function ThoughtBlock({ block }: { block: ThoughtBlockModel }) {
       </button>
       {open && (
         <div className="md-body border-t border-border/70 px-3.5 py-2.5 text-[13px] italic text-muted">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.md}</ReactMarkdown>
+          {block.parts.map((part, i) =>
+            part.type === 'image' ? (
+              <MessageImage key={i} image={part} />
+            ) : (
+              <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>{part.text}</ReactMarkdown>
+            ),
+          )}
         </div>
       )}
     </div>

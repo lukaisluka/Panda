@@ -2,3 +2,5 @@ node_modules
 dist
 *.local
 .DS_Store
+.zcode
+scripts/.mock-sessions.json

@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { usePanda } from './store';
 import { ReplayDriver } from './replay/ReplayDriver';
-import { followUpScenario, mainScenario } from './replay/fixtures';
+import { followUpScenario, longScenario, mainScenario } from './replay/fixtures';
 import type { PermissionOptionKind } from './protocol/types';
+
+/** `?demo=long` streams a 120-turn session instead — the virtualization calibration sample. */
+const demoScenario = () =>
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === 'long'
+    ? longScenario()
+    : mainScenario();
 
 /**
  * Phase 0 session driver: wires the replay driver into the store exactly the
- * way a real ACP client will be wired in Phase 1 (handlers -> store actions).
+ * way the live ACP client is wired (handlers -> store actions). It owns the
+ * session while `mode === 'demo'`; connecting to a real ACP service switches
+ * the store to live mode and this driver stands down.
  */
 export function useReplaySession() {
   // Lazily created once; a stable reference so the autoplay effect below
@@ -21,10 +29,24 @@ export function useReplaySession() {
   }
   const driver = driverRef.current;
 
+  const mode = usePanda((s) => s.mode);
+
   useEffect(() => {
-    driver.play(mainScenario());
+    if (mode !== 'demo') return;
+    const store = usePanda.getState();
+    store.resetDocument();
+    // The replay owns the session — connection state must not leak in.
+    store.setConnection({
+      status: 'disconnected',
+      url: null,
+      agentName: null,
+      protocolVersion: null,
+      sessionId: null,
+      error: null,
+    });
+    driver.play(demoScenario());
     return () => driver.cancel();
-  }, [driver]);
+  }, [driver, mode]);
 
   const send = useCallback(
     (userText: string) => {
@@ -43,5 +65,16 @@ export function useReplaySession() {
     [driver],
   );
 
-  return { send, resolvePermission };
+  /** Restarts the scripted scenario; from live mode it first switches back to demo. */
+  const replayDemo = useCallback(() => {
+    const store = usePanda.getState();
+    if (store.mode !== 'demo') {
+      store.setMode('demo'); // the effect above takes it from here
+      return;
+    }
+    store.resetDocument();
+    driver.play(demoScenario());
+  }, [driver]);
+
+  return { send, resolvePermission, replayDemo };
 }

@@ -17,6 +17,13 @@ import type { ReplayStep } from './types';
 
 const text = (t: string): AcpContentBlock => ({ type: 'text', text: t });
 
+/** Base64 SVG standing in for an agent-produced screenshot (test output). */
+const image = (data: string, mimeType = 'image/svg+xml'): AcpContentBlock => ({ type: 'image', data, mimeType });
+
+const TEST_OUTPUT_IMAGE = image(
+  'PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMjAiIGhlaWdodD0iOTYiPjxyZWN0IHdpZHRoPSIzMjAiIGhlaWdodD0iOTYiIHJ4PSI4IiBmaWxsPSIjMTIyMTFhIi8+PHRleHQgeD0iMTQiIHk9IjI2IiBmaWxsPSIjN2VlMmE4IiBmb250LWZhbWlseT0idWktbW9ub3NwYWNlLG1vbm9zcGFjZSIgZm9udC1zaXplPSIxMyI+cG5wbSB0ZXN0IHNyYy9fX3Rlc3RzX18vYXV0aC5zcGVjLnRzPC90ZXh0Pjx0ZXh0IHg9IjE0IiB5PSI0OCIgZmlsbD0iIzlhYTg5YiIgZm9udC1mYW1pbHk9InVpLW1vbm9zcGFjZSxtb25vc3BhY2UiIGZvbnQtc2l6ZT0iMTIiPuKckyBoYW5kbGVMb2dpbiAoMTJtcyk8L3RleHQ+PHRleHQgeD0iMTQiIHk9IjY4IiBmaWxsPSIjOWFhODliIiBmb250LWZhbWlseT0idWktbW9ub3NwYWNlLG1vbm9zcGFjZSIgZm9udC1zaXplPSIxMiI+4pyTIHJlZnJlc2hUb2tlbiAoOW1zKTwvdGV4dD48dGV4dCB4PSIxNCIgeT0iODgiIGZpbGw9IiM5YWE4OWIiIGZvbnQtZmFtaWx5PSJ1aS1tb25vc3BhY2UsbW9ub3NwYWNlIiBmb250LXNpemU9IjEyIj7inJMgdmVyaWZ5U2Vzc2lvbiAoMjFtcyk8L3RleHQ+PC9zdmc+',
+);
+
 // ---------------------------------------------------------------------------
 // Step helpers
 // ---------------------------------------------------------------------------
@@ -138,7 +145,7 @@ const permissionRequest: PermissionRequest = {
   options: [
     { id: 'allow_once', name: 'Allow once', kind: 'allow_once' },
     { id: 'allow_always', name: 'Always allow for this file', kind: 'allow_always' },
-    { id: 'reject', name: 'Reject', kind: 'reject' },
+    { id: 'reject_once', name: 'Reject', kind: 'reject_once' },
   ],
 };
 
@@ -219,8 +226,20 @@ function allowBranch(): ReplayStep[] {
     toolCallStep('test-1', 'Run auth test suite', 'execute', 'auth.spec.ts', { command: 'pnpm test src/__tests__/auth.spec.ts' }, 500),
     updateStep({ sessionUpdate: 'plan', entries: planTesting }, 200),
     toolStatusStep('test-1', 'in_progress', 350),
-    toolResultStep('test-1', 'auth.spec.ts — 3 passed, 0 failed (42ms)', 700),
+    updateStep(
+      {
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 'test-1',
+        status: 'completed',
+        content: [
+          { type: 'content', content: text('auth.spec.ts — 3 passed, 0 failed (42ms)') },
+          { type: 'content', content: TEST_OUTPUT_IMAGE },
+        ],
+      },
+      700,
+    ),
     ...streamText('agent_message_chunk', 'msg-3', messageFinal, { firstMs: 550 }),
+    updateStep({ sessionUpdate: 'agent_message_chunk', messageId: 'msg-3', content: TEST_OUTPUT_IMAGE }, 300),
     updateStep({ sessionUpdate: 'plan', entries: planDone }, 250),
     usageFinal,
     statusStep('idle', 400),
@@ -293,7 +312,7 @@ export function mainScenario(): ReplayStep[] {
       afterMs: 150,
       request: permissionRequest,
       onResolve: (decision: PermissionOptionKind) =>
-        decision === 'reject' ? rejectBranch() : allowBranch(),
+        decision === 'reject_once' ? rejectBranch() : allowBranch(),
     },
   ];
 }
@@ -321,4 +340,73 @@ export function followUpScenario(userText: string): ReplayStep[] {
     ),
     statusStep('idle', 350),
   ];
+}
+
+// ---------------------------------------------------------------------------
+// Long-session scenario: virtualization / scroll calibration sample (?demo=long)
+// ---------------------------------------------------------------------------
+
+/**
+ * Streams `turns` compact turns at a realistic burst pace — the calibration
+ * sample for long-session virtualization. Start the dev server with
+ * `?demo=long` to run it instead of the scripted scenario.
+ *
+ * Pacing note: 15ms/step (~66 updates/sec) mirrors how a fast WS replay
+ * actually lands after React batching. Pacing per-step timers below ~5ms
+ * (200+ renders/sec) is an unrealistically hostile mode in which
+ * react-virtuoso's own recalculation machinery stalls — not a Panda bug.
+ */
+export function longScenario(turns = 80): ReplayStep[] {
+  const steps: ReplayStep[] = [];
+  const step = (s: ReplayStep, ms = 15): ReplayStep => ({ ...s, afterMs: ms });
+  for (let i = 1; i <= turns; i++) {
+    steps.push(
+      updateStep(
+        {
+          sessionUpdate: 'user_message',
+          content: [text(`第 ${i} 个请求：检查模块 ${i} 的错误处理，确认没有遗漏的边界情况。`)],
+        },
+        15,
+      ),
+    );
+    steps.push(step(statusStep('running', 15)));
+    steps.push(
+      ...streamText(
+        'agent_thought_chunk',
+        `long-thought-${i}`,
+        `模块 ${i} 的错误处理需要核对三层调用。`,
+        { firstMs: 15, chunk: 12, gapMs: 15 },
+      ),
+    );
+    steps.push(
+      step(
+        toolCallStep(`long-tool-${i}`, `Scan src/mod-${i}.ts`, 'search', `src/mod-${i}.ts`, { pattern: 'catch' }),
+      ),
+    );
+    steps.push(step(toolStatusStep(`long-tool-${i}`, 'in_progress', 15)));
+    steps.push(step(toolResultStep(`long-tool-${i}`, `mod-${i}.ts — 3 处 catch，全部有日志，无静默吞错。`, 15)));
+    steps.push(
+      ...streamText(
+        'agent_message_chunk',
+        `long-msg-${i}`,
+        `模块 ${i} 检查完毕：错误处理完整，` +
+          `${i % 7 === 0 ? '但有一处重复的兜底逻辑，建议合并。' : '边界情况都覆盖到了，无需修改。'}\n\n` +
+          `本条消息故意写得长一点，用来校准长会话下的行高与滚动表现。`,
+        { firstMs: 15, chunk: 28, gapMs: 15 },
+      ),
+    );
+    steps.push(
+      updateStep(
+        {
+          sessionUpdate: 'usage_update',
+          used: 10_000 + i * 900,
+          size: 200_000,
+          cost: { amount: 0.1 + i * 0.01, currency: 'USD' },
+        },
+        15,
+      ),
+    );
+    steps.push(step(statusStep('idle', 15)));
+  }
+  return steps;
 }

@@ -22,7 +22,7 @@ export function PermissionCard({ request, onResolve }: {
             key={option.id}
             onClick={() => onResolve(option.kind)}
             className={
-              option.kind === 'reject'
+              option.kind.startsWith('reject')
                 ? 'rounded-lg border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:border-danger/50 hover:text-danger'
                 : 'rounded-lg bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/25'
             }

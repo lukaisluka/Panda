@@ -1,42 +1,46 @@
-import { useMemo } from 'react';
-import { diffLines } from 'diff';
+import { useEffect, useMemo, useState } from 'react';
 import type { AcpToolCallContent } from '../protocol/types';
-import { diffStats } from './diff-utils';
+import { highlightLines, type TokenSpan } from '../highlight/highlighter';
+import { computeRows, diffStats, intersectSpans, withWordSpans, type DiffRow } from './diff-utils';
 
 type DiffPart = Extract<AcpToolCallContent, { type: 'diff' }>;
 
-type Row = {
-  type: 'ctx' | 'add' | 'del';
-  oldNo: number | null;
-  newNo: number | null;
-  text: string;
-};
-
-function computeRows(diff: DiffPart): Row[] {
-  const rows: Row[] = [];
-  let oldNo = 1;
-  let newNo = 1;
-  for (const change of diffLines(diff.oldText ?? '', diff.newText)) {
-    const lines = change.value.replace(/\n$/, '').split('\n');
-    for (const text of lines) {
-      if (change.added) rows.push({ type: 'add', oldNo: null, newNo: newNo++, text });
-      else if (change.removed) rows.push({ type: 'del', oldNo: oldNo++, newNo: null, text });
-      else rows.push({ type: 'ctx', oldNo: oldNo++, newNo: newNo++, text });
-    }
-  }
-  return rows;
-}
-
-const ROW_BG: Record<Row['type'], string> = {
+const ROW_BG: Record<DiffRow['type'], string> = {
   add: 'bg-diff-add',
   del: 'bg-diff-del',
   ctx: '',
 };
 
-/** Full-file diff view: ACP delivers oldText/newText, we compute line pairs. */
+/**
+ * Full-file diff view: ACP delivers oldText/newText, we compute rows with
+ * dual line numbers. Syntax tokens (shiki, lazy) and word-level highlights
+ * (paired del/add runs) layer over the row backgrounds without changing
+ * layout — tokens swap in asynchronously from plain text.
+ */
 export function DiffView({ diff }: { diff: DiffPart }) {
-  const rows = useMemo(() => computeRows(diff), [diff]);
-  const stats = useMemo(() => diffStats(diff.oldText, diff.newText), [diff]);
+  const oldText = diff.oldText ?? '';
+  const rows = useMemo(
+    () => withWordSpans(computeRows(oldText, diff.newText)),
+    [oldText, diff.newText],
+  );
+  const stats = useMemo(() => diffStats(oldText, diff.newText), [oldText, diff.newText]);
+  const [lines, setLines] = useState<{ old: TokenSpan[][] | null; new: TokenSpan[][] | null } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [oldLines, newLines] = await Promise.all([
+        highlightLines(diff.path, oldText),
+        highlightLines(diff.path, diff.newText),
+      ]);
+      if (!cancelled) setLines({ old: oldLines, new: newLines });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [diff.path, oldText, diff.newText]);
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface">
@@ -61,12 +65,50 @@ export function DiffView({ diff }: { diff: DiffPart }) {
                 >
                   {row.type === 'add' ? '+' : row.type === 'del' ? '−' : '·'}
                 </td>
-                <td className="whitespace-pre px-2 pr-4 align-top text-fg/85">{row.text || '\u00A0'}</td>
+                <td className="whitespace-pre px-2 pr-4 align-top text-fg/85">
+                  <LineContent row={row} tokens={tokenLineFor(row, lines)} />
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
     </div>
+  );
+}
+
+/** del/ctx rows read the old side, add rows the new side; ctx prefers the new. */
+function tokenLineFor(
+  row: DiffRow,
+  lines: { old: TokenSpan[][] | null; new: TokenSpan[][] | null } | null,
+): TokenSpan[] | null {
+  if (!lines) return null;
+  if (row.type === 'del') return lines.old?.[row.oldNo! - 1] ?? null;
+  if (row.type === 'add') return lines.new?.[row.newNo! - 1] ?? null;
+  return lines.new?.[row.newNo! - 1] ?? lines.old?.[row.oldNo! - 1] ?? null;
+}
+
+function LineContent({ row, tokens }: { row: DiffRow; tokens: TokenSpan[] | null }) {
+  if (!tokens && !row.words) return <>{row.text || '\u00A0'}</>;
+  const segments = intersectSpans(tokens, row.words);
+  if (segments.length === 0) return <>{'\u00A0'}</>;
+  return (
+    <>
+      {segments.map((seg, i) => (
+        <span
+          key={i}
+          style={seg.color ? { color: seg.color } : undefined}
+          className={
+            seg.changed
+              ? row.type === 'add'
+                ? 'rounded-[2px] bg-accent/25'
+                : 'rounded-[2px] bg-danger/30'
+              : undefined
+          }
+        >
+          {seg.value}
+        </span>
+      ))}
+    </>
   );
 }

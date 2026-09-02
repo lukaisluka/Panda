@@ -9,6 +9,7 @@ import {
   FileText,
   Globe,
   Loader2,
+  Repeat,
   Search,
   ShieldAlert,
   SquareTerminal,
@@ -27,6 +28,7 @@ import type {
   ToolCallStatus,
 } from '../protocol/types';
 import { DiffView } from './DiffView';
+import { MessageImage } from './MessageImage';
 import { PermissionCard } from './PermissionCard';
 import { diffStats } from './diff-utils';
 
@@ -39,6 +41,7 @@ const KIND_ICON: Record<AcpToolKind, LucideIcon> = {
   execute: SquareTerminal,
   think: Brain,
   fetch: Globe,
+  switch_mode: Repeat,
   other: Wrench,
 };
 
@@ -142,6 +145,9 @@ export function ToolCallCard({ call, permission, onResolvePermission }: {
           )}
           {call.content.map((item, i) => {
             if (item.type === 'diff') return <DiffView key={i} diff={item} />;
+            if (item.type === 'content' && item.content.type === 'image') {
+              return <MessageImage key={i} image={item.content} />;
+            }
             if (item.type === 'content' && item.content.type === 'text') {
               return (
                 <div key={i} className="md-body rounded-lg border border-border/70 bg-surface/60 px-3.5 py-2.5 text-[13px] text-muted">
