@@ -38,6 +38,8 @@ mock agent 声明了全部会话能力（list / load / resume / delete）和图�
 2. 填一个**绝对路径**作为工作目录（随便写，mock 只存不用；连真实 agent 时见下节）
 3. 点「连接」
 
+常用地址可以点「**存为 Agent 配置**」起名保存——之后在面板顶部的下拉里一键选中、自动预填地址和目录；连接时对地址/目录的改动会在**连接成功后写回**这条配置（「默认工作目录」的意思就是「上次用的」）。删除一条配置不影响该端点已记忆的会话。
+
 ### 连接你自己的 agent
 
 常见做法是用社区 bridge 把一个 stdio ACP agent 包成 WebSocket 端点，例如 [acpremote](https://github.com/vcoderun/acpkit)（`expose`）、[@flutur/acp-http-bridge](https://github.com/Alemusica/acp-http-bridge)、[acp-bridge](https://github.com/vezaynk/acp-bridge)。具体命令看各工具的 README——服务生命周期归你，Panda 只负责连。
@@ -132,7 +134,7 @@ Panda 目前只协商 **v1**（`PROTOCOL_VERSION = 1`），不匹配时 fail fas
 不会，也永远不打算会。agent 服务由你自己启动（或连接别人运维的），Panda 只消费协议。这是产品的核心边界。
 
 **我的对话数据存在哪？**
-对话内容在 agent 侧；Panda 只在浏览器 localStorage 里按端点记住会话列表（id、目录、标题、时间）和你上次填的地址/目录，方便下次连接。Panda 自己不落任何对话内容。
+对话内容在 agent 侧；Panda 只在浏览器 localStorage 里按端点记住会话列表（id、目录、标题、时间）、你上次填的地址/目录，以及你保存的 Agent 配置（名称、地址、工作目录），方便下次连接。Panda 自己不落任何对话内容。
 
 **demo 回放和真实连接有什么区别？**
 同一个界面、同一套内部状态机，只是消息来源不同：demo 是内置脚本，live 是 JSON-RPC over WebSocket。demo 不需要网络，也不碰 localStorage 之外的任何东西。

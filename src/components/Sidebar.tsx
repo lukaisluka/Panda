@@ -5,6 +5,7 @@ import type {
   SessionEntry,
   SessionMode,
 } from '../store';
+import type { ConnectOptions } from '../useLiveSession';
 import { ConnectPanel } from './ConnectPanel';
 
 const basename = (cwd: string) => cwd.split('/').filter(Boolean).at(-1) ?? cwd;
@@ -16,7 +17,7 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
   sessions: SessionEntry[];
   /** A turn in flight — switching sessions mid-turn would orphan the prompt. */
   busy: boolean;
-  onConnect(url: string, cwd: string, opts?: { resume?: boolean }): void;
+  onConnect(url: string, cwd: string, opts?: ConnectOptions): void;
   onDisconnect(): void;
   onNewSession(cwd: string): void;
   onLoadSession(sessionId: string, cwd: string): void;
