@@ -4,6 +4,7 @@ import {
   methods,
   type AgentCapabilities,
   type ClientConnection,
+  type ContentBlock,
   type InitializeResponse,
   type ListSessionsResponse,
   type RequestPermissionRequest,
@@ -12,6 +13,7 @@ import {
   type Stream,
 } from '@agentclientprotocol/sdk';
 import type {
+  AcpContentBlock,
   AcpSessionUpdate,
   PermissionOptionKind,
   PermissionRequest,
@@ -39,6 +41,7 @@ import { toAcpUpdates, toPermissionRequest } from './wire';
 
 /** Capability gates as advertised by the agent at initialize (v1). */
 export type AgentCaps = {
+  image: boolean;
   loadSession: boolean;
   list: boolean;
   resume: boolean;
@@ -98,6 +101,7 @@ function describeError(err: unknown): string {
 function readCaps(caps: AgentCapabilities | null | undefined): AgentCaps {
   const session = caps?.sessionCapabilities;
   return {
+    image: caps?.promptCapabilities?.image === true,
     loadSession: caps?.loadSession === true,
     list: session?.list != null,
     resume: session?.resume != null,
@@ -109,7 +113,13 @@ export class LiveAcpClient {
   private readonly handlers: LiveClientHandlers;
   private connection: ClientConnection | null = null;
   private sessionId: string | null = null;
-  private capabilities: AgentCaps = { loadSession: false, list: false, resume: false, delete: false };
+  private capabilities: AgentCaps = {
+    image: false,
+    loadSession: false,
+    list: false,
+    resume: false,
+    delete: false,
+  };
   private pendingPrompt: Promise<unknown> | null = null;
   private pendingPermission: PendingPermission | null = null;
   private disconnectReported = false;
@@ -256,20 +266,23 @@ export class LiveAcpClient {
     }
   }
 
-  /** Sends one user message and owns the turn until `session/prompt` resolves. */
-  async send(text: string): Promise<void> {
-    const trimmed = text.trim();
-    if (!trimmed) return;
+  /** Sends one ordered set of user content blocks and owns the turn until it resolves. */
+  async send(content: AcpContentBlock[]): Promise<void> {
+    if (content.length === 0) return;
     if (!this.connection || !this.sessionId) {
       console.warn('[panda/acp] send ignored: not connected');
       return;
     }
+    if (!this.capabilities.image && content.some((block) => block.type === 'image')) {
+      throw new Error('agent 未声明 promptCapabilities.image，拒绝发送图片');
+    }
     // The reducer is the only path that opens a user turn — echo locally.
-    this.handlers.onUpdate({ sessionUpdate: 'user_message', content: [{ type: 'text', text: trimmed }] });
+    this.handlers.onUpdate({ sessionUpdate: 'user_message', content });
     this.handlers.onStatus('running');
+    const wirePrompt: ContentBlock[] = content;
     const prompt = this.connection.agent.request(methods.agent.session.prompt, {
       sessionId: this.sessionId,
-      prompt: [{ type: 'text', text: trimmed }],
+      prompt: wirePrompt,
     });
     this.pendingPrompt = prompt;
     try {

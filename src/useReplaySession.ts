@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { usePanda } from './store';
 import { ReplayDriver } from './replay/ReplayDriver';
 import { followUpScenario, longScenario, mainScenario } from './replay/fixtures';
-import type { PermissionOptionKind } from './protocol/types';
+import type { AcpContentBlock, PermissionOptionKind } from './protocol/types';
 
 /** `?demo=long` streams an 80-turn session instead — the virtualization calibration sample. */
 const demoScenario = () =>
@@ -49,10 +49,9 @@ export function useReplaySession() {
   }, [driver, mode]);
 
   const send = useCallback(
-    (userText: string) => {
-      const trimmed = userText.trim();
-      if (!trimmed) return;
-      driver.play(followUpScenario(trimmed));
+    (content: AcpContentBlock[]) => {
+      if (content.length === 0) return;
+      driver.play(followUpScenario(content));
     },
     [driver],
   );

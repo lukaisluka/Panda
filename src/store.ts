@@ -43,6 +43,7 @@ export type SessionEntry = {
 
 /** What the current agent advertised at initialize (v1 capability gates). */
 export type AgentCapabilityInfo = {
+  image: boolean;
   loadSession: boolean;
   list: boolean;
   resume: boolean;
@@ -94,6 +95,7 @@ const initialConnection: ConnectionInfo = {
 };
 
 const initialCapabilities: AgentCapabilityInfo = {
+  image: false,
   loadSession: false,
   list: false,
   resume: false,

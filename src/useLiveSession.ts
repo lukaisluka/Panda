@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { createWebSocketStream } from '@agentclientprotocol/sdk/experimental/ws-client';
 import { LiveAcpClient } from './acp/LiveAcpClient';
-import type { PermissionOptionKind } from './protocol/types';
+import type { AcpContentBlock, PermissionOptionKind } from './protocol/types';
 import { usePanda, type SessionEntry } from './store';
 
 /**
@@ -86,6 +86,7 @@ export function useLiveSession() {
           ),
       onCapabilities: (caps) =>
         usePanda.getState().setCapabilities({
+          image: caps.image,
           loadSession: caps.loadSession,
           list: caps.list,
           resume: caps.resume,
@@ -163,7 +164,10 @@ export function useLiveSession() {
     [acpClient],
   );
 
-  const send = useCallback((text: string) => acpClient.send(text), [acpClient]);
+  const send = useCallback(
+    (content: AcpContentBlock[]) => acpClient.send(content),
+    [acpClient],
+  );
 
   const resolvePermission = useCallback(
     (kind: PermissionOptionKind) => acpClient.resolvePermission(kind),

@@ -81,6 +81,25 @@ describe('reducer content parts', () => {
     });
   });
 
+  it('merges adjacent replayed user_message chunks into one multipart turn', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [IMAGE] },
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: '截图如下' }] },
+      textChunk('reply', '看到了'),
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: '下一轮' }] },
+    ]);
+
+    expect(doc.turns).toHaveLength(2);
+    expect(doc.turns[0]!.blocks[0]).toEqual({
+      kind: 'user_message',
+      content: [IMAGE, { type: 'text', text: '截图如下' }],
+    });
+    expect(doc.turns[1]!.blocks[0]).toEqual({
+      kind: 'user_message',
+      content: [{ type: 'text', text: '下一轮' }],
+    });
+  });
+
   it('streams thought chunks through the same parts model', () => {
     const doc = fold([
       {

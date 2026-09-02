@@ -321,11 +321,11 @@ export function mainScenario(): ReplayStep[] {
 // Follow-up scenario: short scripted reply after the user sends anything
 // ---------------------------------------------------------------------------
 
-export function followUpScenario(userText: string): ReplayStep[] {
+export function followUpScenario(userContent: AcpContentBlock[]): ReplayStep[] {
   const reply =
     '（demo 回放）Phase 0 还没有接真 agent——你的消息已经走完整条链路：composer → `user_message` 事件 → reducer → 消息流渲染。Phase 1 接上 claude-agent-acp 之后，这里会是 Claude Code 的真实回复。';
   return [
-    updateStep({ sessionUpdate: 'user_message', content: [text(userText)] }, 120),
+    updateStep({ sessionUpdate: 'user_message', content: userContent }, 120),
     statusStep('running', 200),
     ...streamText('agent_thought_chunk', 'thought-followup', '收到，继续推进。', { firstMs: 300, chunk: 5, gapMs: 30 }),
     ...streamText('agent_message_chunk', 'msg-followup', reply, { firstMs: 350, chunk: 18 }),
