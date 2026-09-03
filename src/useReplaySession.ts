@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { usePanda } from './store';
+import { connectionStorePort, usePanda, type ConnectionStorePort } from './store';
 import { ReplayDriver } from './replay/ReplayDriver';
 import { followUpScenario, longScenario, mainScenario } from './replay/fixtures';
 import type { AcpContentBlock, PermissionOptionKind } from './protocol/types';
@@ -16,15 +16,23 @@ const demoScenario = () =>
  * session while `mode === 'demo'`; connecting to a real ACP service switches
  * the store to live mode and this driver stands down.
  */
+/** The demo pseudo-connection slot; its document dies with the slot, not with mode switches. */
+const DEMO_CONNECTION_ID = 'demo';
+const DEMO_SESSION_ID = 'demo';
+
 export function useReplaySession() {
+  // Connection-scoped store port: handlers never touch global fields (#16).
+  const portRef = useRef<ConnectionStorePort | null>(null);
+  if (portRef.current === null) portRef.current = connectionStorePort(DEMO_CONNECTION_ID);
+  const port = portRef.current;
   // Lazily created once; a stable reference so the autoplay effect below
   // doesn't restart on every render.
   const driverRef = useRef<ReplayDriver | null>(null);
   if (driverRef.current === null) {
     driverRef.current = new ReplayDriver({
-      onUpdate: (update) => usePanda.getState().update(update),
-      onStatus: (status) => usePanda.getState().setStatus(status),
-      onPermission: (request) => usePanda.getState().setPermission(request),
+      onUpdate: (update) => port.update(update),
+      onStatus: (status) => port.setStatus(status),
+      onPermission: (request) => port.setPermission(request),
     });
   }
   const driver = driverRef.current;
@@ -33,10 +41,11 @@ export function useReplaySession() {
 
   useEffect(() => {
     if (mode !== 'demo') return;
-    const store = usePanda.getState();
-    store.resetDocument();
+    usePanda.getState().ensureConnection(DEMO_CONNECTION_ID);
+    port.adoptSession(DEMO_SESSION_ID, 'demo');
+    port.resetDocument();
     // The replay owns the session — connection state must not leak in.
-    store.setConnection({
+    port.setConnection({
       status: 'disconnected',
       url: null,
       agentName: null,
@@ -46,7 +55,7 @@ export function useReplaySession() {
     });
     driver.play(demoScenario());
     return () => driver.cancel();
-  }, [driver, mode]);
+  }, [driver, mode, port]);
 
   const send = useCallback(
     (content: AcpContentBlock[]) => {
@@ -58,22 +67,21 @@ export function useReplaySession() {
 
   const resolvePermission = useCallback(
     (kind: PermissionOptionKind) => {
-      usePanda.getState().setPermission(null);
+      port.setPermission(null);
       driver.resolvePermission(kind);
     },
-    [driver],
+    [driver, port],
   );
 
   /** Restarts the scripted scenario; from live mode it first switches back to demo. */
   const replayDemo = useCallback(() => {
-    const store = usePanda.getState();
-    if (store.mode !== 'demo') {
-      store.setMode('demo'); // the effect above takes it from here
+    if (usePanda.getState().mode !== 'demo') {
+      usePanda.getState().setMode('demo'); // the effect above takes it from here
       return;
     }
-    store.resetDocument();
+    port.resetDocument();
     driver.play(demoScenario());
-  }, [driver]);
+  }, [driver, port]);
 
   return { send, resolvePermission, replayDemo };
 }

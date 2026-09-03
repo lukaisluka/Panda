@@ -386,18 +386,22 @@ export class LiveAcpClient {
   }
 
   /**
-   * `session/load`: reset the document first (via the handler), then route the
-   * replay into the freshly-adopted session. Must set this.sessionId BEFORE
-   * the request so replay notifications pass the session filter.
+   * `session/load`: adopt the target session, then signal replay start so the
+   * driver resets exactly the document the replay rebuilds. Must set
+   * this.sessionId BEFORE the request so replay notifications pass the
+   * session filter.
    */
   private async loadSessionInternal(
     connection: ClientConnection,
     sessionId: string,
     cwd: string,
   ): Promise<void> {
-    this.handlers.onReplayStart();
+    // Adopt first (the session's slot keeps prior documents when revisited),
+    // then signal replay start so the driver resets exactly the document the
+    // replay is about to rebuild.
     this.sessionId = sessionId;
     this.handlers.onSessionId(sessionId, cwd);
+    this.handlers.onReplayStart();
     await connection.agent.request(methods.agent.session.load, { sessionId, cwd, mcpServers: [] });
   }
 

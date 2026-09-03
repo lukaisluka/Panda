@@ -4,18 +4,25 @@ import { Sidebar } from './components/Sidebar';
 import { MessageStream } from './components/MessageStream';
 import { StatusBar } from './components/StatusBar';
 import { Composer } from './components/Composer';
-import { usePanda } from './store';
+import {
+  useActiveCapabilities,
+  useActiveConnection,
+  useActiveDoc,
+  useActivePermission,
+  useActiveSessions,
+  usePanda,
+} from './store';
 import { useReplaySession } from './useReplaySession';
 import { useLiveSession } from './useLiveSession';
 
 export default function App() {
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const mode = usePanda((s) => s.mode);
-  const doc = usePanda((s) => s.doc);
-  const permission = usePanda((s) => s.permission);
-  const connection = usePanda((s) => s.connection);
-  const sessions = usePanda((s) => s.sessions);
-  const capabilities = usePanda((s) => s.capabilities);
+  const doc = useActiveDoc();
+  const permission = useActivePermission();
+  const connection = useActiveConnection();
+  const sessions = useActiveSessions();
+  const capabilities = useActiveCapabilities();
 
   const demo = useReplaySession();
   const live = useLiveSession();

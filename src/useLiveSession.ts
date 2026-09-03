@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef } from 'react';
 import { LiveAcpClient } from './acp/LiveAcpClient';
 import { createBrowserWebSocketStream } from './acp/browserWebSocketStream';
 import type { AcpContentBlock, PermissionOptionKind } from './protocol/types';
-import { usePanda, type SessionEntry } from './store';
+import {
+  connectionStorePort,
+  usePanda,
+  type ConnectionStorePort,
+  type SessionEntry,
+} from './store';
 import { updateProfileFields, type AgentProfile } from './profiles';
 
 /**
@@ -78,7 +83,14 @@ function persistSessions(url: string, sessions: SessionEntry[]): void {
   }
 }
 
+/** The one live connection slot; stable across reconnects so its documents (and thus a resumable transcript) survive. */
+const LIVE_CONNECTION_ID = 'live';
+
 export function useLiveSession() {
+  // Connection-scoped store port: handlers never touch global fields (#16).
+  const portRef = useRef<ConnectionStorePort | null>(null);
+  if (portRef.current === null) portRef.current = connectionStorePort(LIVE_CONNECTION_ID);
+  const port = portRef.current;
   // Lazily created once, mirroring useReplaySession's driver wiring.
   const clientRef = useRef<LiveAcpClient | null>(null);
   // Profile targeted by the in-flight connect — consumed on success
@@ -86,12 +98,11 @@ export function useLiveSession() {
   const pendingProfileRef = useRef<{ id: string; url: string; cwd: string } | null>(null);
   if (clientRef.current === null) {
     clientRef.current = new LiveAcpClient({
-      onUpdate: (update) => usePanda.getState().update(update),
-      onStatus: (status) => usePanda.getState().setStatus(status),
-      onPermission: (request) => usePanda.getState().setPermission(request),
+      onUpdate: (update) => port.update(update),
+      onStatus: (status) => port.setStatus(status),
+      onPermission: (request) => port.setPermission(request),
       onConnected: (info) => {
-        const store = usePanda.getState();
-        store.setConnection({
+        port.setConnection({
           status: 'connected',
           agentName: info.agentName,
           protocolVersion: info.protocolVersion,
@@ -102,36 +113,30 @@ export function useLiveSession() {
         if (pending) updateProfileFields(pending.id, { url: pending.url, cwd: pending.cwd });
         pendingProfileRef.current = null;
       },
-      onSessionId: (sessionId, cwd) => {
-        const store = usePanda.getState();
-        store.setConnection({ sessionId });
-        store.upsertSession({ sessionId, cwd });
-      },
+      onSessionId: (sessionId, cwd) => port.adoptSession(sessionId, cwd),
       // An unexpected disconnect keeps the session id so the panel can offer
       // "reconnect and resume"; a clean user disconnect clears it. Either way
       // a failed connect must not write its edits back into the profile.
       onDisconnected: (reason) => {
         pendingProfileRef.current = null;
-        usePanda
-          .getState()
-          .setConnection(
-            reason
-              ? { status: 'error', error: reason }
-              : { status: 'disconnected', error: null, sessionId: null },
-          );
+        port.setConnection(
+          reason
+            ? { status: 'error', error: reason }
+            : { status: 'disconnected', error: null, sessionId: null },
+        );
       },
       onCapabilities: (caps) =>
-        usePanda.getState().setCapabilities({
+        port.setCapabilities({
           image: caps.image,
           loadSession: caps.loadSession,
           list: caps.list,
           resume: caps.resume,
           delete: caps.delete,
         }),
-      onSessions: (entries) => usePanda.getState().mergeSessions(entries),
-      onSessionInfo: (sessionId, info) => usePanda.getState().patchSession(sessionId, info),
-      onReplayStart: () => usePanda.getState().resetDocument(),
-      onSessionDeleted: (sessionId) => usePanda.getState().removeSession(sessionId),
+      onSessions: (entries) => port.mergeSessions(entries),
+      onSessionInfo: (sessionId, info) => port.patchSession(sessionId, info),
+      onReplayStart: () => port.resetDocument(),
+      onSessionDeleted: (sessionId) => port.removeSession(sessionId),
     });
   }
   const acpClient = clientRef.current;
@@ -149,11 +154,13 @@ export function useLiveSession() {
       pendingProfileRef.current = opts?.profileId
         ? { id: opts.profileId, url: trimmedUrl, cwd: trimmedCwd }
         : null;
-      const store = usePanda.getState();
-      const resumeSessionId = opts?.resume ? store.connection.sessionId : null;
-      if (!resumeSessionId) store.resetDocument();
-      store.setMode('live');
-      store.setConnection({
+      usePanda.getState().ensureConnection(LIVE_CONNECTION_ID);
+      const resumeSessionId = opts?.resume
+        ? usePanda.getState().connections[LIVE_CONNECTION_ID]?.connection.sessionId ?? null
+        : null;
+      if (!resumeSessionId) port.resetDocument();
+      usePanda.getState().setMode('live');
+      port.setConnection({
         status: 'connecting',
         url: trimmedUrl,
         cwd: trimmedCwd,
@@ -165,7 +172,7 @@ export function useLiveSession() {
       // Seed the sidebar with sessions remembered for this service; the
       // server list (if any) merges on top. A new endpoint replaces the old
       // endpoint's visible list rather than combining unrelated histories.
-      restoreEndpointSessions(trimmedUrl, store.replaceSessions);
+      restoreEndpointSessions(trimmedUrl, port.replaceSessions);
       await acpClient.connect(
         createBrowserWebSocketStream(trimmedUrl),
         trimmedCwd,
@@ -191,13 +198,12 @@ export function useLiveSession() {
       console.error(`[panda/profiles] selected profile ${profile.id} has an empty url or cwd`);
       return;
     }
-    const store = usePanda.getState();
-    restoreEndpointSessions(url, store.replaceSessions);
-    if (store.mode !== 'live') return;
+    restoreEndpointSessions(url, port.replaceSessions);
+    if (usePanda.getState().mode !== 'live') return;
 
-    store.resetDocument();
-    store.setCapabilities({ image: false, loadSession: false, list: false, resume: false, delete: false });
-    store.setConnection({
+    port.resetDocument();
+    port.setCapabilities({ image: false, loadSession: false, list: false, resume: false, delete: false });
+    port.setConnection({
       status: 'disconnected',
       url,
       cwd,
@@ -216,7 +222,7 @@ export function useLiveSession() {
         return;
       }
       remember(CWD_KEY, trimmedCwd);
-      usePanda.getState().resetDocument();
+      port.resetDocument();
       await acpClient.newSession(trimmedCwd);
     },
     [acpClient],
@@ -246,8 +252,12 @@ export function useLiveSession() {
   const cancel = useCallback(() => acpClient.cancel(), [acpClient]);
 
   // Persist the session list per service endpoint.
-  const connectionUrl = usePanda((s) => s.connection.url);
-  const sessions = usePanda((s) => s.sessions);
+  const connectionUrl = usePanda(
+    (s) => (s.activeConnectionId ? s.connections[s.activeConnectionId]?.connection.url : undefined) ?? null,
+  );
+  const sessions = usePanda(
+    (s) => (s.activeConnectionId ? s.connections[s.activeConnectionId]?.sessions : undefined) ?? [],
+  );
   useEffect(() => {
     if (connectionUrl) persistSessions(connectionUrl, sessions);
   }, [connectionUrl, sessions]);
