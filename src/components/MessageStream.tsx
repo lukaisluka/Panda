@@ -74,10 +74,11 @@ export type FlatItem = BlockFlatItem | StandalonePermissionItem;
 const StreamHeader = () => <div className="h-7" />;
 const StreamFooter = () => <div className="h-[6.75rem]" />;
 
-export function MessageStream({ doc, permission, onResolvePermission }: {
+export function MessageStream({ doc, permissions, onResolvePermission }: {
   doc: SessionDocument;
-  permission: PermissionRequest | null;
-  onResolvePermission: (kind: PermissionOptionKind) => void;
+  /** Pending permission requests — rendered concurrently (issue #18). */
+  permissions: PermissionRequest[];
+  onResolvePermission: (toolCallId: string, kind: PermissionOptionKind) => void;
 }) {
   const [pinned, setPinned] = useState(true);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -86,8 +87,8 @@ export function MessageStream({ doc, permission, onResolvePermission }: {
   pinnedRef.current = pinned;
 
   const items = useMemo(
-    () => flatten(doc, permission, findStreamingBlock(doc)),
-    [doc, permission],
+    () => flatten(doc, permissions, findStreamingBlock(doc)),
+    [doc, permissions],
   );
 
   // Unpin is USER-intent only. Wheel/touch/key/pointer-down open a short
@@ -210,7 +211,10 @@ export function MessageStream({ doc, permission, onResolvePermission }: {
           if (item.kind === 'permission') {
             return (
               <ContentColumn>
-                <PermissionCard request={item.request} onResolve={onResolvePermission} />
+                <PermissionCard
+                  request={item.request}
+                  onResolve={(kind) => onResolvePermission(item.request.toolCallId, kind)}
+                />
               </ContentColumn>
             );
           }
@@ -243,7 +247,7 @@ export function MessageStream({ doc, permission, onResolvePermission }: {
 
 export function flatten(
   doc: SessionDocument,
-  permission: PermissionRequest | null,
+  permissions: PermissionRequest[],
   streamingBlock: Block | null,
 ): FlatItem[] {
   const items: FlatItem[] = [];
@@ -259,35 +263,46 @@ export function flatten(
     });
   }
 
-  if (!permission) return items;
+  for (const permission of permissions) {
+    attachPermission(items, doc, permission);
+  }
+  return items;
+}
 
+/**
+ * Places one pending permission: onto its exact tool-call block, else onto
+ * the current turn's single pending call (some ACP bridges emit an interrupt
+ * ID for request_permission instead of the preceding tool_call ID — attach
+ * only when that leaves no doubt), else as an independent card at the end.
+ * A block is only ever claimed by one permission — a second one degrades to
+ * an independent card instead of silently evicting the first.
+ */
+function attachPermission(items: FlatItem[], doc: SessionDocument, permission: PermissionRequest): void {
   const exactMatch = items.find(
     (item): item is BlockFlatItem =>
       item.kind === 'block' &&
       item.block.kind === 'tool_call' &&
       item.block.call.id === permission.toolCallId,
   );
-  if (exactMatch) {
+  if (exactMatch && exactMatch.permission === null) {
     exactMatch.permission = permission;
-    return items;
+    return;
   }
 
-  // Some ACP bridges emit an interrupt ID for request_permission instead of
-  // the preceding tool_call ID. Attach only when the current turn leaves no
-  // doubt about the operation; otherwise render an independent card below.
   const currentTurn = doc.turns.at(-1);
   const pendingCalls = currentTurn?.blocks.filter(
     (block): block is Extract<Block, { kind: 'tool_call' }> =>
       block.kind === 'tool_call' && block.call.status === 'pending',
   ) ?? [];
-  if (pendingCalls.length === 1) {
-    const fallbackMatch = items.find(
-      (item): item is BlockFlatItem => item.kind === 'block' && item.block === pendingCalls[0],
-    );
-    if (fallbackMatch) {
-      fallbackMatch.permission = permission;
-      return items;
-    }
+  const fallbackMatch =
+    pendingCalls.length === 1
+      ? items.find(
+          (item): item is BlockFlatItem => item.kind === 'block' && item.block === pendingCalls[0],
+        )
+      : undefined;
+  if (fallbackMatch && fallbackMatch.permission === null) {
+    fallbackMatch.permission = permission;
+    return;
   }
 
   items.push({
@@ -295,7 +310,6 @@ export function flatten(
     kind: 'permission',
     request: permission,
   });
-  return items;
 }
 
 function findStreamingBlock(doc: SessionDocument): Block | null {
@@ -317,7 +331,7 @@ const BlockView = memo(function BlockView({ block, streaming, permission, onReso
   block: Block;
   streaming: boolean;
   permission: PermissionRequest | null;
-  onResolvePermission: (kind: PermissionOptionKind) => void;
+  onResolvePermission: (toolCallId: string, kind: PermissionOptionKind) => void;
 }) {
   switch (block.kind) {
     case 'user_message':
@@ -333,7 +347,10 @@ const BlockView = memo(function BlockView({ block, streaming, permission, onReso
         <ToolCallCard
           call={block.call}
           permission={permission}
-          onResolvePermission={onResolvePermission}
+          // Bound here (inside the memo) so the stable outer callback keeps
+          // BlockView's shallow compare intact; the card only invokes it
+          // while a permission is attached.
+          onResolvePermission={(kind) => onResolvePermission(permission?.toolCallId ?? '', kind)}
         />
       );
     case 'unsupported':

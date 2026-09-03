@@ -32,7 +32,6 @@ export function useReplaySession() {
     driverRef.current = new ReplayDriver({
       onUpdate: (update) => port.update(update),
       onStatus: (status) => port.setStatus(status),
-      onPermission: (request) => port.setPermission(request),
     });
   }
   const driver = driverRef.current;
@@ -66,11 +65,10 @@ export function useReplaySession() {
   );
 
   const resolvePermission = useCallback(
-    (kind: PermissionOptionKind) => {
-      port.setPermission(null);
+    (_toolCallId: string, kind: PermissionOptionKind) => {
       driver.resolvePermission(kind);
     },
-    [driver, port],
+    [driver],
   );
 
   /** Restarts the scripted scenario; from live mode it first switches back to demo. */

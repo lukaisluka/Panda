@@ -51,7 +51,6 @@ if (!forcedSkip) {
 type Records = {
   updates: AcpSessionUpdate[];
   statuses: SessionStatus[];
-  permissions: PermissionRequest[];
   capabilities: AgentCaps[];
   sessionIds: string[];
   sessionInfos: { sessionId: string; title?: string | null; updatedAt?: string | null }[];
@@ -114,14 +113,11 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
   const records: Records = {
     updates: [],
     statuses: [],
-    permissions: [],
     capabilities: [],
     sessionIds: [],
     sessionInfos: [],
     replayStarts: 0,
   };
-  /** 已批准的权限请求游标(权限请求会跨用例累积,按游标推进) */
-  let approvedCursor = 0;
 
   beforeAll(async () => {
     sandboxDir = mkdtempSync(join(tmpdir(), 'panda-e2e-sandbox-'));
@@ -172,12 +168,6 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
     const handlers: LiveClientHandlers = {
       onUpdate: (update) => records.updates.push(update),
       onStatus: (status) => records.statuses.push(status),
-      // LiveAcpClient emits null when a permission card is cleared. Keep only
-      // actual requests here so the approval cursor cannot mistake a clear
-      // notification for the next interrupt.
-      onPermission: (request) => {
-        if (request) records.permissions.push(request);
-      },
       onConnected: () => {},
       onSessionId: (sessionId) => records.sessionIds.push(sessionId),
       onDisconnected: () => {},
@@ -209,16 +199,29 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
+  /** 未决权限请求:按事件流时序折叠(requested 置入、resolved 移除)——同一 id 被 agent 重问时重新挂起。 */
+  const pendingPermissionRequests = () => {
+    const pending = new Map<string, PermissionRequest>();
+    for (const update of records.updates) {
+      if (update.sessionUpdate === 'permission_requested') {
+        pending.set(update.request.toolCallId, update.request);
+      } else if (update.sessionUpdate === 'permission_resolved') {
+        pending.delete(update.toolCallId);
+      }
+    }
+    return [...pending.values()];
+  };
+
   /** 依次批准 ask 模式下的每个权限请求,直到回合结束。 */
   const approveAllPending = async (expected: number) => {
     for (let i = 0; i < expected; i++) {
       await waitFor(
-        () => records.permissions.length > approvedCursor,
+        () => pendingPermissionRequests().length > 0,
         30_000,
-        `第 ${approvedCursor + 1} 个权限请求`,
+        `第 ${i + 1}/${expected} 个权限请求`,
       );
-      acpClient.resolvePermission('allow_once');
-      approvedCursor++;
+      const pending = pendingPermissionRequests();
+      acpClient.resolvePermission(pending[0]!.toolCallId, 'allow_once');
     }
   };
 
@@ -334,7 +337,11 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
       );
 
       // 权限选项是 Panda 认识的四种 kind 之一
-      expect(records.permissions[0]?.options.map((o) => o.kind)).toContain('allow_once');
+      const firstRequest = records.updates.find(
+        (u): u is Extract<typeof u, { sessionUpdate: 'permission_requested' }> =>
+          u.sessionUpdate === 'permission_requested',
+      );
+      expect(firstRequest?.request.options.map((o) => o.kind)).toContain('allow_once');
     },
   );
 
@@ -402,13 +409,12 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
       const turn = acpClient.send([{ type: 'text', text: '重构 auth 校验' }]);
       // 等第一个权限请求(剧本会停在 write_todos 的 interrupt 上)
       await waitFor(
-        () => records.permissions.length > approvedCursor,
+        () => pendingPermissionRequests().length > 0,
         30_000,
         'cancel 用例的权限请求',
       );
       // 回合明确卡在权限上时取消——确定性的取消时机
       acpClient.cancel();
-      approvedCursor++;
       await turn;
       expect(records.statuses.at(-1)).toBe('idle');
 

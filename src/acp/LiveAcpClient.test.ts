@@ -17,11 +17,7 @@ import {
   type ConnectionStorePort,
   type SessionSwitchSnapshot,
 } from '../store';
-import type {
-  AcpSessionUpdate,
-  PermissionRequest,
-  SessionStatus,
-} from '../protocol/types';
+import type { AcpSessionUpdate, SessionStatus } from '../protocol/types';
 
 /**
  * Drives LiveAcpClient against a scripted SDK `agent()` app over an in-memory
@@ -35,7 +31,6 @@ type PromptHandler = (ctx: PromptCtx) => Promise<{ stopReason: 'end_turn' | 'can
 type Records = {
   updates: AcpSessionUpdate[];
   statuses: SessionStatus[];
-  permissions: (PermissionRequest | null)[];
   connected: { agentName: string; protocolVersion: number }[];
   sessionIds: string[];
   disconnected: (string | null)[];
@@ -76,6 +71,8 @@ type FakeAgentOptions = {
   beforeLoad?: () => Promise<void>;
   /** Reconnect target passed to LiveAcpClient.connect. */
   resume?: { sessionId: string };
+  /** Sees every JSON-RPC message the fake agent sends (wire-level assertions). */
+  spyAgentOutgoing?: (message: AnyMessage) => void;
   onPrompt?: PromptHandler;
 };
 
@@ -100,7 +97,6 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
   const records: Records = {
     updates: [],
     statuses: [],
-    permissions: [],
     connected: [],
     sessionIds: [],
     disconnected: [],
@@ -114,7 +110,6 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
   const handlers: LiveClientHandlers = {
     onUpdate: (update) => records.updates.push(update),
     onStatus: (status) => records.statuses.push(status),
-    onPermission: (request) => records.permissions.push(request),
     onConnected: (info) => records.connected.push(info),
     onSessionId: (id) => records.sessionIds.push(id),
     onDisconnected: (reason) => records.disconnected.push(reason),
@@ -142,7 +137,23 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     ...(caps.delete ? { delete: {} } : {}),
   };
 
-  const { clientStream, serverStream } = streamPair();
+  const { clientStream, serverStream: rawServerStream } = streamPair();
+  // Optional wire tap on the agent's outgoing messages (e.g. to learn the
+  // JSON-RPC id of a server-initiated request before cancelling it).
+  const serverStream = (() => {
+    if (!opts.spyAgentOutgoing) return rawServerStream;
+    const writer = rawServerStream.writable.getWriter();
+    return {
+      readable: rawServerStream.readable,
+      writable: new WritableStream<AnyMessage>({
+        write: (chunk) => {
+          opts.spyAgentOutgoing!(chunk);
+          return writer.write(chunk);
+        },
+        abort: (reason) => writer.abort(reason),
+      }),
+    };
+  })();
   const serverConnection: AgentConnection = agent({ name: 'fake-agent' })
     .onRequest(methods.agent.initialize, () => ({
       protocolVersion: opts.protocolVersion ?? PROTOCOL_VERSION,
@@ -211,6 +222,19 @@ function notifyUpdate(ctx: PromptCtx, payload: object) {
     sessionId: ctx.params.sessionId,
     update: payload,
   });
+}
+
+/** Permission lifecycle events folded through the document stream (issue #18). */
+function permissionEvents(h: Harness) {
+  return h.updates.filter(
+    (u): u is Extract<typeof u, { sessionUpdate: 'permission_requested' | 'permission_resolved' }> =>
+      u.sessionUpdate === 'permission_requested' || u.sessionUpdate === 'permission_resolved',
+  );
+}
+
+/** Waits until the document stream has seen `n` permission events. */
+async function waitForPermissionEvents(h: Harness, n: number) {
+  await waitFor(() => permissionEvents(h).length >= n);
 }
 
 /** Agent-side helper: ask for permission and record the client's answer. */
@@ -359,25 +383,35 @@ describe('LiveAcpClient', () => {
     harnessRef.h = h;
 
     const turn = h.acpClient.send([{ type: 'text', text: 'edit it' }]);
-    await waitFor(() => h.permissions.length > 0 && h.permissions[0] !== null);
+    await waitForPermissionEvents(h, 1);
 
     expect(h.statuses).toContain('requires_action');
-    expect(h.permissions[0]).toEqual({
-      toolCallId: 'edit-1',
-      title: 'Edit file: src/a.ts',
-      options: [
-        { id: 'allow-once', name: 'Allow once', kind: 'allow_once' },
-        { id: 'reject-once', name: 'Reject', kind: 'reject_once' },
-      ],
-    });
+    expect(permissionEvents(h)).toEqual([
+      {
+        sessionUpdate: 'permission_requested',
+        request: {
+          toolCallId: 'edit-1',
+          title: 'Edit file: src/a.ts',
+          kind: 'edit',
+          options: [
+            { id: 'allow-once', name: 'Allow once', kind: 'allow_once' },
+            { id: 'reject-once', name: 'Reject', kind: 'reject_once' },
+          ],
+        },
+      },
+    ]);
 
-    h.acpClient.resolvePermission('allow_once');
+    h.acpClient.resolvePermission('edit-1', 'allow_once');
     await turn;
 
     expect(h.agentState.permissionResponses).toEqual([
       { outcome: { outcome: 'selected', optionId: 'allow-once' } },
     ]);
-    expect(h.permissions.at(-1)).toBeNull();
+    expect(permissionEvents(h).at(-1)).toEqual({
+      sessionUpdate: 'permission_resolved',
+      toolCallId: 'edit-1',
+      response: { outcome: 'selected', kind: 'allow_once' },
+    });
     // answered → turn continues (running) → prompt resolves (idle)
     expect(h.statuses).toEqual(expect.arrayContaining(['requires_action', 'running', 'idle']));
     h.closeAll();
@@ -393,15 +427,19 @@ describe('LiveAcpClient', () => {
     harnessRef.h = h;
 
     const turn = h.acpClient.send([{ type: 'text', text: 'edit it' }]);
-    await waitFor(() => h.permissions.length > 0 && h.permissions[0] !== null);
+    await waitForPermissionEvents(h, 1);
 
-    h.acpClient.resolvePermission('reject_once');
+    h.acpClient.resolvePermission('edit-1', 'reject_once');
     await turn;
 
     expect(h.agentState.permissionResponses).toEqual([
       { outcome: { outcome: 'selected', optionId: 'reject-once' } },
     ]);
-    expect(h.permissions.at(-1)).toBeNull();
+    expect(permissionEvents(h).at(-1)).toEqual({
+      sessionUpdate: 'permission_resolved',
+      toolCallId: 'edit-1',
+      response: { outcome: 'selected', kind: 'reject_once' },
+    });
     h.closeAll();
   });
 
@@ -415,15 +453,250 @@ describe('LiveAcpClient', () => {
     harnessRef.h = h;
 
     const turn = h.acpClient.send([{ type: 'text', text: 'edit it' }]);
-    await waitFor(() => h.permissions.length > 0 && h.permissions[0] !== null);
+    await waitForPermissionEvents(h, 1);
 
     h.acpClient.cancel();
     await turn;
 
     expect(h.agentState.cancelNotifications).toEqual([{ sessionId: 's-1' }]);
     expect(h.agentState.permissionResponses).toEqual([{ outcome: { outcome: 'cancelled' } }]);
-    expect(h.permissions.at(-1)).toBeNull();
+    expect(permissionEvents(h).at(-1)).toEqual({
+      sessionUpdate: 'permission_resolved',
+      toolCallId: 'edit-1',
+      response: { outcome: 'cancelled' },
+    });
     expect(h.statuses.at(-1)).toBe('idle');
+    h.closeAll();
+  });
+
+  it('keeps two concurrent permissions independent — each answered separately (issue #18)', async () => {
+    const harnessRef: { h?: Harness } = {};
+    const onPrompt: PromptHandler = async (ctx) => {
+      // Both requests hang concurrently; neither cancels the other.
+      const [first] = await Promise.all([
+        askPermission(ctx, harnessRef.h!),
+        ctx.client.request(methods.client.session.requestPermission, {
+          sessionId: ctx.params.sessionId,
+          toolCall: { toolCallId: 'edit-2', title: 'Edit file: src/b.ts', kind: 'edit', status: 'pending' },
+          options: [
+            { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
+            { optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' },
+          ],
+        }).then((response) => {
+          harnessRef.h!.agentState.permissionResponses.push(response);
+          return response;
+        }),
+      ]);
+      return { stopReason: first.outcome.outcome === 'cancelled' ? 'cancelled' : 'end_turn' };
+    };
+    const h = await setup({ onPrompt });
+    harnessRef.h = h;
+
+    const turn = h.acpClient.send([{ type: 'text', text: 'edit both' }]);
+    await waitForPermissionEvents(h, 2);
+
+    // Answering the second leaves the first pending — no first-wins cancellation.
+    h.acpClient.resolvePermission('edit-2', 'reject_once');
+    await waitForPermissionEvents(h, 3);
+    const events = permissionEvents(h);
+    expect(events.filter((e) => e.sessionUpdate === 'permission_requested')).toHaveLength(2);
+    expect(events.filter((e) => e.sessionUpdate === 'permission_resolved')).toEqual([
+      { sessionUpdate: 'permission_resolved', toolCallId: 'edit-2', response: { outcome: 'selected', kind: 'reject_once' } },
+    ]);
+    expect(h.statuses.at(-1)).toBe('requires_action'); // the other one is still pending
+
+    h.acpClient.resolvePermission('edit-1', 'allow_once');
+    await turn;
+    expect(h.agentState.permissionResponses).toEqual([
+      { outcome: { outcome: 'selected', optionId: 'reject-once' } },
+      { outcome: { outcome: 'selected', optionId: 'allow-once' } },
+    ]);
+    expect(h.statuses.at(-1)).toBe('idle');
+    h.closeAll();
+  });
+
+  it('settles every pending permission as cancelled when the transport dies (issue #18)', async () => {
+    const harnessRef: { h?: Harness } = {};
+    const onPrompt: PromptHandler = async (ctx) => {
+      await Promise.all([
+        askPermission(ctx, harnessRef.h!),
+        ctx.client.request(methods.client.session.requestPermission, {
+          sessionId: ctx.params.sessionId,
+          toolCall: { toolCallId: 'edit-2', title: 'Edit file: src/b.ts', kind: 'edit', status: 'pending' },
+          options: [{ optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' }],
+        }).then((response) => {
+          harnessRef.h!.agentState.permissionResponses.push(response);
+          return response;
+        }),
+      ]);
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt });
+    harnessRef.h = h;
+
+    const turn = h.acpClient.send([{ type: 'text', text: 'edit both' }]);
+    await waitForPermissionEvents(h, 2);
+
+    h.killTransport();
+    await turn;
+
+    // The agent side can no longer receive anything (its stream is dead);
+    // what matters is that the client settled BOTH waiters and folded both
+    // cancellations into the document instead of leaving cards hanging.
+    expect(permissionEvents(h).filter((e) => e.sessionUpdate === 'permission_resolved')).toEqual([
+      { sessionUpdate: 'permission_resolved', toolCallId: 'edit-1', response: { outcome: 'cancelled' } },
+      { sessionUpdate: 'permission_resolved', toolCallId: 'edit-2', response: { outcome: 'cancelled' } },
+    ]);
+    expect(h.statuses.at(-1)).toBe('idle');
+    h.closeAll();
+  });
+
+  it('supersedes a duplicate request for the same tool call — old cancelled, new answerable (issue #18)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const harnessRef: { h?: Harness } = {};
+    const onPrompt: PromptHandler = async (ctx) => {
+      const first = askPermission(ctx, harnessRef.h!);
+      await waitFor(() => permissionEvents(harnessRef.h!).length >= 1);
+      const second = askPermission(ctx, harnessRef.h!); // same toolCallId: edit-1
+      await Promise.all([first, second]);
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt });
+    harnessRef.h = h;
+
+    const turn = h.acpClient.send([{ type: 'text', text: 'edit it' }]);
+    // requested → superseded (cancelled) → requested again
+    await waitForPermissionEvents(h, 3);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('superseding the stale waiter'));
+
+    h.acpClient.resolvePermission('edit-1', 'allow_once');
+    await turn;
+
+    const events = permissionEvents(h);
+    expect(events).toHaveLength(4);
+    expect(events[1]).toEqual({
+      sessionUpdate: 'permission_resolved',
+      toolCallId: 'edit-1',
+      response: { outcome: 'cancelled' },
+    });
+    expect(h.agentState.permissionResponses).toEqual([
+      { outcome: { outcome: 'cancelled' } },
+      { outcome: { outcome: 'selected', optionId: 'allow-once' } },
+    ]);
+    expect(h.statuses.at(-1)).toBe('idle');
+    warnSpy.mockRestore();
+    h.closeAll();
+  });
+
+  it('answers a sessionless lookup by toolCallId suffix, loudly (issue #18)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const harnessRef: { h?: Harness } = {};
+    const onPrompt: PromptHandler = async (ctx) => {
+      await askPermission(ctx, harnessRef.h!);
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt, capabilities: { delete: true } });
+    harnessRef.h = h;
+
+    const turn = h.acpClient.send([{ type: 'text', text: 'edit it' }]);
+    await waitForPermissionEvents(h, 1);
+
+    // Deleting the active session clears the client's session routing; the
+    // UI still answers by toolCallId, so the exact key misses and the
+    // suffix scan carries the answer — announced, never silent.
+    await h.acpClient.deleteSession('s-1');
+    h.acpClient.resolvePermission('edit-1', 'allow_once');
+    await turn;
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('by toolCallId suffix'));
+    expect(h.agentState.permissionResponses).toEqual([
+      { outcome: { outcome: 'selected', optionId: 'allow-once' } },
+    ]);
+    expect(h.statuses.at(-1)).toBe('idle');
+    warnSpy.mockRestore();
+    h.closeAll();
+  });
+
+  it('settles the waiter as cancelled when the agent aborts its request ($/cancel_request, issue #18)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const outgoing: AnyMessage[] = [];
+    const harnessRef: { h?: Harness } = {};
+    const onPrompt: PromptHandler = async (ctx) => {
+      const pending = askPermission(ctx, harnessRef.h!);
+      await waitFor(() => permissionEvents(harnessRef.h!).length >= 1);
+      const request = outgoing.find(
+        (message): message is AnyMessage & { id: number | string; method: string } =>
+          'method' in message && message.method === 'session/request_permission',
+      );
+      if (!request) throw new Error('permission request never hit the wire');
+      await ctx.client.notify('$/cancel_request', { requestId: request.id });
+      await pending;
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt, spyAgentOutgoing: (message) => outgoing.push(message) });
+    harnessRef.h = h;
+
+    await h.acpClient.send([{ type: 'text', text: 'edit it' }]);
+
+    expect(permissionEvents(h)).toEqual([
+      { sessionUpdate: 'permission_requested', request: expect.objectContaining({ toolCallId: 'edit-1' }) },
+      { sessionUpdate: 'permission_resolved', toolCallId: 'edit-1', response: { outcome: 'cancelled' } },
+    ]);
+    expect(h.agentState.permissionResponses).toEqual([{ outcome: { outcome: 'cancelled' } }]);
+    expect(h.statuses).toContain('requires_action');
+    expect(h.statuses.at(-1)).toBe('idle');
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('aborted by the agent'));
+    warnSpy.mockRestore();
+    h.closeAll();
+  });
+
+  it('answers a foreign-session permission request cancelled without folding it into the stream', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let foreignResponse: RequestPermissionResponse | undefined;
+    const onPrompt: PromptHandler = async (ctx) => {
+      foreignResponse = await ctx.client.request(methods.client.session.requestPermission, {
+        sessionId: 'not-our-session',
+        toolCall: { toolCallId: 'edit-9', title: 'Edit file: src/x.ts', kind: 'edit', status: 'pending' },
+        options: [{ optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' }],
+      });
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt });
+
+    await h.acpClient.send([{ type: 'text', text: 'edit it' }]);
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('answered cancelled'));
+    expect(foreignResponse).toEqual({ outcome: { outcome: 'cancelled' } });
+    expect(permissionEvents(h)).toEqual([]); // never folded into this stream
+    warnSpy.mockRestore();
+    h.closeAll();
+  });
+
+  it('ignores resolvePermission for an unknown tool call; cancels when the kind was not offered', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const harnessRef: { h?: Harness } = {};
+    const onPrompt: PromptHandler = async (ctx) => {
+      await askPermission(ctx, harnessRef.h!);
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt });
+    harnessRef.h = h;
+
+    h.acpClient.resolvePermission('ghost', 'allow_once'); // unknown — ignored
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('ghost'));
+    expect(h.updates).toEqual([]);
+
+    const turn = h.acpClient.send([{ type: 'text', text: 'edit it' }]);
+    await waitForPermissionEvents(h, 1);
+    h.acpClient.resolvePermission('edit-1', 'allow_always'); // not among the offered options
+    await turn;
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('allow_always'));
+    expect(h.agentState.permissionResponses).toEqual([{ outcome: { outcome: 'cancelled' } }]);
+    expect(h.statuses.at(-1)).toBe('idle');
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
     h.closeAll();
   });
 
@@ -1024,7 +1297,6 @@ describe('LiveAcpClient × connectionStorePort', () => {
     const acpClient = new LiveAcpClient({
       onUpdate: (update) => port.update(update),
       onStatus: () => {},
-      onPermission: () => {},
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
       onDisconnected: () => {},
@@ -1077,7 +1349,6 @@ describe('LiveAcpClient × connectionStorePort', () => {
     const acpClient = new LiveAcpClient({
       onUpdate: (update) => port.update(update),
       onStatus: () => {},
-      onPermission: () => {},
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
       onDisconnected: () => {},
@@ -1132,7 +1403,6 @@ describe('LiveAcpClient × connectionStorePort', () => {
     const acpClient = new LiveAcpClient({
       onUpdate: (update) => port.update(update),
       onStatus: () => {},
-      onPermission: () => {},
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
       onDisconnected: () => {},
@@ -1173,7 +1443,6 @@ describe('LiveAcpClient × connectionStorePort', () => {
     const acpClient = new LiveAcpClient({
       onUpdate: (update) => port.update(update),
       onStatus: () => {},
-      onPermission: () => {},
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
       onDisconnected: (reason) =>

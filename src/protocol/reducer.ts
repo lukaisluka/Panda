@@ -13,6 +13,8 @@ import type {
   AcpSessionLevelKind,
   AcpSessionUpdate,
   Block,
+  PermissionRequest,
+  PermissionResponse,
   SessionDocument,
   SessionNotification,
   ToolCallState,
@@ -24,6 +26,7 @@ export function emptySession(): SessionDocument {
     turns: [],
     status: 'idle',
     usage: { used: 0, size: 0, cost: null },
+    permissions: {},
     latestNotifications: {},
     unhandledNotifications: [],
   };
@@ -106,6 +109,12 @@ export function applyUpdate(
 
     case 'unsupported':
       return appendUnsupported(doc, update.raw);
+
+    case 'permission_requested':
+      return requestPermission(doc, update.request);
+
+    case 'permission_resolved':
+      return resolvePermission(doc, update.toolCallId, update.response);
   }
 }
 
@@ -293,6 +302,96 @@ function findToolCall(doc: SessionDocument, toolCallId: string): ToolCallState |
     }
   }
   return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Permission lifecycle (issue #18)
+// ---------------------------------------------------------------------------
+
+/**
+ * Records a permission request and, when it arrives before its `tool_call`
+ * event (out-of-order — the RPC can precede the notification), plants a
+ * placeholder tool record so the card has a place to live; the later
+ * `tool_call` merges into it via the normal upsert path.
+ */
+function requestPermission(doc: SessionDocument, request: PermissionRequest): SessionDocument {
+  const withRecord: SessionDocument = {
+    ...doc,
+    permissions: {
+      ...doc.permissions,
+      [request.toolCallId]: { status: 'pending', request, response: null },
+    },
+  };
+  if (findToolCall(withRecord, request.toolCallId)) return withRecord;
+  return upsertToolCall(withRecord, {
+    id: request.toolCallId,
+    title: request.title,
+    kind: request.kind ?? 'other',
+    status: 'pending',
+    content: [],
+    locations: [],
+  });
+}
+
+/**
+ * Settles a permission: pending → resolved/cancelled with the response kept.
+ * A resolve for an unknown toolCallId is a driver/reducer contract violation
+ * — surfaced loudly, never silently applied. When the tool will never run
+ * (cancelled, or the user picked a reject option), a still-pending tool
+ * record is retired to `cancelled` — otherwise the placeholder planted for
+ * an out-of-order request would linger as "awaiting approval" forever with
+ * nothing left to answer it. A later real `tool_call` for the same id still
+ * overwrites the record through the normal upsert path.
+ */
+function resolvePermission(
+  doc: SessionDocument,
+  toolCallId: string,
+  response: PermissionResponse,
+): SessionDocument {
+  const existing = doc.permissions[toolCallId];
+  if (!existing) {
+    console.warn(`[reducer] permission_resolved for unknown toolCallId ${toolCallId} — ignored`);
+    return doc;
+  }
+  const withRecord: SessionDocument = {
+    ...doc,
+    permissions: {
+      ...doc.permissions,
+      [toolCallId]: {
+        ...existing,
+        status: response.outcome === 'cancelled' ? 'cancelled' : 'resolved',
+        response,
+      },
+    },
+  };
+  const toolWillNotRun =
+    response.outcome === 'cancelled' ||
+    (response.outcome === 'selected' &&
+      (response.kind === 'reject_once' || response.kind === 'reject_always'));
+  return toolWillNotRun ? retirePendingToolCall(withRecord, toolCallId) : withRecord;
+}
+
+/**
+ * Marks a still-pending tool record cancelled. Reference-preserving when
+ * nothing matches (or the call already started) so untouched turns keep
+ * their identities for the memoized block views.
+ */
+function retirePendingToolCall(doc: SessionDocument, toolCallId: string): SessionDocument {
+  let changed = false;
+  const turns = doc.turns.map((turn) => {
+    let blocksChanged = false;
+    const blocks = turn.blocks.map((block) => {
+      if (block.kind === 'tool_call' && block.call.id === toolCallId && block.call.status === 'pending') {
+        blocksChanged = true;
+        return { kind: 'tool_call' as const, call: { ...block.call, status: 'cancelled' as const } };
+      }
+      return block;
+    });
+    if (!blocksChanged) return turn;
+    changed = true;
+    return { ...turn, blocks };
+  });
+  return changed ? { ...doc, turns } : doc;
 }
 
 /**

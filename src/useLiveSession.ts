@@ -106,7 +106,6 @@ export function useLiveSession() {
     clientRef.current = new LiveAcpClient({
       onUpdate: (update) => port.update(update),
       onStatus: (status) => port.setStatus(status),
-      onPermission: (request) => port.setPermission(request),
       onConnected: (info) => {
         port.setConnection({
           status: 'connected',
@@ -187,9 +186,6 @@ export function useLiveSession() {
       const resumeSessionId = opts?.resume
         ? usePanda.getState().connections[LIVE_CONNECTION_ID]?.connection.sessionId ?? null
         : null;
-      // Fresh connect: drop a stale permission card; the previous session's
-      // document stays in the slot (the pointer moves once a session adopts).
-      if (!resumeSessionId) port.setPermission(null);
       usePanda.getState().setMode('live');
       port.setConnection({
         status: 'connecting',
@@ -254,7 +250,6 @@ export function useLiveSession() {
       }
       remember(CWD_KEY, trimmedCwd);
       // The new session adopts a fresh document; the old one is retained.
-      port.setPermission(null);
       await acpClient.newSession(trimmedCwd);
     },
     [acpClient],
@@ -277,7 +272,7 @@ export function useLiveSession() {
   );
 
   const resolvePermission = useCallback(
-    (kind: PermissionOptionKind) => acpClient.resolvePermission(kind),
+    (toolCallId: string, kind: PermissionOptionKind) => acpClient.resolvePermission(toolCallId, kind),
     [acpClient],
   );
 

@@ -373,3 +373,151 @@ describe('reducer echo reconciliation (optimistic user messages)', () => {
     const after = applyUpdate(doc, { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'late' }] });
     expect(after.turns[0]!.blocks).toHaveLength(2);
   });
+
+describe('reducer permission lifecycle (issue #18)', () => {
+  const request = (toolCallId: string, title = `操作 ${toolCallId}`) => ({
+    toolCallId,
+    title,
+    kind: 'edit' as const,
+    options: [{ id: 'o-1', name: 'Allow once', kind: 'allow_once' as const }],
+  });
+
+  it('records concurrent pending permissions independently', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'permission_requested', request: request('t-1') },
+      { sessionUpdate: 'permission_requested', request: request('t-2') },
+    ]);
+    expect(doc.permissions['t-1']).toMatchObject({ status: 'pending', response: null });
+    expect(doc.permissions['t-2']).toMatchObject({ status: 'pending', response: null });
+  });
+
+  it('settles one permission without touching the others and keeps the record', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'permission_requested', request: request('t-1') },
+      { sessionUpdate: 'permission_requested', request: request('t-2') },
+      { sessionUpdate: 'permission_resolved', toolCallId: 't-1', response: { outcome: 'selected', kind: 'allow_once' } },
+    ]);
+    expect(doc.permissions['t-1']).toEqual({
+      status: 'resolved',
+      request: request('t-1'),
+      response: { outcome: 'selected', kind: 'allow_once' },
+    });
+    expect(doc.permissions['t-2']).toMatchObject({ status: 'pending' });
+  });
+
+  it('plants a placeholder tool record when the permission precedes its tool_call, then merges', () => {
+    const before = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'permission_requested', request: request('t-out-of-order') },
+    ]);
+    // Placeholder visible immediately, carrying the request's title/kind.
+    expect(before.turns[0]!.blocks).toContainEqual(
+      expect.objectContaining({
+        kind: 'tool_call',
+        call: expect.objectContaining({ id: 't-out-of-order', title: '操作 t-out-of-order', kind: 'edit', status: 'pending' }),
+      }),
+    );
+
+    const merged = applyUpdate(before, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 't-out-of-order',
+      title: 'Edit file: src/a.ts',
+      kind: 'edit',
+      status: 'in_progress',
+    });
+    // The later tool_call merges into the placeholder — no duplicate block.
+    const calls = merged.turns[0]!.blocks.filter((b) => b.kind === 'tool_call');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ call: { id: 't-out-of-order', title: 'Edit file: src/a.ts', status: 'in_progress' } });
+  });
+
+  it('keeps a cancelled permission as cancelled (turn cancel / disconnect)', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'permission_requested', request: request('t-1') },
+      { sessionUpdate: 'permission_resolved', toolCallId: 't-1', response: { outcome: 'cancelled' } },
+    ]);
+    expect(doc.permissions['t-1']).toMatchObject({
+      status: 'cancelled',
+      response: { outcome: 'cancelled' },
+    });
+  });
+
+  it('drops a resolve for an unknown toolCallId loudly', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'permission_resolved', toolCallId: 'ghost', response: { outcome: 'cancelled' } },
+    ]);
+    expect(doc.permissions).toEqual({});
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('permission_resolved for unknown toolCallId ghost'),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('retires a still-pending placeholder tool record when the tool will never run', () => {
+    const base = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'permission_requested', request: request('t-1') },
+    ]);
+    const cancelled = applyUpdate(base, {
+      sessionUpdate: 'permission_resolved',
+      toolCallId: 't-1',
+      response: { outcome: 'cancelled' },
+    });
+    expect(cancelled.turns[0]!.blocks).toContainEqual(
+      expect.objectContaining({ kind: 'tool_call', call: expect.objectContaining({ id: 't-1', status: 'cancelled' }) }),
+    );
+
+    const rejected = applyUpdate(base, {
+      sessionUpdate: 'permission_resolved',
+      toolCallId: 't-1',
+      response: { outcome: 'selected', kind: 'reject_once' },
+    });
+    expect(rejected.turns[0]!.blocks).toContainEqual(
+      expect.objectContaining({ kind: 'tool_call', call: expect.objectContaining({ id: 't-1', status: 'cancelled' }) }),
+    );
+  });
+
+  it('keeps the placeholder pending on allow, and never retires a call that already started', () => {
+    const base = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'permission_requested', request: request('t-1') },
+    ]);
+    const allowed = applyUpdate(base, {
+      sessionUpdate: 'permission_resolved',
+      toolCallId: 't-1',
+      response: { outcome: 'selected', kind: 'allow_once' },
+    });
+    expect(allowed.turns[0]!.blocks).toContainEqual(
+      expect.objectContaining({ kind: 'tool_call', call: expect.objectContaining({ id: 't-1', status: 'pending' }) }),
+    );
+
+    const started = applyUpdate(base, { sessionUpdate: 'tool_call', toolCallId: 't-1', title: 'Edit', kind: 'edit', status: 'in_progress' });
+    const settled = applyUpdate(started, {
+      sessionUpdate: 'permission_resolved',
+      toolCallId: 't-1',
+      response: { outcome: 'cancelled' },
+    });
+    expect(settled.turns[0]!.blocks).toContainEqual(
+      expect.objectContaining({ kind: 'tool_call', call: expect.objectContaining({ id: 't-1', status: 'in_progress' }) }),
+    );
+  });
+
+  it('folds a re-asked permission back to pending (requested after resolved)', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'permission_requested', request: request('t-1') },
+      { sessionUpdate: 'permission_resolved', toolCallId: 't-1', response: { outcome: 'cancelled' } },
+      { sessionUpdate: 'permission_requested', request: request('t-1', '重新请求') },
+    ]);
+    expect(doc.permissions['t-1']).toMatchObject({
+      status: 'pending',
+      request: request('t-1', '重新请求'),
+      response: null,
+    });
+  });
+});

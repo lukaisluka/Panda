@@ -9,7 +9,6 @@ import type { ReplayStep } from './types';
 export type DriverHandlers = {
   onUpdate(update: AcpSessionUpdate): void;
   onStatus(status: SessionStatus): void;
-  onPermission(request: PermissionRequest): void;
 };
 
 /**
@@ -19,7 +18,9 @@ export type DriverHandlers = {
  *
  * Permission steps pause the timeline until the user decides — mirroring the
  * real `session/request_permission` RPC where the agent thread blocks on the
- * client's answer.
+ * client's answer. The request and its resolution flow into the document as
+ * `permission_requested` / `permission_resolved` events (issue #18), exactly
+ * like the live client's translation of the RPC.
  */
 export class ReplayDriver {
   private queue: ReplayStep[] = [];
@@ -38,6 +39,13 @@ export class ReplayDriver {
   cancel(): void {
     this.stopped = true;
     this.queue = [];
+    if (this.waitingPermission) {
+      this.handlers.onUpdate({
+        sessionUpdate: 'permission_resolved',
+        toolCallId: this.waitingPermission.request.toolCallId,
+        response: { outcome: 'cancelled' },
+      });
+    }
     this.waitingPermission = null;
     if (this.timer !== null) {
       clearTimeout(this.timer);
@@ -53,6 +61,11 @@ export class ReplayDriver {
     const pending = this.waitingPermission;
     if (!pending) return;
     this.waitingPermission = null;
+    this.handlers.onUpdate({
+      sessionUpdate: 'permission_resolved',
+      toolCallId: pending.request.toolCallId,
+      response: { outcome: 'selected', kind: decision },
+    });
     const followUps = pending.onResolve(decision);
     this.queue = [...followUps, ...this.queue];
     this.tick();
@@ -77,7 +90,10 @@ export class ReplayDriver {
         case 'permission':
           this.handlers.onStatus('requires_action');
           this.waitingPermission = { request: step.request, onResolve: step.onResolve };
-          this.handlers.onPermission(step.request);
+          this.handlers.onUpdate({
+            sessionUpdate: 'permission_requested',
+            request: step.request,
+          });
           break;
       }
     }, step.afterMs);

@@ -16,7 +16,7 @@ import type {
   AcpContentBlock,
   AcpSessionUpdate,
   PermissionOptionKind,
-  PermissionRequest,
+  PermissionResponse,
   SessionStatus,
 } from '../protocol/types';
 import {
@@ -70,7 +70,6 @@ export type SessionSummary = {
 export type LiveClientHandlers = {
   onUpdate(update: AcpSessionUpdate): void;
   onStatus(status: SessionStatus): void;
-  onPermission(request: PermissionRequest | null): void;
   onConnected(info: { agentName: string; protocolVersion: number }): void;
   onSessionId(sessionId: string, cwd: string): void;
   /** null reason = clean disconnect; a string = failure shown to the user. */
@@ -162,8 +161,13 @@ export class LiveAcpClient {
     delete: false,
   };
   private pendingPrompt: Promise<unknown> | null = null;
-  private pendingPermission: PendingPermission | null = null;
   private pendingOutbound: PendingOutbound | null = null;
+  /**
+   * Concurrent `session/request_permission` waiters (issue #18), keyed
+   * `${sessionId}:${toolCallId}` — each hangs independently; overlapping
+   * requests for different tools no longer cancel each other.
+   */
+  private permissionWaiters = new Map<string, PendingPermission>();
   /** A transactional session/load switch is in flight (issue #17). */
   private sessionSwitch = false;
   private disconnectReported = false;
@@ -195,7 +199,7 @@ export class LiveAcpClient {
         (ctx) => this.handleUpdate(ctx.params),
       )
       .onRequest(methods.client.session.requestPermission, (ctx) =>
-        this.handlePermissionRequest(ctx.params),
+        this.handlePermissionRequest(ctx.params, ctx.signal),
       )
       .connect(stream);
     this.connection = connection;
@@ -369,7 +373,7 @@ export class LiveAcpClient {
     } catch (err) {
       console.error('[panda/acp] session/prompt failed', err);
       // The turn is dead — any permission still on screen must be answered.
-      this.finishPermission({ outcome: { outcome: 'cancelled' } });
+      this.finishAllPermissions();
     } finally {
       this.pendingPrompt = null;
       // Turn over: render any echo still held un-reconciled, then drop the
@@ -379,25 +383,35 @@ export class LiveAcpClient {
     }
   }
 
-  /** Answers the pending `session/request_permission` with the chosen option. */
-  resolvePermission(kind: PermissionOptionKind): void {
-    const pending = this.pendingPermission;
-    if (!pending) {
-      console.warn('[panda/acp] resolvePermission ignored: no permission request pending');
+  /**
+   * Answers one pending `session/request_permission` (keyed by tool call —
+   * concurrent requests are answered independently, issue #18).
+   */
+  resolvePermission(toolCallId: string, kind: PermissionOptionKind): void {
+    const entry = this.findPermissionWaiter(toolCallId);
+    if (!entry) {
+      console.warn(
+        `[panda/acp] resolvePermission ignored: no pending request for toolCallId ${toolCallId}`,
+      );
       return;
     }
-    const option = pending.wireOptions.find((o) => o.kind === kind);
+    const option = entry.waiter.wireOptions.find((o) => o.kind === kind);
     if (!option) {
-      console.error(`[panda/acp] permission option "${kind}" was not offered by the agent`);
-      this.finishPermission({ outcome: { outcome: 'cancelled' } });
+      console.error(
+        `[panda/acp] permission option "${kind}" was not offered by the agent for toolCallId ${toolCallId}`,
+      );
+      this.settlePermission(entry.key, toolCallId, { outcome: { outcome: 'cancelled' } }, { outcome: 'cancelled' });
     } else {
-      this.finishPermission({ outcome: { outcome: 'selected', optionId: option.optionId } });
+      this.settlePermission(
+        entry.key,
+        toolCallId,
+        { outcome: { outcome: 'selected', optionId: option.optionId } },
+        { outcome: 'selected', kind },
+      );
     }
-    // After the answer the turn either continues or has already ended.
-    this.handlers.onStatus(this.pendingPrompt ? 'running' : 'idle');
   }
 
-  /** Cancels the in-flight turn: `session/cancel` + cancelled permission outcome. */
+  /** Cancels the in-flight turn: `session/cancel` + cancelled permission outcomes. */
   cancel(): void {
     if (!this.connection || !this.sessionId) return;
     if (!this.pendingPrompt) {
@@ -408,7 +422,7 @@ export class LiveAcpClient {
       .notify(methods.agent.session.cancel, { sessionId: this.sessionId })
       .catch((err) => console.error('[panda/acp] session/cancel failed', err));
     // Spec: the client MUST answer pending permission requests with cancelled.
-    this.finishPermission({ outcome: { outcome: 'cancelled' } });
+    this.finishAllPermissions();
   }
 
   /** Cleanly closes the connection; safe to call repeatedly. */
@@ -595,28 +609,126 @@ export class LiveAcpClient {
     this.pendingOutbound = null;
   }
 
+  /**
+   * One `session/request_permission`: records it in the document (the
+   * reducer plants a placeholder tool when the tool_call has not arrived
+   * yet) and hangs independently — a second request for a *different* tool
+   * never cancels this one (issue #18). Re-asking for the same toolCallId
+   * supersedes the stale waiter (cancelled) — the RPC would otherwise
+   * leak. The request's own AbortSignal (aborted when the agent sends
+   * `$/cancel_request`) settles the waiter as cancelled so the card never
+   * outlives the agent's interest in it.
+   */
   private handlePermissionRequest(
     params: RequestPermissionRequest,
+    signal: AbortSignal,
   ): Promise<RequestPermissionResponse> {
-    if (this.pendingPermission) {
-      console.error(
-        '[panda/acp] overlapping session/request_permission — answering the older one with cancelled',
+    // Foreign sessions share handleUpdate's loud-drop policy, but an RPC
+    // must be answered: cancelled, and never folded into this stream.
+    if (this.sessionId !== null && params.sessionId !== this.sessionId) {
+      console.warn(
+        `[panda/acp] session/request_permission for session ${params.sessionId} ` +
+          `(expected ${this.sessionId}) — answered cancelled`,
       );
-      this.finishPermission({ outcome: { outcome: 'cancelled' } });
+      return Promise.resolve({ outcome: { outcome: 'cancelled' } });
     }
+    const key = `${params.sessionId}:${params.toolCall.toolCallId}`;
+    const stale = this.permissionWaiters.get(key);
+    if (stale) {
+      console.warn(
+        `[panda/acp] duplicate session/request_permission for ${key} — superseding the stale waiter`,
+      );
+      this.settlePermission(key, params.toolCall.toolCallId, { outcome: { outcome: 'cancelled' } }, { outcome: 'cancelled' });
+    }
+    this.handlers.onUpdate({
+      sessionUpdate: 'permission_requested',
+      request: toPermissionRequest(params),
+    });
     return new Promise((resolve) => {
-      this.pendingPermission = { wireOptions: params.options, resolve };
-      this.handlers.onStatus('requires_action');
-      this.handlers.onPermission(toPermissionRequest(params));
+      const waiter: PendingPermission = { wireOptions: params.options, resolve };
+      this.permissionWaiters.set(key, waiter);
+      const settleAborted = () => {
+        // Identity check: a superseding waiter under the same key owns the
+        // slot now — the old request's signal must not steal it back.
+        if (this.permissionWaiters.get(key) !== waiter) return;
+        console.warn(
+          `[panda/acp] session/request_permission for ${key} aborted by the agent — settling as cancelled`,
+        );
+        this.settlePermission(key, params.toolCall.toolCallId, { outcome: { outcome: 'cancelled' } }, { outcome: 'cancelled' });
+      };
+      signal.addEventListener('abort', settleAborted);
+      if (signal.aborted) settleAborted();
+      else this.handlers.onStatus('requires_action');
     });
   }
 
-  private finishPermission(outcome: RequestPermissionResponse): void {
-    const pending = this.pendingPermission;
-    if (!pending) return;
-    this.pendingPermission = null;
-    pending.resolve(outcome);
-    this.handlers.onPermission(null);
+  /**
+   * Finds the waiter for a toolCallId — exact session key first, then a
+   * suffix scan. The fallback exists because the UI answers by toolCallId
+   * alone while `this.sessionId` can lag the waiter's session (a failed
+   * switch rolls it back, deleteSession nulls it); crossing sessions is
+   * announced so a mis-routed answer stays traceable.
+   */
+  private findPermissionWaiter(
+    toolCallId: string,
+  ): { key: string; waiter: PendingPermission } | null {
+    if (this.sessionId !== null) {
+      const exactKey = `${this.sessionId}:${toolCallId}`;
+      const exact = this.permissionWaiters.get(exactKey);
+      if (exact) return { key: exactKey, waiter: exact };
+    }
+    for (const [key, waiter] of this.permissionWaiters) {
+      if (key.endsWith(`:${toolCallId}`)) {
+        console.warn(
+          `[panda/acp] no pending permission for ${this.sessionId ?? 'unrouted'}:${toolCallId} ` +
+            `— answering ${key} by toolCallId suffix`,
+        );
+        return { key, waiter };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Settles one permission: resolves the wire RPC, folds the outcome into
+   * the document, and converges the turn status (still requires_action
+   * while other permissions remain pending).
+   */
+  private settlePermission(
+    key: string,
+    toolCallId: string,
+    wireOutcome: RequestPermissionResponse,
+    uiResponse: PermissionResponse,
+  ): void {
+    const waiter = this.permissionWaiters.get(key);
+    if (!waiter) return;
+    this.permissionWaiters.delete(key);
+    waiter.resolve(wireOutcome);
+    this.handlers.onUpdate({
+      sessionUpdate: 'permission_resolved',
+      toolCallId,
+      response: uiResponse,
+    });
+    this.handlers.onStatus(
+      this.permissionWaiters.size > 0
+        ? 'requires_action'
+        : this.pendingPrompt
+          ? 'running'
+          : 'idle',
+    );
+  }
+
+  /**
+   * Settles every pending permission as cancelled (disconnect / turn
+   * cancel). Reuses settlePermission so every card folds a
+   * permission_resolved event and the status converges exactly like a user
+   * answer — with no prompt left, the last settle lands on idle.
+   */
+  private finishAllPermissions(): void {
+    for (const key of [...this.permissionWaiters.keys()]) {
+      const toolCallId = key.slice(key.indexOf(':') + 1);
+      this.settlePermission(key, toolCallId, { outcome: { outcome: 'cancelled' } }, { outcome: 'cancelled' });
+    }
   }
 
   /** Idempotent: cleans up state and reports the disconnect exactly once. */
@@ -629,11 +741,13 @@ export class LiveAcpClient {
 
   /** Closes the socket and clears session state without reporting anything. */
   private cleanupConnection(): void {
-    this.finishPermission({ outcome: { outcome: 'cancelled' } });
+    // Clear the turn before settling waiters: with no prompt left, their
+    // status convergence lands on idle instead of a phantom running.
+    this.pendingPrompt = null;
+    this.finishAllPermissions();
     this.connection?.close();
     this.connection = null;
     this.sessionId = null;
-    this.pendingPrompt = null;
     this.sessionSwitch = false;
   }
 }
