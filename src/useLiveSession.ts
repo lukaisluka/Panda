@@ -124,6 +124,9 @@ export function useLiveSession() {
       // a failed connect must not write its edits back into the profile.
       onDisconnected: (reason) => {
         pendingProfileRef.current = null;
+        // A closed connection can no longer settle a selection (issue #19):
+        // any in-flight switch's late commit stops moving the UI pointer.
+        port.invalidateSelections();
         port.setConnection(
           reason
             ? { status: 'error', error: reason }
@@ -146,8 +149,11 @@ export function useLiveSession() {
         stagedSwitchRef.current = port.stageSession(sessionId, cwd);
       },
       onSessionSwitchCommit: () => {
+        const snapshot = stagedSwitchRef.current;
         stagedSwitchRef.current = null;
-        port.commitStagedSession();
+        // The snapshot carries the selection token (issue #19): a commit for
+        // a superseded switch moves no settled pointer.
+        port.commitStagedSession(snapshot);
       },
       onSessionSwitchRollback: (reason) => {
         const snapshot = stagedSwitchRef.current;

@@ -69,6 +69,8 @@ type FakeAgentOptions = {
   failLoadFor?: string[];
   /** Suspends every session/load until the returned promise resolves. */
   beforeLoad?: () => Promise<void>;
+  /** Suspends every session/new until the returned promise resolves (supersede tests). */
+  beforeNewSession?: () => Promise<void>;
   /** Reconnect target passed to LiveAcpClient.connect. */
   resume?: { sessionId: string };
   /** Sees every JSON-RPC message the fake agent sends (wire-level assertions). */
@@ -164,7 +166,10 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
         ...(Object.keys(sessionCaps).length > 0 ? { sessionCapabilities: sessionCaps } : {}),
       },
     }))
-    .onRequest(methods.agent.session.new, () => ({ sessionId: 's-1' }))
+    .onRequest(methods.agent.session.new, async () => {
+      await opts.beforeNewSession?.();
+      return { sessionId: 's-1' };
+    })
     .onRequest(methods.agent.session.list, () => ({
       sessions: opts.listSessions ?? [],
     }))
@@ -1242,8 +1247,9 @@ describe('LiveAcpClient × connectionStorePort', () => {
         staged = port.stageSession(id, cwd);
       },
       onSessionSwitchCommit: () => {
+        const snapshot = staged;
         staged = null;
-        port.commitStagedSession();
+        port.commitStagedSession(snapshot);
       },
       onSessionSwitchRollback: (reason: string) => {
         const snapshot = staged;
@@ -1471,5 +1477,150 @@ describe('LiveAcpClient × connectionStorePort', () => {
     expect(slot.connection.sessionId).toBe('A'); // resumable pointer kept
     expect(usePanda.getState().activeSessionId).toBe('A');
     acpClient.disconnect();
+  });
+
+  it('treats a late initialize from a superseded connect as superseded, not an error (issue #19)', async () => {
+    // Era 1's initialize hangs; era 2 (a reconnect) supersedes it before the
+    // response ever lands.
+    let releaseEra1!: () => void;
+    const era1Gate = new Promise<void>((resolve) => (releaseEra1 = resolve));
+    let era1InitSeen = false;
+    const { clientStream: era1Client, serverStream: era1Server } = streamPair();
+    const era1ServerConnection = agent({ name: 'slow-agent' })
+      .onRequest(methods.agent.initialize, () => {
+        era1InitSeen = true;
+        return era1Gate.then(() => ({
+          protocolVersion: PROTOCOL_VERSION,
+          agentInfo: { name: 'slow-agent', version: '0.0.0' },
+          agentCapabilities: {},
+        }));
+      })
+      .onRequest(methods.agent.session.new, () => ({ sessionId: 's-slow' }))
+      .connect(era1Server);
+
+    const connected: string[] = [];
+    const sessionIds: string[] = [];
+    const disconnected: (string | null)[] = [];
+    const acpClient = new LiveAcpClient({
+      onUpdate: () => {},
+      onStatus: () => {},
+      onConnected: (info) => connected.push(info.agentName),
+      onSessionId: (id) => sessionIds.push(id),
+      onDisconnected: (reason) => disconnected.push(reason),
+      onCapabilities: () => {},
+      onSessions: () => {},
+      onSessionInfo: () => {},
+      onReplayStart: () => {},
+      onSessionDeleted: () => {},
+      onSessionSwitchStage: () => {},
+      onSessionSwitchCommit: () => {},
+      onSessionSwitchRollback: () => {},
+    });
+    const era1 = acpClient.connect(era1Client, '/tmp/project');
+    await waitFor(() => era1InitSeen);
+
+    // Era 2: a plain reconnect on a second server — it wins the race.
+    const { clientStream: era2Client, serverStream: era2Server } = streamPair();
+    agent({ name: 'fake-agent-2' })
+      .onRequest(methods.agent.initialize, () => ({
+        protocolVersion: PROTOCOL_VERSION,
+        agentInfo: { name: 'fake-agent-2', title: 'Fake Agent 2', version: '0.0.0' },
+        agentCapabilities: {},
+      }))
+      .onRequest(methods.agent.session.new, () => ({ sessionId: 's-3' }))
+      .connect(era2Server);
+    await acpClient.connect(era2Client, '/tmp/project');
+
+    releaseEra1(); // era 1's initialize finally resolves — superseded
+    await era1;
+    era1ServerConnection.close();
+
+    expect(connected).toEqual(['Fake Agent 2']); // era 1 never surfaced
+    expect(sessionIds).toEqual(['s-3']);
+    expect(disconnected).toEqual([]); // superseded ≠ disconnect, no error report
+    acpClient.disconnect();
+  });
+
+  it('drops session updates that drain from a superseded connection era (issue #19)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let releaseChunk!: () => void;
+    const chunkGate = new Promise<void>((resolve) => (releaseChunk = resolve));
+    const onPrompt: PromptHandler = async (ctx) => {
+      await chunkGate;
+      await notifyUpdate(ctx, {
+        sessionUpdate: 'agent_message_chunk',
+        content: { type: 'text', text: 'stale era' },
+      });
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt });
+
+    const turn = h.acpClient.send([{ type: 'text', text: 'hi' }]);
+    await waitFor(() => h.statuses.includes('running'));
+    // What a reconnect's cleanup does to the era — the generation moves on
+    // while the old socket (still open here) drains its buffered events.
+    (h.acpClient as unknown as { connectionGeneration: number }).connectionGeneration += 1;
+    releaseChunk();
+    await turn;
+
+    expect(h.updates).toEqual([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }], optimistic: true },
+    ]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('session/update from a superseded connection — dropped'),
+    );
+    warnSpy.mockRestore();
+    h.closeAll();
+  });
+
+  it('rolls back a session/load that outlives its connection era (issue #19)', async () => {
+    let releaseLoad!: () => void;
+    const loadGate = new Promise<void>((resolve) => (releaseLoad = resolve));
+    const h = await setup({
+      capabilities: { loadSession: true },
+      history: {
+        's-2': [{ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 's-2 history' } }],
+      },
+      beforeLoad: () => loadGate,
+    });
+
+    const switching = h.acpClient.loadSession('s-2', '/tmp/project');
+    await waitFor(() => h.switchLog.some((entry) => entry.kind === 'stage'));
+
+    // The era is superseded while the load is still in flight (what a
+    // reconnect's cleanup does first): success must roll back, not commit.
+    (h.acpClient as unknown as { connectionGeneration: number }).connectionGeneration += 1;
+    releaseLoad();
+    await switching;
+
+    expect(h.switchLog).toEqual([
+      { kind: 'stage', sessionId: 's-2', cwd: '/tmp/project' },
+      { kind: 'rollback', reason: '连接已被更新的连接替换' },
+    ]);
+    expect(h.sessionIds).toEqual(['s-1']); // nothing settled onto the target
+    h.closeAll();
+  });
+
+  it('discards a session/new that completes after the connection was replaced (issue #19)', async () => {
+    let releaseNew!: () => void;
+    const newGate = new Promise<void>((resolve) => (releaseNew = resolve));
+    let newCalls = 0;
+    const h = await setup({
+      // Gate only the second session/new (the first belongs to connect).
+      beforeNewSession: () => {
+        newCalls += 1;
+        return newCalls > 1 ? newGate : Promise.resolve();
+      },
+    });
+
+    const creating = h.acpClient.newSession('/tmp/project');
+    await waitFor(() => newCalls === 2);
+    (h.acpClient as unknown as { connectionGeneration: number }).connectionGeneration += 1;
+    releaseNew();
+    await creating;
+
+    // The created session was never adopted — only the initial connect's.
+    expect(h.sessionIds).toEqual(['s-1']);
+    h.closeAll();
   });
 });

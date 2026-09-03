@@ -89,6 +89,14 @@ export type SessionSwitchSnapshot = {
   targetDoc: SessionDocument | null;
   /** connection.sessionId before the switch. */
   connectionSessionId: string | null;
+  /**
+   * Selection token minted at stage (issue #19): the store's
+   * `selectionGeneration` when this transaction became the latest
+   * selection. A commit/rollback whose token no longer matches has been
+   * superseded — it may restore era-scoped documents but must not move
+   * settled pointers (latest-wins).
+   */
+  selectionToken: number;
 };
 
 /** A session as locally known — sparse fields merge with existing knowledge. */
@@ -105,6 +113,14 @@ interface PandaState {
   activeConnectionId: string | null;
   /** The session whose document the UI renders; drivers move this pointer. */
   activeSessionId: string | null;
+  /**
+   * Selection generation (issue #19): minted (incremented) every time a new
+   * selection attempt becomes the latest — a staged switch, a delete that
+   * invalidates selections pointing at it, or a close. A pointer-moving
+   * commit carrying an older token has been superseded and is ignored
+   * (latest-wins).
+   */
+  selectionGeneration: number;
   setMode(mode: SessionMode): void;
   /**
    * Creates the slot if missing (existing documents survive — reconnects keep
@@ -168,6 +184,7 @@ export const usePanda = create<PandaState>((set) => ({
   connections: {},
   activeConnectionId: null,
   activeSessionId: null,
+  selectionGeneration: 0,
   setMode: (mode) => set({ mode }),
   ensureConnection: (connectionId) =>
     set((s) => ({
@@ -222,24 +239,37 @@ export type ConnectionStorePort = {
   /** Applies a live session_info_update; undefined fields are untouched. */
   patchSession(sessionId: string, patch: { title?: string | null; updatedAt?: string | null }): void;
   removeSession(sessionId: string): void;
+  /**
+   * Invalidates every in-flight selection (issue #19: close/disconnect) —
+   * commits carrying older tokens stop moving the UI pointer.
+   */
+  invalidateSelections(): void;
   // -- transactional session switch (issue #17) --------------------------------
   /**
    * Stages the switch target: routes this port's writes to the target and
    * guarantees its document exists, but does NOT move the UI pointer or
    * `connection.sessionId` — those are settled-state, owned by
-   * `commitStagedSession`. Returns the pre-state snapshot for rollback.
+   * `commitStagedSession`. Staging also mints the store's selection
+   * generation, making this transaction the latest selection (issue #19):
+   * any older in-flight commit/rollback becomes superseded. Returns the
+   * pre-state snapshot for rollback.
    */
   stageSession(sessionId: string, cwd: string): SessionSwitchSnapshot;
   /**
    * Commits the staged switch: moves `connection.sessionId` and (for the
-   * active connection) `activeSessionId` to the staged session.
+   * active connection) `activeSessionId` to the staged session — unless the
+   * snapshot's selection token was superseded (issue #19): a newer selection
+   * owns the settled pointers by then, so a stale commit clears at most its
+   * own `switching` marker.
    */
-  commitStagedSession(): void;
+  commitStagedSession(snapshot: SessionSwitchSnapshot | null): void;
   /**
    * Rolls the switch back: restores the target's pre-switch document (or
    * removes the placeholder it never had) — pending permissions ride on
    * the document (issue #18) — plus `connection.sessionId` and this port's
-   * routing. The UI pointer never moved, so it needs no restore.
+   * routing. A superseded rollback restores documents only; the settled
+   * routing belongs to the newer selection (issue #19). The UI pointer never
+   * moved, so it needs no restore.
    */
   rollbackStagedSession(snapshot: SessionSwitchSnapshot): void;
 };
@@ -342,6 +372,11 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
         ),
       })),
     removeSession: (sessionId) => {
+      const slot = usePanda.getState().connections[connectionId];
+      // A delete only invalidates selections pointing at the deleted session
+      // (issue #19) — an unrelated in-flight switch must survive it.
+      const touchesSelection =
+        currentSessionId === sessionId || slot?.switching?.sessionId === sessionId;
       currentSessionId = currentSessionId === sessionId ? null : currentSessionId;
       usePanda.setState((s) => {
         const patched = patchConnectionState(s, connectionId, (state) => ({
@@ -352,16 +387,25 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
         return {
           ...(patched ?? {}),
           ...(s.activeSessionId === sessionId ? { activeSessionId: null } : {}),
+          ...(touchesSelection ? { selectionGeneration: s.selectionGeneration + 1 } : {}),
         };
       });
     },
+    invalidateSelections: () =>
+      usePanda.setState((s) => ({ selectionGeneration: s.selectionGeneration + 1 })),
     stageSession: (sessionId, cwd) => {
+      // Mint the selection token FIRST (issue #19): staging makes this
+      // transaction the latest selection — older in-flight commits become
+      // superseded the moment this runs.
+      usePanda.setState((s) => ({ selectionGeneration: s.selectionGeneration + 1 }));
+      const selectionToken = usePanda.getState().selectionGeneration;
       const slot = usePanda.getState().connections[connectionId];
       const snapshot: SessionSwitchSnapshot = {
         targetSessionId: sessionId,
         prevSessionId: currentSessionId,
         targetDoc: slot?.docs[sessionId] ?? null,
         connectionSessionId: slot?.connection.sessionId ?? null,
+        selectionToken,
       };
       currentSessionId = sessionId;
       usePanda.setState((s) => {
@@ -387,15 +431,33 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
       });
       return snapshot;
     },
-    commitStagedSession: () => {
-      const sessionId = currentSessionId;
-      if (sessionId === null) {
+    commitStagedSession: (snapshot) => {
+      if (snapshot === null) {
         // Never leave `switching` set on this path: a stale marker would lock
         // the UI busy forever (nothing else can clear it once staged).
-        console.warn(`[store] connection "${connectionId}" commitStagedSession without a staged session — ignored`);
+        console.warn(`[store] connection "${connectionId}" commitStagedSession without a staged snapshot — ignored`);
         usePanda.setState((s) => patchConnectionState(s, connectionId, () => ({ switching: null })) ?? {});
         return;
       }
+      const stale = usePanda.getState().selectionGeneration !== snapshot.selectionToken;
+      if (stale) {
+        // Latest-wins (issue #19): a newer selection (or an invalidating
+        // delete/close) owns the settled pointers — this late commit moves
+        // nothing. Its replay history lives on in the target's document.
+        console.warn(
+          `[store] connection "${connectionId}" switch to ${snapshot.targetSessionId} superseded ` +
+            `(selection token ${snapshot.selectionToken}) — settled pointers untouched`,
+        );
+        usePanda.setState((s) =>
+          patchConnectionState(s, connectionId, (state) => ({
+            // Clear only this transaction's marker: a newer stage may have
+            // set its own.
+            switching: state.switching?.sessionId === snapshot.targetSessionId ? null : state.switching,
+          })) ?? {},
+        );
+        return;
+      }
+      const sessionId = snapshot.targetSessionId;
       usePanda.setState((s) => {
         const patched = patchConnectionState(s, connectionId, (state) => ({
           connection: { ...state.connection, sessionId },
@@ -413,7 +475,8 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
       });
     },
     rollbackStagedSession: (snapshot) => {
-      currentSessionId = snapshot.prevSessionId;
+      const stale = usePanda.getState().selectionGeneration !== snapshot.selectionToken;
+      if (!stale) currentSessionId = snapshot.prevSessionId;
       usePanda.setState((s) => {
         const patched = patchConnectionState(s, connectionId, (state) => {
           const docs = { ...state.docs };
@@ -432,8 +495,12 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
           // metadata upsert (cwd/title/updatedAt retention) is a keeper.
           return {
             docs,
-            connection: { ...state.connection, sessionId: snapshot.connectionSessionId },
-            switching: null,
+            // A superseded rollback restores documents only (issue #19): the
+            // settled routing belongs to the newer selection by now.
+            connection: stale
+              ? state.connection
+              : { ...state.connection, sessionId: snapshot.connectionSessionId },
+            switching: state.switching?.sessionId === snapshot.targetSessionId ? null : state.switching,
           };
         });
         return patched ?? {};

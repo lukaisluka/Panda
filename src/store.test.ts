@@ -115,7 +115,7 @@ describe('transactional session switch (issue #17)', () => {
     expect(usePanda.getState().connections['live']!.connection.sessionId).toBe('s-1');
     expect(usePanda.getState().connections['live']!.docs['s-2']!.turns).toHaveLength(1);
 
-    port.commitStagedSession();
+    port.commitStagedSession(snapshot);
     const settled = usePanda.getState();
     expect(settled.activeSessionId).toBe('s-2');
     expect(settled.connections['live']!.connection.sessionId).toBe('s-2');
@@ -211,15 +211,15 @@ describe('transactional session switch (issue #17)', () => {
     expect(slot.connection.error).toBeNull();
   });
 
-  it('commitStagedSession without a staged session warns, clears switching, never deadlocks', () => {
+  it('commitStagedSession without a staged snapshot warns, clears switching, never deadlocks', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     usePanda.getState().ensureConnection('live');
     const port = connectionStorePort('live'); // no session ever adopted
 
-    port.commitStagedSession();
+    port.commitStagedSession(null);
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('commitStagedSession without a staged session'),
+      expect.stringContaining('commitStagedSession without a staged snapshot'),
     );
     expect(usePanda.getState().connections['live']!.connection.sessionId).toBeNull();
     expect(usePanda.getState().activeSessionId).toBeNull();
@@ -232,13 +232,96 @@ describe('transactional session switch (issue #17)', () => {
     usePanda.getState().ensureConnection('live');
     const port = connectionStorePort('live');
     port.adoptSession('s-1', '/a');
-    port.stageSession('s-2', '/b');
+    const snapshot = port.stageSession('s-2', '/b');
     port.removeSession('s-2');
 
-    port.commitStagedSession();
+    port.commitStagedSession(snapshot);
 
     expect(usePanda.getState().connections['live']!.switching).toBeNull();
     // The pointer stays on the surviving session; the UI never locks busy.
     expect(usePanda.getState().connections['live']!.connection.sessionId).toBe('s-1');
+  });
+});
+
+describe('selection generation (issue #19)', () => {
+  it('latest-wins: a late commit for a superseded switch never moves the pointer', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+
+    // Two overlapping switch attempts (the client blocks these today; the
+    // store must survive them anyway — drivers can drift, #21 lifts the
+    // block). A's replay history routes into s-A's own document.
+    const switchA = port.stageSession('s-A', '/a');
+    port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'A history' }] });
+    const switchB = port.stageSession('s-B', '/b');
+    port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'B history' }] });
+
+    // A's load completes late: latest-wins — no settled pointer moves, and
+    // B's marker survives A's stale commit.
+    port.commitStagedSession(switchA);
+    let state = usePanda.getState();
+    expect(state.activeSessionId).toBe('s-1');
+    expect(state.connections['live']!.connection.sessionId).toBe('s-1');
+    expect(state.connections['live']!.switching).toEqual({ sessionId: 's-B' });
+    // A's history stays filed under its own session document.
+    expect(state.connections['live']!.docs['s-A']!.turns).toHaveLength(1);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('superseded'));
+
+    port.commitStagedSession(switchB);
+    state = usePanda.getState();
+    expect(state.activeSessionId).toBe('s-B');
+    expect(state.connections['live']!.switching).toBeNull();
+    warnSpy.mockRestore();
+  });
+
+  it('a superseded rollback restores documents but not the newer era\'s settled routing', () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+    const switchA = port.stageSession('s-A', '/a');
+    port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'A partial replay' }] });
+    const switchB = port.stageSession('s-B', '/b');
+    port.commitStagedSession(switchB);
+
+    // A's transaction dies late: its document restore is still correct
+    // (era-scoped), but the settled routing now belongs to B.
+    port.rollbackStagedSession(switchA);
+    const state = usePanda.getState();
+    expect(state.connections['live']!.connection.sessionId).toBe('s-B');
+    expect(state.activeSessionId).toBe('s-B');
+    // A never had a pre-switch document — the placeholder the stage created
+    // (and its partial replay) is removed, not resurrected as state.
+    expect(state.connections['live']!.docs['s-A']).toBeUndefined();
+  });
+
+  it('a close invalidates in-flight selections — a late commit moves nothing', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+    const snapshot = port.stageSession('s-2', '/b');
+
+    port.invalidateSelections(); // what the driver calls on disconnect
+    port.commitStagedSession(snapshot);
+
+    const state = usePanda.getState();
+    expect(state.activeSessionId).toBe('s-1');
+    expect(state.connections['live']!.connection.sessionId).toBe('s-1');
+    expect(state.connections['live']!.switching).toBeNull();
+    warnSpy.mockRestore();
+  });
+
+  it('an unrelated delete does not invalidate an in-flight switch', () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+    const snapshot = port.stageSession('s-2', '/b');
+
+    port.removeSession('s-unrelated'); // deleting some other session
+    port.commitStagedSession(snapshot);
+
+    expect(usePanda.getState().activeSessionId).toBe('s-2'); // the switch settles
   });
 });
