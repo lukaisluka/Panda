@@ -167,7 +167,7 @@ describe('transactional session switch (issue #17)', () => {
     expect(usePanda.getState().connections['live']!.docs['s-fresh']).toBeUndefined();
   });
 
-  it('rollback restores a pending permission cleared by the replay reset', () => {
+  it('rollback restores pending permissions cleared by the replay reset', () => {
     usePanda.getState().ensureConnection('live');
     const port = connectionStorePort('live');
     port.adoptSession('s-1', '/a');
@@ -176,14 +176,22 @@ describe('transactional session switch (issue #17)', () => {
       title: 'Edit file',
       options: [{ id: 'o-1', name: 'Allow once', kind: 'allow_once' as const }],
     };
-    port.setPermission(request);
+    // Permissions live in the document (issue #18): the target of a revisit
+    // switch carries a pending permission that the replay reset destroys.
+    port.adoptSession('s-2', '/b');
+    port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'work' }] });
+    port.update({ sessionUpdate: 'permission_requested', request });
+    port.adoptSession('s-1', '/a');
 
     const snapshot = port.stageSession('s-2', '/b');
     port.resetDocument();
-    expect(usePanda.getState().connections['live']!.permission).toBeNull();
+    expect(usePanda.getState().connections['live']!.docs['s-2']!.permissions).toEqual({});
 
     port.rollbackStagedSession(snapshot);
-    expect(usePanda.getState().connections['live']!.permission).toEqual(request);
+    expect(usePanda.getState().connections['live']!.docs['s-2']!.permissions['t-1']).toMatchObject({
+      status: 'pending',
+      request,
+    });
   });
 
   it('staging keeps the session entry metadata and clears a stale error', () => {

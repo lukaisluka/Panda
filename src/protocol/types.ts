@@ -135,11 +135,27 @@ export type AcpSessionUpdate =
    */
   | { sessionUpdate: 'session_state'; kind: AcpSessionLevelKind; raw: SessionNotification }
   /**
-   * An update Panda cannot interpret (unknown `sessionUpdate` kind, or a
-   * chunk whose only content block is unsupported). Rendered as an
-   * unsupported fallback block and kept in `unhandledNotifications`.
+   * An unknown-to-Panda `sessionUpdate` kind, or a chunk whose only content
+   * block is unsupported. Rendered as an unsupported fallback block and kept
+   * in `unhandledNotifications`.
    */
-  | { sessionUpdate: 'unsupported'; raw: SessionNotification };
+  | { sessionUpdate: 'unsupported'; raw: SessionNotification }
+  // -- permission lifecycle (session/request_permission, issue #18) -----------
+  // Not wire notifications: the drivers translate the client-side RPC into
+  // these events so the reducer folds permissions into the document like
+  // every other session-scoped state.
+  /**
+   * The agent asked for permission. Concurrent requests coexist; if the
+   * tool call has not arrived yet the reducer plants a placeholder tool
+   * record that the later `tool_call` event merges into.
+   */
+  | { sessionUpdate: 'permission_requested'; request: PermissionRequest }
+  /**
+   * A permission settled — user answer or cancellation (turn cancel,
+   * disconnect). The resolved record is kept in the document (status +
+   * response); only the pending card disappears from the UI.
+   */
+  | { sessionUpdate: 'permission_resolved'; toolCallId: string; response: PermissionResponse };
 
 /**
  * Session-level kinds mapped to `session_state` events (latest-wins recording,
@@ -226,6 +242,14 @@ export type SessionDocument = {
   status: SessionStatus;
   usage: Usage;
   /**
+   * Permission lifecycle per tool call (issue #18), keyed by toolCallId and
+   * kept for the whole session — pending requests render as cards, resolved
+   * ones stay as records. Insertion-ordered: JS object string keys iterate
+   * in assignment order, so replayed sessions restore the original card
+   * order.
+   */
+  permissions: Record<string, PermissionState>;
+  /**
    * Latest raw notification per session-level kind (plan/usage/mode/config/
    * commands/session_info/…). Bounded by the kind set — history per kind is
    * intentionally not kept.
@@ -240,9 +264,9 @@ export type SessionDocument = {
 };
 
 // ---------------------------------------------------------------------------
-// Permission requests (session/request_permission, mirrored from the client
-// side of the wire; the replay driver emits them during Phase 0, the live
-// client during Phase 1). The four kinds are the exact ACP wire set.
+// Permissions (session/request_permission, mirrored from the client side of
+// the wire; the drivers translate the RPC into reducer events, issue #18).
+// The four kinds are the exact ACP wire set.
 // ---------------------------------------------------------------------------
 
 export type PermissionOptionKind =
@@ -260,5 +284,20 @@ export type PermissionOption = {
 export type PermissionRequest = {
   toolCallId: string;
   title: string;
+  /** Tool kind from the wire's toolCall, for placeholder tool records. */
+  kind?: AcpToolKind;
   options: PermissionOption[];
+};
+
+/** How a permission settled — the chosen option, or a cancellation. */
+export type PermissionResponse =
+  | { outcome: 'selected'; kind: PermissionOptionKind }
+  | { outcome: 'cancelled' };
+
+/** One permission's lifecycle state, session-scoped in the document. */
+export type PermissionState = {
+  status: 'pending' | 'resolved' | 'cancelled';
+  request: PermissionRequest;
+  /** Settled outcome; null while pending. */
+  response: PermissionResponse | null;
 };

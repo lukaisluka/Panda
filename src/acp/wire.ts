@@ -335,6 +335,7 @@ export function toPermissionRequest(request: RequestPermissionRequest): Permissi
   return {
     toolCallId: request.toolCall.toolCallId,
     title: request.toolCall.title ?? '未命名操作',
+    kind: request.toolCall.kind ?? undefined,
     options: request.options.map((option) => ({
       id: option.optionId,
       name: option.name,

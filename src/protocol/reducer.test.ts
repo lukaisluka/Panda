@@ -373,3 +373,88 @@ describe('reducer echo reconciliation (optimistic user messages)', () => {
     const after = applyUpdate(doc, { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'late' }] });
     expect(after.turns[0]!.blocks).toHaveLength(2);
   });
+
+describe('reducer permission lifecycle (issue #18)', () => {
+  const request = (toolCallId: string, title = `操作 ${toolCallId}`) => ({
+    toolCallId,
+    title,
+    kind: 'edit' as const,
+    options: [{ id: 'o-1', name: 'Allow once', kind: 'allow_once' as const }],
+  });
+
+  it('records concurrent pending permissions independently', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'permission_requested', request: request('t-1') },
+      { sessionUpdate: 'permission_requested', request: request('t-2') },
+    ]);
+    expect(doc.permissions['t-1']).toMatchObject({ status: 'pending', response: null });
+    expect(doc.permissions['t-2']).toMatchObject({ status: 'pending', response: null });
+  });
+
+  it('settles one permission without touching the others and keeps the record', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'permission_requested', request: request('t-1') },
+      { sessionUpdate: 'permission_requested', request: request('t-2') },
+      { sessionUpdate: 'permission_resolved', toolCallId: 't-1', response: { outcome: 'selected', kind: 'allow_once' } },
+    ]);
+    expect(doc.permissions['t-1']).toEqual({
+      status: 'resolved',
+      request: request('t-1'),
+      response: { outcome: 'selected', kind: 'allow_once' },
+    });
+    expect(doc.permissions['t-2']).toMatchObject({ status: 'pending' });
+  });
+
+  it('plants a placeholder tool record when the permission precedes its tool_call, then merges', () => {
+    const before = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'permission_requested', request: request('t-out-of-order') },
+    ]);
+    // Placeholder visible immediately, carrying the request's title/kind.
+    expect(before.turns[0]!.blocks).toContainEqual(
+      expect.objectContaining({
+        kind: 'tool_call',
+        call: expect.objectContaining({ id: 't-out-of-order', title: '操作 t-out-of-order', kind: 'edit', status: 'pending' }),
+      }),
+    );
+
+    const merged = applyUpdate(before, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 't-out-of-order',
+      title: 'Edit file: src/a.ts',
+      kind: 'edit',
+      status: 'in_progress',
+    });
+    // The later tool_call merges into the placeholder — no duplicate block.
+    const calls = merged.turns[0]!.blocks.filter((b) => b.kind === 'tool_call');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ call: { id: 't-out-of-order', title: 'Edit file: src/a.ts', status: 'in_progress' } });
+  });
+
+  it('keeps a cancelled permission as cancelled (turn cancel / disconnect)', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'permission_requested', request: request('t-1') },
+      { sessionUpdate: 'permission_resolved', toolCallId: 't-1', response: { outcome: 'cancelled' } },
+    ]);
+    expect(doc.permissions['t-1']).toMatchObject({
+      status: 'cancelled',
+      response: { outcome: 'cancelled' },
+    });
+  });
+
+  it('drops a resolve for an unknown toolCallId loudly', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'permission_resolved', toolCallId: 'ghost', response: { outcome: 'cancelled' } },
+    ]);
+    expect(doc.permissions).toEqual({});
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('permission_resolved for unknown toolCallId ghost'),
+    );
+    warnSpy.mockRestore();
+  });
+});

@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { applyUpdate, emptySession } from './protocol/reducer';
 import type {
   AcpSessionUpdate,
-  PermissionRequest,
   SessionDocument,
   SessionStatus,
 } from './protocol/types';
@@ -70,20 +69,16 @@ export type ConnectionState = {
    * `activeSessionId`, which only a commit may move.
    */
   switching: { sessionId: string } | null;
-  /**
-   * Single placeholder until #18 turns permissions into a collection
-   * (concurrent / out-of-order / settle paths).
-   */
-  permission: PermissionRequest | null;
 };
 
 /**
  * Snapshot taken before a transactional session switch (issue #17) — what
  * `rollbackStagedSession` restores when `session/load` fails: the routed
- * session, the target's document (the thing the replay reset destroys), the
- * pending permission and the settled `connection.sessionId`. The sidebar
- * entry is deliberately kept — stage's metadata upsert survives (title and
- * updatedAt retention is the point). Captured before the replay reset runs.
+ * session, the target's document (the thing the replay reset destroys —
+ * permissions included, they live in the document per #18) and the settled
+ * `connection.sessionId`. The sidebar entry is deliberately kept — stage's
+ * metadata upsert survives (title and updatedAt retention is the point).
+ * Captured before the replay reset runs.
  */
 export type SessionSwitchSnapshot = {
   /** The switch's target; identifies the document rollback writes back. */
@@ -92,8 +87,6 @@ export type SessionSwitchSnapshot = {
   prevSessionId: string | null;
   /** The target's document before the replay reset it; null = it didn't exist. */
   targetDoc: SessionDocument | null;
-  /** Pending permission at switch start — the replay reset clears it. */
-  permission: PermissionRequest | null;
   /** connection.sessionId before the switch. */
   connectionSessionId: string | null;
 };
@@ -147,7 +140,6 @@ export function emptyConnectionState(): ConnectionState {
     sessions: [],
     docs: {},
     switching: null,
-    permission: null,
   };
 }
 
@@ -217,7 +209,6 @@ export type ConnectionStorePort = {
   adoptSession(sessionId: string, cwd: string): void;
   update(update: AcpSessionUpdate): void;
   setStatus(status: SessionStatus): void;
-  setPermission(request: PermissionRequest | null): void;
   setConnection(patch: Partial<ConnectionInfo>): void;
   /** Clears the adopted session's document and the pending permission. */
   resetDocument(): void;
@@ -317,7 +308,6 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
       if (!requireSession('status')) return;
       patchDoc((doc) => ({ ...doc, status }));
     },
-    setPermission: (request) => patchSlot(() => ({ permission: request })),
     setConnection: (patch) =>
       patchSlot((state) => ({ connection: { ...state.connection, ...patch } })),
     resetDocument: () => {
@@ -327,7 +317,6 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
       const sessionId = currentSessionId;
       patchSlot((state) => ({
         docs: { ...state.docs, [sessionId]: emptySession() },
-        permission: null,
       }));
     },
     setCapabilities: (caps) => patchSlot(() => ({ capabilities: caps })),
@@ -372,7 +361,6 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
         targetSessionId: sessionId,
         prevSessionId: currentSessionId,
         targetDoc: slot?.docs[sessionId] ?? null,
-        permission: slot?.permission ?? null,
         connectionSessionId: slot?.connection.sessionId ?? null,
       };
       currentSessionId = sessionId;
@@ -444,7 +432,6 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
           // metadata upsert (cwd/title/updatedAt retention) is a keeper.
           return {
             docs,
-            permission: snapshot.permission,
             connection: { ...state.connection, sessionId: snapshot.connectionSessionId },
             switching: null,
           };
@@ -477,8 +464,6 @@ export const useActiveDoc = () =>
     const connection = activeConnectionState(s);
     return (s.activeSessionId ? connection.docs[s.activeSessionId] : undefined) ?? EMPTY_DOC;
   });
-
-export const useActivePermission = () => usePanda((s) => activeConnectionState(s).permission);
 
 export const useActiveConnection = () => usePanda((s) => activeConnectionState(s).connection);
 

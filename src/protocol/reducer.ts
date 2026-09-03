@@ -13,6 +13,8 @@ import type {
   AcpSessionLevelKind,
   AcpSessionUpdate,
   Block,
+  PermissionRequest,
+  PermissionResponse,
   SessionDocument,
   SessionNotification,
   ToolCallState,
@@ -24,6 +26,7 @@ export function emptySession(): SessionDocument {
     turns: [],
     status: 'idle',
     usage: { used: 0, size: 0, cost: null },
+    permissions: {},
     latestNotifications: {},
     unhandledNotifications: [],
   };
@@ -106,6 +109,12 @@ export function applyUpdate(
 
     case 'unsupported':
       return appendUnsupported(doc, update.raw);
+
+    case 'permission_requested':
+      return requestPermission(doc, update.request);
+
+    case 'permission_resolved':
+      return resolvePermission(doc, update.toolCallId, update.response);
   }
 }
 
@@ -293,6 +302,63 @@ function findToolCall(doc: SessionDocument, toolCallId: string): ToolCallState |
     }
   }
   return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Permission lifecycle (issue #18)
+// ---------------------------------------------------------------------------
+
+/**
+ * Records a permission request and, when it arrives before its `tool_call`
+ * event (out-of-order — the RPC can precede the notification), plants a
+ * placeholder tool record so the card has a place to live; the later
+ * `tool_call` merges into it via the normal upsert path.
+ */
+function requestPermission(doc: SessionDocument, request: PermissionRequest): SessionDocument {
+  const withRecord: SessionDocument = {
+    ...doc,
+    permissions: {
+      ...doc.permissions,
+      [request.toolCallId]: { status: 'pending', request, response: null },
+    },
+  };
+  if (findToolCall(withRecord, request.toolCallId)) return withRecord;
+  return upsertToolCall(withRecord, {
+    id: request.toolCallId,
+    title: request.title,
+    kind: request.kind ?? 'other',
+    status: 'pending',
+    content: [],
+    locations: [],
+  });
+}
+
+/**
+ * Settles a permission: pending → resolved/cancelled with the response kept.
+ * A resolve for an unknown toolCallId is a driver/reducer contract violation
+ * — surfaced loudly, never silently applied.
+ */
+function resolvePermission(
+  doc: SessionDocument,
+  toolCallId: string,
+  response: PermissionResponse,
+): SessionDocument {
+  const existing = doc.permissions[toolCallId];
+  if (!existing) {
+    console.warn(`[reducer] permission_resolved for unknown toolCallId ${toolCallId} — ignored`);
+    return doc;
+  }
+  return {
+    ...doc,
+    permissions: {
+      ...doc.permissions,
+      [toolCallId]: {
+        ...existing,
+        status: response.outcome === 'cancelled' ? 'cancelled' : 'resolved',
+        response,
+      },
+    },
+  };
 }
 
 /**

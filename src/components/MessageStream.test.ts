@@ -13,6 +13,12 @@ const permission: PermissionRequest = {
   options: [{ id: 'approve', name: 'Approve', kind: 'allow_once' }],
 };
 
+const secondPermission: PermissionRequest = {
+  toolCallId: 'second-permission-id',
+  title: 'Approve the other operation',
+  options: [{ id: 'approve', name: 'Approve', kind: 'allow_once' }],
+};
+
 function toolCall(id: string, status: ToolCallState['status'] = 'pending'): ToolCallState {
   return { id, title: id, kind: 'other', status, content: [], locations: [] };
 }
@@ -22,6 +28,7 @@ function documentWith(...calls: ToolCallState[]): SessionDocument {
     turns: [{ id: 'turn-1', blocks: calls.map((call) => ({ kind: 'tool_call' as const, call })) }],
     status: 'requires_action',
     usage: { used: 0, size: 0, cost: null },
+    permissions: {},
     latestNotifications: {},
     unhandledNotifications: [],
   };
@@ -29,13 +36,13 @@ function documentWith(...calls: ToolCallState[]): SessionDocument {
 
 describe('flatten permission placement', () => {
   it('mounts a permission card on the exact matching tool call', () => {
-    const items = flatten(documentWith(toolCall('permission-id')), permission, null);
+    const items = flatten(documentWith(toolCall('permission-id')), [permission], null);
 
     expect(items[0]).toMatchObject({ kind: 'block', permission });
   });
 
   it('mounts an unmatched permission on the sole pending tool call in the current turn', () => {
-    const items = flatten(documentWith(toolCall('stream-id')), permission, null);
+    const items = flatten(documentWith(toolCall('stream-id')), [permission], null);
 
     expect(items[0]).toMatchObject({ kind: 'block', permission });
   });
@@ -43,12 +50,36 @@ describe('flatten permission placement', () => {
   it('renders an unmatched permission independently when multiple pending calls make attachment ambiguous', () => {
     const items = flatten(
       documentWith(toolCall('first-pending'), toolCall('second-pending')),
-      permission,
+      [permission],
       null,
     );
 
     expect(items).toHaveLength(3);
     expect(items[2]).toMatchObject({ kind: 'permission', request: permission });
+  });
+
+  it('renders several pending permissions concurrently, each answered independently (issue #18)', () => {
+    const items = flatten(
+      documentWith(toolCall('permission-id'), toolCall('second-permission-id')),
+      [permission, secondPermission],
+      null,
+    );
+
+    // Both cards attach to their own tool call — no first-wins cancellation.
+    expect(items[0]).toMatchObject({ kind: 'block', permission });
+    expect(items[1]).toMatchObject({ kind: 'block', permission: secondPermission });
+  });
+
+  it('renders unmatched concurrent permissions as stacked independent cards', () => {
+    const items = flatten(
+      documentWith(toolCall('first-pending'), toolCall('second-pending')),
+      [permission, secondPermission],
+      null,
+    );
+
+    expect(items).toHaveLength(4);
+    expect(items[2]).toMatchObject({ kind: 'permission', request: permission });
+    expect(items[3]).toMatchObject({ kind: 'permission', request: secondPermission });
   });
 });
 
@@ -71,11 +102,12 @@ describe('flatten unsupported fallback blocks', () => {
       ],
       status: 'idle',
       usage: { used: 0, size: 0, cost: null },
+      permissions: {},
       latestNotifications: {},
       unhandledNotifications: [notification],
     };
 
-    const items = flatten(doc, null, null);
+    const items = flatten(doc, [], null);
     expect(items.map((item) => (item.kind === 'block' ? item.block.kind : item.kind))).toEqual([
       'user_message',
       'unsupported',
