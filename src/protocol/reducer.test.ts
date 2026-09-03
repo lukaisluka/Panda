@@ -357,3 +357,19 @@ describe('reducer echo reconciliation (optimistic user messages)', () => {
     warnSpy.mockRestore();
   });
 });
+
+  it('keeps the optimistic marker (and the merge lock) when the echo carried no messageId', () => {
+    const r = rawNote('echo-no-id');
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }], optimistic: true },
+      { sessionUpdate: 'user_message_confirmed', notifications: [r] },
+    ]);
+    expect(doc.turns[0]!.blocks[0]).toEqual({
+      kind: 'user_message',
+      content: [{ type: 'text', text: 'hi' }],
+      optimistic: true,
+      rawNotifications: [r],
+    });
+    const after = applyUpdate(doc, { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'late' }] });
+    expect(after.turns[0]!.blocks).toHaveLength(2);
+  });

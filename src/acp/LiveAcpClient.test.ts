@@ -827,3 +827,23 @@ describe('LiveAcpClient', () => {
     ]);
     h.closeAll();
   });
+
+  it('flushes an un-reconciled partial echo when the prompt turn fails', async () => {
+    const onPrompt: PromptHandler = async (ctx) => {
+      await notifyUpdate(ctx, {
+        sessionUpdate: 'user_message_chunk',
+        messageId: 'pm-1',
+        content: { type: 'text', text: 'hel' },
+      });
+      throw new Error('agent exploded');
+    };
+    const h = await setup({ onPrompt });
+    await h.acpClient.send([{ type: 'text', text: 'hello' }]);
+
+    expect(h.updates).toEqual([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hello' }], optimistic: true },
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hel' }], raw: expect.any(Object) },
+    ]);
+    expect(h.statuses.at(-1)).toBe('idle');
+    h.closeAll();
+  });

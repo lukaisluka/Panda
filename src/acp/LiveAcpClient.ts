@@ -11,14 +11,21 @@ import {
   type RequestPermissionResponse,
   type SessionNotification,
   type Stream,
-} from '@agentclientprotocol/sdk';import type {
+} from '@agentclientprotocol/sdk';
+import type {
   AcpContentBlock,
   AcpSessionUpdate,
   PermissionOptionKind,
   PermissionRequest,
   SessionStatus,
 } from '../protocol/types';
-import { parseSessionNotification, echoRelation, removeSdkStrictSessionUpdateRouter, toAcpUpdates, toPermissionRequest } from './wire';
+import {
+  echoRelation,
+  parseSessionNotification,
+  removeSdkStrictSessionUpdateRouter,
+  toAcpUpdates,
+  toPermissionRequest,
+} from './wire';
 
 /**
  * Live ACP client (Phase 1+2): speaks v1 ACP over an injected stream to an
@@ -92,8 +99,7 @@ type PendingOutbound = {
   /** Protocol messageId seen on the first echo chunk, if the agent sent one. */
   protocolMessageId?: string;
   /** Echo window closed (matched, diverged, or boundary passed) — pass through. */
-  echoDisabled: boolean;
-  confirmed: boolean;
+  echoWindowClosed: boolean;
 };
 
 /** Keep in sync with package.json. */
@@ -306,7 +312,7 @@ export class LiveAcpClient {
     }
     // The reducer is the only path that opens a user turn — echo locally as
     // optimistic (reconciled against the agent's echo, see pendingOutbound).
-    this.pendingOutbound = { prompt: content, buffered: [], echoDisabled: false, confirmed: false };
+    this.pendingOutbound = { prompt: content, buffered: [], echoWindowClosed: false };
     this.handlers.onUpdate({ sessionUpdate: 'user_message', content, optimistic: true });
     this.handlers.onStatus('running');
     const wirePrompt: ContentBlock[] = content;
@@ -461,16 +467,22 @@ export class LiveAcpClient {
    */
   private reconcileUserEcho(params: SessionNotification): boolean {
     const pending = this.pendingOutbound;
-    if (!pending || pending.echoDisabled) return false;
+    if (!pending || pending.echoWindowClosed) return false;
     const update = params.update;
     if (update.sessionUpdate !== 'user_message_chunk') {
-      if (pending.buffered.length > 0) this.flushBufferedEcho();
+      if (pending.buffered.length > 0) {
+        console.info('[panda/acp] echo window closed by non-echo update — flushing partial echo');
+        this.flushBufferedEcho();
+      }
       return false;
     }
     const incomingId = update.messageId ?? undefined;
     if (pending.protocolMessageId && incomingId && pending.protocolMessageId !== incomingId) {
       // A second protocol message started echoing — the buffered one belongs
       // elsewhere; render the buffer and let this chunk through as-is.
+      console.info(
+        `[panda/acp] echo messageId changed (${pending.protocolMessageId} -> ${incomingId}) — flushing`,
+      );
       this.flushBufferedEcho();
       return false;
     }
@@ -481,19 +493,25 @@ export class LiveAcpClient {
       pending.buffered.map((n) => (n.update as { content: ContentBlock }).content),
     );
     if (relation === 'equal') {
+      console.info(
+        `[panda/acp] echo matched outbound message${pending.protocolMessageId ? ` (messageId ${pending.protocolMessageId})` : ''}`,
+      );
       this.handlers.onUpdate({
         sessionUpdate: 'user_message_confirmed',
         protocolMessageId: pending.protocolMessageId,
         notifications: pending.buffered,
       });
       pending.buffered = [];
-      pending.confirmed = true;
-      pending.echoDisabled = true;
+      pending.echoWindowClosed = true;
       return true;
     }
     if (relation === 'different') {
       // The agent echoed something else: keep the optimistic block untouched
-      // and render the protocol version as its own message.
+      // and render the protocol version as its own message. Note a `prefix`
+      // that never completes is also flushed here or at turn end — an
+      // incomplete echo cannot be merged into the optimistic block because
+      // it may still diverge later (react-acp semantics, doc §4.7).
+      console.info('[panda/acp] echo diverged from outbound message — rendering protocol version');
       this.flushBufferedEcho();
     }
     return true; // equal handled above; prefix keeps buffering, different flushed
@@ -509,7 +527,7 @@ export class LiveAcpClient {
       }
     }
     pending.buffered = [];
-    pending.echoDisabled = true;
+    pending.echoWindowClosed = true;
   }
 
   /** Turn settled: flush anything still held and drop the reconciliation state. */

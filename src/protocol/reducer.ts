@@ -199,8 +199,12 @@ function appendUserMessage(
 
 /**
  * Equal-echo reconciliation: the trailing optimistic user block becomes
- * protocol-confirmed. An event that cannot find its block is a client/reducer
- * contract violation — surfaced loudly, never silently applied elsewhere.
+ * protocol-confirmed. With a protocol messageId the block drops its local
+ * marker and becomes indistinguishable from a replayed one; without one the
+ * marker stays — either way the block stays locked against merging (it is or
+ * was a local echo; only reconciliation owns its content). An event that
+ * cannot find its block is a client/reducer contract violation — surfaced
+ * loudly, never silently applied elsewhere.
  */
 function confirmUserMessage(
   doc: SessionDocument,
@@ -213,10 +217,9 @@ function confirmUserMessage(
     return doc;
   }
   const { optimistic: _dropped, ...rest } = last;
-  let confirmed: Block = {
-    ...rest,
-    ...(update.protocolMessageId ? { protocolMessageId: update.protocolMessageId } : {}),
-  };
+  let confirmed: Block = update.protocolMessageId
+    ? { ...rest, protocolMessageId: update.protocolMessageId }
+    : { ...last };
   for (const notification of update.notifications) {
     confirmed = withRaw(confirmed, notification);
   }
