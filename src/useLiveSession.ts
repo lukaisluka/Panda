@@ -94,9 +94,28 @@ export function useLiveSession() {
   const portRef = useRef<ConnectionStorePort | null>(null);
   if (portRef.current === null) portRef.current = connectionStorePort(LIVE_CONNECTION_ID);
   const port = portRef.current;
-  // Snapshot of the in-flight session switch (issue #17) — captured at stage,
-  // consumed by exactly one commit or rollback.
-  const stagedSwitchRef = useRef<SessionSwitchSnapshot | null>(null);
+  /**
+   * Snapshot of the in-flight session switch (issue #17) — captured at stage,
+   * consumed by exactly one commit or rollback. Carries the client's
+   * connection era (issue #19): a settle whose era no longer matches was
+   * abandoned (reconnect/disconnect) and must be ignored — its snapshot was
+   * already rolled back stale at abandonment time.
+   */
+  const stagedSwitchRef = useRef<{ snapshot: SessionSwitchSnapshot; era: number } | null>(null);
+  /**
+   * Abandons the staged switch (issue #19): the connection era it belongs to
+   * is gone (a new connect is replacing it, or the connection died). The
+   * invalidation mints a fresh selection generation FIRST, so the rollback
+   * below lands stale — documents restored, settled pointers untouched.
+   */
+  const abandonStagedSwitch = (where: string) => {
+    const staged = stagedSwitchRef.current;
+    if (!staged) return;
+    stagedSwitchRef.current = null;
+    console.info(`[panda/acp] abandoning a staged session switch to ${staged.snapshot.targetSessionId} (${where})`);
+    port.invalidateSelections();
+    port.rollbackStagedSession(staged.snapshot);
+  };
   // Lazily created once, mirroring useReplaySession's driver wiring.
   const clientRef = useRef<LiveAcpClient | null>(null);
   // Profile targeted by the in-flight connect — consumed on success
@@ -124,6 +143,10 @@ export function useLiveSession() {
       // a failed connect must not write its edits back into the profile.
       onDisconnected: (reason) => {
         pendingProfileRef.current = null;
+        // A closed connection can no longer settle a selection (issue #19):
+        // any in-flight switch's late commit stops moving the UI pointer, and
+        // its staged snapshot is rolled back stale (documents only).
+        abandonStagedSwitch('disconnect');
         port.setConnection(
           reason
             ? { status: 'error', error: reason }
@@ -142,23 +165,34 @@ export function useLiveSession() {
       onSessionInfo: (sessionId, info) => port.patchSession(sessionId, info),
       onReplayStart: () => port.resetDocument(),
       onSessionDeleted: (sessionId) => port.removeSession(sessionId),
-      onSessionSwitchStage: (sessionId, cwd) => {
-        stagedSwitchRef.current = port.stageSession(sessionId, cwd);
+      onSessionSwitchStage: (sessionId, cwd, era) => {
+        stagedSwitchRef.current = { snapshot: port.stageSession(sessionId, cwd), era };
       },
-      onSessionSwitchCommit: () => {
-        stagedSwitchRef.current = null;
-        port.commitStagedSession();
-      },
-      onSessionSwitchRollback: (reason) => {
-        const snapshot = stagedSwitchRef.current;
-        stagedSwitchRef.current = null;
-        if (!snapshot) {
-          // The client's transaction state machine drifted from the driver's
-          // — fail loudly instead of silently skipping the restore.
-          console.error('[panda/acp] session switch rollback without a staged snapshot');
+      onSessionSwitchCommit: (era) => {
+        const staged = stagedSwitchRef.current;
+        if (!staged || staged.era !== era) {
+          // The switch was abandoned (reconnect/disconnect rolled it back
+          // stale) or belongs to another era — a late commit must not consume
+          // a snapshot the current era never staged (issue #19).
+          console.info(`[panda/acp] session switch commit from era ${era} ignored (staged: ${staged ? `era ${staged.era}` : 'none'})`);
           return;
         }
-        port.rollbackStagedSession(snapshot);
+        stagedSwitchRef.current = null;
+        // The snapshot carries the selection token (issue #19): a commit for
+        // a superseded switch moves no settled pointer.
+        port.commitStagedSession(staged.snapshot);
+      },
+      onSessionSwitchRollback: (reason, era) => {
+        const staged = stagedSwitchRef.current;
+        if (!staged || staged.era !== era) {
+          // Expected after abandonment (the snapshot was already rolled back
+          // stale) — info, not error: the store's token check is the second
+          // line of defense and warns loudly there if it ever matters.
+          console.info(`[panda/acp] session switch rollback from era ${era} ignored (staged: ${staged ? `era ${staged.era}` : 'none'})`);
+          return;
+        }
+        stagedSwitchRef.current = null;
+        port.rollbackStagedSession(staged.snapshot);
         // Surface the failure on a live connection only: after a disconnect
         // (reason=null already reported) a stale error banner must not linger.
         if (usePanda.getState().connections[LIVE_CONNECTION_ID]?.connection.status === 'connected') {
@@ -200,6 +234,10 @@ export function useLiveSession() {
       // server list (if any) merges on top. A new endpoint replaces the old
       // endpoint's visible list rather than combining unrelated histories.
       restoreEndpointSessions(trimmedUrl, port.replaceSessions);
+      // A replacing connect ends the previous connection era (issue #19):
+      // its in-flight switch can never settle — roll it back stale BEFORE
+      // the new era begins staging/adopting anything.
+      abandonStagedSwitch('connect replacing the connection');
       await acpClient.connect(
         createBrowserWebSocketStream(trimmedUrl),
         trimmedCwd,

@@ -66,9 +66,12 @@ export type ConnectionState = {
    * A transactional session switch in flight (issue #17): the target session
    * is staged and its history replay is loading. Null once committed or
    * rolled back — the settled state is `connection.sessionId` +
-   * `activeSessionId`, which only a commit may move.
+   * `activeSessionId`, which only a commit may move. `selectionToken` is the
+   * store's selection generation minted at stage (issue #19): a settle may
+   * only clear the marker its own transaction set — two switches to the same
+   * session (a retry) would be indistinguishable by sessionId alone.
    */
-  switching: { sessionId: string } | null;
+  switching: { sessionId: string; selectionToken: number } | null;
 };
 
 /**
@@ -89,6 +92,14 @@ export type SessionSwitchSnapshot = {
   targetDoc: SessionDocument | null;
   /** connection.sessionId before the switch. */
   connectionSessionId: string | null;
+  /**
+   * Selection token minted at stage (issue #19): the store's
+   * `selectionGeneration` when this transaction became the latest
+   * selection. A commit/rollback whose token no longer matches has been
+   * superseded — it may restore era-scoped documents but must not move
+   * settled pointers (latest-wins).
+   */
+  selectionToken: number;
 };
 
 /** A session as locally known — sparse fields merge with existing knowledge. */
@@ -105,6 +116,14 @@ interface PandaState {
   activeConnectionId: string | null;
   /** The session whose document the UI renders; drivers move this pointer. */
   activeSessionId: string | null;
+  /**
+   * Selection generation (issue #19): minted (incremented) every time a new
+   * selection attempt becomes the latest — a staged switch, a delete that
+   * invalidates selections pointing at it, or a close. A pointer-moving
+   * commit carrying an older token has been superseded and is ignored
+   * (latest-wins).
+   */
+  selectionGeneration: number;
   setMode(mode: SessionMode): void;
   /**
    * Creates the slot if missing (existing documents survive — reconnects keep
@@ -168,6 +187,7 @@ export const usePanda = create<PandaState>((set) => ({
   connections: {},
   activeConnectionId: null,
   activeSessionId: null,
+  selectionGeneration: 0,
   setMode: (mode) => set({ mode }),
   ensureConnection: (connectionId) =>
     set((s) => ({
@@ -222,24 +242,37 @@ export type ConnectionStorePort = {
   /** Applies a live session_info_update; undefined fields are untouched. */
   patchSession(sessionId: string, patch: { title?: string | null; updatedAt?: string | null }): void;
   removeSession(sessionId: string): void;
+  /**
+   * Invalidates every in-flight selection (issue #19: close/disconnect) —
+   * commits carrying older tokens stop moving the UI pointer.
+   */
+  invalidateSelections(): void;
   // -- transactional session switch (issue #17) --------------------------------
   /**
    * Stages the switch target: routes this port's writes to the target and
    * guarantees its document exists, but does NOT move the UI pointer or
    * `connection.sessionId` — those are settled-state, owned by
-   * `commitStagedSession`. Returns the pre-state snapshot for rollback.
+   * `commitStagedSession`. Staging also mints the store's selection
+   * generation, making this transaction the latest selection (issue #19):
+   * any older in-flight commit/rollback becomes superseded. Returns the
+   * pre-state snapshot for rollback.
    */
   stageSession(sessionId: string, cwd: string): SessionSwitchSnapshot;
   /**
    * Commits the staged switch: moves `connection.sessionId` and (for the
-   * active connection) `activeSessionId` to the staged session.
+   * active connection) `activeSessionId` to the staged session — unless the
+   * snapshot's selection token was superseded (issue #19): a newer selection
+   * owns the settled pointers by then, so a stale commit clears at most its
+   * own `switching` marker.
    */
-  commitStagedSession(): void;
+  commitStagedSession(snapshot: SessionSwitchSnapshot | null): void;
   /**
    * Rolls the switch back: restores the target's pre-switch document (or
    * removes the placeholder it never had) — pending permissions ride on
    * the document (issue #18) — plus `connection.sessionId` and this port's
-   * routing. The UI pointer never moved, so it needs no restore.
+   * routing. A superseded rollback restores documents only; the settled
+   * routing belongs to the newer selection (issue #19). The UI pointer never
+   * moved, so it needs no restore.
    */
   rollbackStagedSession(snapshot: SessionSwitchSnapshot): void;
 };
@@ -342,6 +375,16 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
         ),
       })),
     removeSession: (sessionId) => {
+      const slot = usePanda.getState().connections[connectionId];
+      // A delete only invalidates selections pointing at the deleted session
+      // (issue #19) — an unrelated in-flight switch must survive it. "Points
+      // at" covers the routed, the staged AND the settled pointer: a late
+      // commit onto a world where the predecessor was deleted must not move
+      // pointers built on it.
+      const touchesSelection =
+        currentSessionId === sessionId ||
+        slot?.switching?.sessionId === sessionId ||
+        slot?.connection.sessionId === sessionId;
       currentSessionId = currentSessionId === sessionId ? null : currentSessionId;
       usePanda.setState((s) => {
         const patched = patchConnectionState(s, connectionId, (state) => ({
@@ -352,24 +395,39 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
         return {
           ...(patched ?? {}),
           ...(s.activeSessionId === sessionId ? { activeSessionId: null } : {}),
+          ...(touchesSelection ? { selectionGeneration: s.selectionGeneration + 1 } : {}),
         };
       });
     },
+    invalidateSelections: () => {
+      // Observable by design (issue #19): this fires on close/disconnect and
+      // connect replacement — the trace line makes a dangling commit's
+      // "superseded" warning diagnosable after the fact.
+      console.info(`[store] connection "${connectionId}" selection generation invalidated — in-flight commits stop moving pointers`);
+      usePanda.setState((s) => ({ selectionGeneration: s.selectionGeneration + 1 }));
+    },
     stageSession: (sessionId, cwd) => {
-      const slot = usePanda.getState().connections[connectionId];
-      const snapshot: SessionSwitchSnapshot = {
-        targetSessionId: sessionId,
-        prevSessionId: currentSessionId,
-        targetDoc: slot?.docs[sessionId] ?? null,
-        connectionSessionId: slot?.connection.sessionId ?? null,
-      };
-      currentSessionId = sessionId;
+      // Mint the selection token, snapshot the pre-state and stage the slot
+      // in ONE atomic update (issue #19): split setStates would let a racing
+      // stage read a token another stage had already superseded, and reading
+      // the slot after staging would capture the placeholder as `targetDoc`.
+      let selectionToken = 0;
+      let snapshot: SessionSwitchSnapshot | null = null;
       usePanda.setState((s) => {
+        selectionToken = s.selectionGeneration + 1;
+        const existing = s.connections[connectionId];
+        snapshot = {
+          targetSessionId: sessionId,
+          prevSessionId: currentSessionId,
+          targetDoc: existing?.docs[sessionId] ?? null,
+          connectionSessionId: existing?.connection.sessionId ?? null,
+          selectionToken,
+        };
         const patched = patchConnectionState(s, connectionId, (state) => {
           const known = state.sessions.find((entry) => entry.sessionId === sessionId);
           return {
             docs: { ...state.docs, [sessionId]: state.docs[sessionId] ?? emptySession() },
-            switching: { sessionId },
+            switching: { sessionId, selectionToken },
             // A new transaction starts from a clean slate — a previous
             // switch's failure banner must not linger into it.
             connection: { ...state.connection, error: null },
@@ -383,19 +441,44 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
             ]),
           };
         });
-        return patched ?? {};
+        return { ...(patched ?? {}), selectionGeneration: selectionToken };
       });
+      currentSessionId = sessionId;
+      // The updater ran synchronously; the non-null holds unless setState
+      // itself failed — fail loud rather than stage with a torn snapshot.
+      if (!snapshot) throw new Error(`[store] connection "${connectionId}" stageSession snapshot missing after staging`);
       return snapshot;
     },
-    commitStagedSession: () => {
-      const sessionId = currentSessionId;
-      if (sessionId === null) {
+    commitStagedSession: (snapshot) => {
+      if (snapshot === null) {
         // Never leave `switching` set on this path: a stale marker would lock
         // the UI busy forever (nothing else can clear it once staged).
-        console.warn(`[store] connection "${connectionId}" commitStagedSession without a staged session — ignored`);
+        console.warn(`[store] connection "${connectionId}" commitStagedSession without a staged snapshot — ignored`);
         usePanda.setState((s) => patchConnectionState(s, connectionId, () => ({ switching: null })) ?? {});
         return;
       }
+      const stale = usePanda.getState().selectionGeneration !== snapshot.selectionToken;
+      if (stale) {
+        // Latest-wins (issue #19): a newer selection (or an invalidating
+        // delete/close) owns the settled pointers — this late commit moves
+        // nothing. Its replay history lives on in the target's document.
+        console.warn(
+          `[store] connection "${connectionId}" switch to ${snapshot.targetSessionId} superseded ` +
+            `(selection token ${snapshot.selectionToken}) — settled pointers untouched`,
+        );
+        usePanda.setState((s) =>
+          patchConnectionState(s, connectionId, (state) => ({
+            // Clear only this transaction's marker: a newer stage may have
+            // set its own (token match — the same sessionId can stage twice,
+            // e.g. a retry).
+            switching: state.switching?.selectionToken === snapshot.selectionToken
+              ? null
+              : state.switching,
+          })) ?? {},
+        );
+        return;
+      }
+      const sessionId = snapshot.targetSessionId;
       usePanda.setState((s) => {
         const patched = patchConnectionState(s, connectionId, (state) => ({
           connection: { ...state.connection, sessionId },
@@ -413,7 +496,8 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
       });
     },
     rollbackStagedSession: (snapshot) => {
-      currentSessionId = snapshot.prevSessionId;
+      const stale = usePanda.getState().selectionGeneration !== snapshot.selectionToken;
+      if (!stale) currentSessionId = snapshot.prevSessionId;
       usePanda.setState((s) => {
         const patched = patchConnectionState(s, connectionId, (state) => {
           const docs = { ...state.docs };
@@ -432,8 +516,16 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
           // metadata upsert (cwd/title/updatedAt retention) is a keeper.
           return {
             docs,
-            connection: { ...state.connection, sessionId: snapshot.connectionSessionId },
-            switching: null,
+            // A superseded rollback restores documents only (issue #19): the
+            // settled routing belongs to the newer selection by now.
+            connection: stale
+              ? state.connection
+              : { ...state.connection, sessionId: snapshot.connectionSessionId },
+            // Token-matched clear (P3-9): the same sessionId can stage twice
+            // (a retry) — only this transaction's own marker may go.
+            switching: state.switching?.selectionToken === snapshot.selectionToken
+              ? null
+              : state.switching,
           };
         });
         return patched ?? {};
