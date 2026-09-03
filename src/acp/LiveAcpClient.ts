@@ -19,7 +19,12 @@ import type {
   PermissionRequest,
   SessionStatus,
 } from '../protocol/types';
-import { toAcpUpdates, toPermissionRequest } from './wire';
+import {
+  parseSessionNotification,
+  removeSdkStrictSessionUpdateRouter,
+  toAcpUpdates,
+  toPermissionRequest,
+} from './wire';
 
 /**
  * Live ACP client (Phase 1+2): speaks v1 ACP over an injected stream to an
@@ -139,8 +144,17 @@ export class LiveAcpClient {
     // the connection-identity check below.
     this.cleanupConnection();
     this.disconnectReported = false;
-    const connection = client({ name: 'panda' })
-      .onNotification(methods.client.session.update, (ctx) => this.handleUpdate(ctx.params))
+    const app = client({ name: 'panda' });
+    // The SDK's built-in session/update router strictly zod-parses before any
+    // handler runs and drops schema-invalid notifications (unknown kinds) —
+    // remove it so the lenient parser below is the only parse seam.
+    removeSdkStrictSessionUpdateRouter(app);
+    const connection = app
+      .onNotification(
+        methods.client.session.update,
+        parseSessionNotification,
+        (ctx) => this.handleUpdate(ctx.params),
+      )
       .onRequest(methods.client.session.requestPermission, (ctx) =>
         this.handlePermissionRequest(ctx.params),
       )
@@ -407,13 +421,14 @@ export class LiveAcpClient {
       return;
     }
     if (params.update.sessionUpdate === 'session_info_update') {
+      // Sidebar bookkeeping; the notification is ALSO recorded at session
+      // level via the session_state event below (raw preservation).
       this.handlers.onSessionInfo(params.sessionId, {
         title: params.update.title,
         updatedAt: params.update.updatedAt,
       });
-      return;
     }
-    for (const mapped of toAcpUpdates(params.update)) {
+    for (const mapped of toAcpUpdates(params)) {
       this.handlers.onUpdate(mapped);
     }
   }

@@ -24,6 +24,7 @@ import { ToolCallCard } from './ToolCallCard';
 import { UserMessage } from './UserMessage';
 import { ContentColumn } from './ContentColumn';
 import { PermissionCard } from './PermissionCard';
+import { UnsupportedBlock } from './UnsupportedBlock';
 
 /**
  * Scroll-following policy: stick to the bottom while the user is already
@@ -335,5 +336,7 @@ const BlockView = memo(function BlockView({ block, streaming, permission, onReso
           onResolvePermission={onResolvePermission}
         />
       );
+    case 'unsupported':
+      return <UnsupportedBlock block={block} />;
   }
 });
