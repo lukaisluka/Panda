@@ -10,6 +10,7 @@ import {
   useActiveDoc,
   useActivePermission,
   useActiveSessions,
+  useActiveSwitching,
   usePanda,
 } from './store';
 import { useReplaySession } from './useReplaySession';
@@ -23,6 +24,7 @@ export default function App() {
   const connection = useActiveConnection();
   const sessions = useActiveSessions();
   const capabilities = useActiveCapabilities();
+  const switching = useActiveSwitching();
 
   const demo = useReplaySession();
   const live = useLiveSession();
@@ -32,7 +34,9 @@ export default function App() {
   const send = liveActive ? live.send : demo.send;
   const resolvePermission = liveActive ? live.resolvePermission : demo.resolvePermission;
 
-  const busy = doc.status !== 'idle';
+  // A session switch in flight is busy too: the composer must not send into a
+  // session that has not settled yet, and the sidebar locks other switches.
+  const busy = doc.status !== 'idle' || switching !== null;
   const composerDisabled = liveActive ? !connected || busy : busy;
   const hint = !liveActive
     ? doc.status === 'requires_action'
@@ -46,9 +50,13 @@ export default function App() {
         ? '连接失败 — 在侧栏重连并恢复，或重新连接'
         : !connected
           ? '未连接 ACP 服务 — 在侧栏连接'
-          : busy
-            ? 'Panda 正在工作…'
-            : undefined;
+          : switching
+            ? '切换会话中…'
+            : connection.error
+              ? connection.error
+              : busy
+                ? 'Panda 正在工作…'
+                : undefined;
 
   const activeSession = liveActive
     ? sessions.find((entry) => entry.sessionId === connection.sessionId)
@@ -104,7 +112,12 @@ export default function App() {
           permission={permission}
           onResolvePermission={resolvePermission}
         />
-        <StatusBar doc={doc} connection={connection} mode={mode} />
+        <StatusBar
+          doc={doc}
+          connection={connection}
+          mode={mode}
+          switching={switching !== null}
+        />
         <Composer
           onSend={send}
           disabled={composerDisabled}

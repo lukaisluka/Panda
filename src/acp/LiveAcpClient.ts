@@ -43,6 +43,12 @@ import {
  * Session lifecycle (Phase 2): capabilities gate everything; reconnect prefers
  * `session/resume` (transcript preserved, no replay), falls back to
  * `session/load` (history replayed onto a clean document), else starts fresh.
+ *
+ * Session switches are transactional (issue #17): `session/load` stages the
+ * target first and commits only on success — a failure rolls the client's
+ * routing and the driver's snapshot back, so the previous session stays
+ * fully rendered and the switch is retryable. The settled pointer semantics:
+ * `connection.sessionId` / `activeSessionId` only move on commit.
  */
 
 /** Capability gates as advertised by the agent at initialize (v1). */
@@ -77,6 +83,17 @@ export type LiveClientHandlers = {
   /** Emitted right before a session/load replay rebuilds the document. */
   onReplayStart(): void;
   onSessionDeleted(sessionId: string): void;
+  // -- transactional session switch (issue #17) --------------------------------
+  /**
+   * A session/load switch begins: the driver stages the target session
+   * (routes document writes to it, snapshots the pre-state) and the replay
+   * reset follows via `onReplayStart`. The settled pointer does not move yet.
+   */
+  onSessionStage(sessionId: string, cwd: string): void;
+  /** The switch's session/load resolved — the driver commits the staged target. */
+  onSessionSwitchCommit(): void;
+  /** The switch's session/load failed — the driver rolls back to the snapshot. */
+  onSessionSwitchRollback(reason: string): void;
 };
 
 type PendingPermission = {
@@ -147,6 +164,8 @@ export class LiveAcpClient {
   private pendingPrompt: Promise<unknown> | null = null;
   private pendingPermission: PendingPermission | null = null;
   private pendingOutbound: PendingOutbound | null = null;
+  /** A transactional session/load switch is in flight (issue #17). */
+  private sessionSwitch = false;
   private disconnectReported = false;
 
   constructor(handlers: LiveClientHandlers) {
@@ -251,6 +270,9 @@ export class LiveAcpClient {
 
   /**
    * Switches to another session by replaying its history (`session/load`).
+   * Transactional (issue #17): a failure rolls the client and the driver's
+   * snapshot back instead of tearing anything down — the connection stays
+   * up unless the transport itself died (the closed watcher reports that).
    * Requires the loadSession capability and an idle turn.
    */
   async loadSession(sessionId: string, cwd: string): Promise<void> {
@@ -267,12 +289,18 @@ export class LiveAcpClient {
       console.warn('[panda/acp] loadSession ignored: a turn is still in flight');
       return;
     }
+    if (this.sessionSwitch) {
+      console.warn('[panda/acp] loadSession ignored: another switch is still in flight');
+      return;
+    }
     try {
       await this.loadSessionInternal(connection, sessionId, cwd);
       console.info(`[panda/acp] switched to session ${sessionId} (history replayed)`);
     } catch (err) {
-      console.error('[panda/acp] session/load failed', err);
-      this.reportDisconnect(`切换会话失败: ${describeError(err)}`);
+      // The store was already rolled back inside loadSessionInternal; report
+      // loudly but keep the connection — a failed switch is session-scoped,
+      // not transport-scoped (#19 adds generation guards for rapid retried).
+      console.error('[panda/acp] session/load failed — rolled back to the previous session', err);
     }
   }
 
@@ -305,6 +333,10 @@ export class LiveAcpClient {
     if (content.length === 0) return;
     if (!this.connection || !this.sessionId) {
       console.warn('[panda/acp] send ignored: not connected');
+      return;
+    }
+    if (this.sessionSwitch) {
+      console.warn('[panda/acp] send ignored: a session switch is still in flight');
       return;
     }
     if (!this.capabilities.image && content.some((block) => block.type === 'image')) {
@@ -386,23 +418,33 @@ export class LiveAcpClient {
   }
 
   /**
-   * `session/load`: adopt the target session, then signal replay start so the
-   * driver resets exactly the document the replay rebuilds. Must set
-   * this.sessionId BEFORE the request so replay notifications pass the
-   * session filter.
+   * `session/load` as a transaction (issue #17): stage the target (the
+   * driver snapshots the pre-state and routes writes to the target's
+   * document), reset the replay area, then commit on success or roll back
+   * both this client's session routing and the driver's snapshot on failure.
+   * Must set this.sessionId BEFORE the request so replay notifications pass
+   * the session filter.
    */
   private async loadSessionInternal(
     connection: ClientConnection,
     sessionId: string,
     cwd: string,
   ): Promise<void> {
-    // Adopt first (the session's slot keeps prior documents when revisited),
-    // then signal replay start so the driver resets exactly the document the
-    // replay is about to rebuild.
+    const prevSessionId = this.sessionId;
+    this.sessionSwitch = true;
     this.sessionId = sessionId;
-    this.handlers.onSessionId(sessionId, cwd);
+    this.handlers.onSessionStage(sessionId, cwd);
     this.handlers.onReplayStart();
-    await connection.agent.request(methods.agent.session.load, { sessionId, cwd, mcpServers: [] });
+    try {
+      await connection.agent.request(methods.agent.session.load, { sessionId, cwd, mcpServers: [] });
+      this.handlers.onSessionSwitchCommit();
+    } catch (err) {
+      this.sessionId = prevSessionId;
+      this.handlers.onSessionSwitchRollback(describeError(err));
+      throw err;
+    } finally {
+      this.sessionSwitch = false;
+    }
   }
 
   private async fetchSessionList(connection: ClientConnection): Promise<void> {

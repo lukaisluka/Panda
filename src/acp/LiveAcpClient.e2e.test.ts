@@ -186,6 +186,9 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
       onSessionInfo: (sessionId, info) => records.sessionInfos.push({ sessionId, ...info }),
       onReplayStart: () => records.replayStarts++,
       onSessionDeleted: () => {},
+      onSessionStage: () => {},
+      onSessionSwitchCommit: () => {},
+      onSessionSwitchRollback: () => {},
     };
     acpClient = new LiveAcpClient(handlers);
     await acpClient.connect(createWebSocketStream(`ws://127.0.0.1:${port}/acp`), '/tmp/project');
