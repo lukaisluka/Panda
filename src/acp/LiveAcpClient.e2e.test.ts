@@ -14,7 +14,9 @@ import {
   type AgentCaps,
   type LiveClientHandlers,
 } from './LiveAcpClient';
+import { applyUpdate, emptySession } from '../protocol/reducer';
 import type {
+  AcpContentBlock,
   AcpSessionUpdate,
   PermissionRequest,
   SessionStatus,
@@ -255,6 +257,14 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
     }
   });
 
+  /** Folds a slice of the recorded update stream into a session document. */
+  const foldSlice = (from: number) =>
+    records.updates.slice(from).reduce((doc, update) => applyUpdate(doc, update), emptySession());
+  const userBlocks = (from: number): AcpContentBlock[][] =>
+    foldSlice(from).turns.flatMap((turn) =>
+      turn.blocks.flatMap((block) => (block.kind === 'user_message' ? [block.content] : [])),
+    );
+
   it(
     '完整回合:计划→读→改(真实 diff)→执行→总结,权限逐个批准',
     { timeout: 90_000 },
@@ -266,6 +276,11 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
       // write_todos → edit_file → execute
       await approveAllPending(3);
       await turn;
+
+      // echo 对账(issue #15):同一 prompt 只渲染一条用户消息
+      const turnStart = records.updates.findIndex((u) => u.sessionUpdate === 'user_message');
+      const sent = userBlocks(turnStart).flat();
+      expect(sent.filter((t) => t.type === 'text' && t.text === '重构 auth 校验')).toHaveLength(1);
 
       // 回合结束回到 idle
       expect(records.statuses.at(-1)).toBe('idle');
@@ -369,6 +384,11 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
         .slice(updateCountBefore)
         .some((u) => u.sessionUpdate === 'agent_message_chunk'),
     ).toBe(true);
+    // echo 对账(issue #15):session/load 重放后历史里该 prompt 只有一条用户消息
+    const replayed = userBlocks(updateCountBefore).flat().filter(
+      (t) => t.type === 'text' && t.text === '重构 auth 校验',
+    );
+    expect(replayed).toHaveLength(1);
   });
 
   it(
