@@ -9,6 +9,7 @@ import {
   usePanda,
   type ConnectionStorePort,
   type SessionEntry,
+  type SessionSwitchSnapshot,
 } from './store';
 import { updateProfileFields, type AgentProfile } from './profiles';
 
@@ -93,6 +94,9 @@ export function useLiveSession() {
   const portRef = useRef<ConnectionStorePort | null>(null);
   if (portRef.current === null) portRef.current = connectionStorePort(LIVE_CONNECTION_ID);
   const port = portRef.current;
+  // Snapshot of the in-flight session switch (issue #17) — captured at stage,
+  // consumed by exactly one commit or rollback.
+  const stagedSwitchRef = useRef<SessionSwitchSnapshot | null>(null);
   // Lazily created once, mirroring useReplaySession's driver wiring.
   const clientRef = useRef<LiveAcpClient | null>(null);
   // Profile targeted by the in-flight connect — consumed on success
@@ -139,6 +143,29 @@ export function useLiveSession() {
       onSessionInfo: (sessionId, info) => port.patchSession(sessionId, info),
       onReplayStart: () => port.resetDocument(),
       onSessionDeleted: (sessionId) => port.removeSession(sessionId),
+      onSessionSwitchStage: (sessionId, cwd) => {
+        stagedSwitchRef.current = port.stageSession(sessionId, cwd);
+      },
+      onSessionSwitchCommit: () => {
+        stagedSwitchRef.current = null;
+        port.commitStagedSession();
+      },
+      onSessionSwitchRollback: (reason) => {
+        const snapshot = stagedSwitchRef.current;
+        stagedSwitchRef.current = null;
+        if (!snapshot) {
+          // The client's transaction state machine drifted from the driver's
+          // — fail loudly instead of silently skipping the restore.
+          console.error('[panda/acp] session switch rollback without a staged snapshot');
+          return;
+        }
+        port.rollbackStagedSession(snapshot);
+        // Surface the failure on a live connection only: after a disconnect
+        // (reason=null already reported) a stale error banner must not linger.
+        if (usePanda.getState().connections[LIVE_CONNECTION_ID]?.connection.status === 'connected') {
+          port.setConnection({ error: `切换会话失败: ${reason}` });
+        }
+      },
     });
   }
   const acpClient = clientRef.current;

@@ -99,3 +99,138 @@ describe('connection-scoped ports (issue #16)', () => {
     expect(state.activeSessionId).toBeNull();
   });
 });
+
+describe('transactional session switch (issue #17)', () => {
+  it('stages without moving the settled pointers and commits on success', () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+
+    const snapshot = port.stageSession('s-2', '/b');
+    expect(snapshot).toMatchObject({ targetSessionId: 's-2', prevSessionId: 's-1', connectionSessionId: 's-1' });
+    expect(usePanda.getState().connections['live']!.switching).toEqual({ sessionId: 's-2' });
+    // Staged, not settled: writes route to the target but the pointer stays.
+    port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'replayed' }] });
+    expect(usePanda.getState().activeSessionId).toBe('s-1');
+    expect(usePanda.getState().connections['live']!.connection.sessionId).toBe('s-1');
+    expect(usePanda.getState().connections['live']!.docs['s-2']!.turns).toHaveLength(1);
+
+    port.commitStagedSession();
+    const settled = usePanda.getState();
+    expect(settled.activeSessionId).toBe('s-2');
+    expect(settled.connections['live']!.connection.sessionId).toBe('s-2');
+    expect(settled.connections['live']!.switching).toBeNull();
+  });
+
+  it('rollback restores the revisit document, permission and pointers', () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+    // The target was visited before — its cached history must survive a failed switch.
+    port.adoptSession('s-2', '/b');
+    port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'cached' }] });
+    port.adoptSession('s-1', '/a');
+    const cachedDoc = usePanda.getState().connections['live']!.docs['s-2']!;
+
+    const snapshot = port.stageSession('s-2', '/b');
+    // The replay reset destroys the cached document and the permission.
+    port.resetDocument();
+    port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'partial replay' }] });
+    expect(usePanda.getState().connections['live']!.docs['s-2']!.turns).toHaveLength(1);
+
+    port.rollbackStagedSession(snapshot);
+    const state = usePanda.getState();
+    const slot = state.connections['live']!;
+    expect(slot.docs['s-2']).toBe(cachedDoc); // exact pre-switch identity
+    expect(slot.connection.sessionId).toBe('s-1');
+    expect(slot.switching).toBeNull();
+    expect(state.activeSessionId).toBe('s-1'); // pointer never moved
+    // The port routes writes back to the previous session.
+    port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'home' }] });
+    const after = usePanda.getState().connections['live']!;
+    expect(after.docs['s-1']!.turns).toHaveLength(1);
+    expect(slot.docs['s-2']!.turns[0]!.blocks[0]).toMatchObject({
+      kind: 'user_message',
+      content: [{ type: 'text', text: 'cached' }],
+    });
+  });
+
+  it('rollback removes the placeholder document when the target was never seen', () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+
+    const snapshot = port.stageSession('s-fresh', '/b');
+    expect(snapshot.targetDoc).toBeNull();
+    port.rollbackStagedSession(snapshot);
+
+    expect(usePanda.getState().connections['live']!.docs['s-fresh']).toBeUndefined();
+  });
+
+  it('rollback restores a pending permission cleared by the replay reset', () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+    const request = {
+      toolCallId: 't-1',
+      title: 'Edit file',
+      options: [{ id: 'o-1', name: 'Allow once', kind: 'allow_once' as const }],
+    };
+    port.setPermission(request);
+
+    const snapshot = port.stageSession('s-2', '/b');
+    port.resetDocument();
+    expect(usePanda.getState().connections['live']!.permission).toBeNull();
+
+    port.rollbackStagedSession(snapshot);
+    expect(usePanda.getState().connections['live']!.permission).toEqual(request);
+  });
+
+  it('staging keeps the session entry metadata and clears a stale error', () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+    port.upsertSession({ sessionId: 's-2', cwd: '/old-cwd', title: '已命名', updatedAt: '2026-01-01T00:00:00Z' });
+    port.setConnection({ error: '切换会话失败: 上一次' });
+
+    port.stageSession('s-2', '/new-cwd');
+    const slot = usePanda.getState().connections['live']!;
+    expect(slot.sessions.find((e) => e.sessionId === 's-2')).toMatchObject({
+      cwd: '/new-cwd',
+      title: '已命名',
+      updatedAt: '2026-01-01T00:00:00Z',
+    });
+    expect(slot.connection.error).toBeNull();
+  });
+
+  it('commitStagedSession without a staged session warns, clears switching, never deadlocks', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live'); // no session ever adopted
+
+    port.commitStagedSession();
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('commitStagedSession without a staged session'),
+    );
+    expect(usePanda.getState().connections['live']!.connection.sessionId).toBeNull();
+    expect(usePanda.getState().activeSessionId).toBeNull();
+    warnSpy.mockRestore();
+  });
+
+  it('commitStagedSession clears switching when the staged session was dropped mid-switch', () => {
+    // The delete-mid-switch path: removeSession nulls the port's routing, the
+    // pending load later succeeds — commit must not leave a stale marker.
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+    port.stageSession('s-2', '/b');
+    port.removeSession('s-2');
+
+    port.commitStagedSession();
+
+    expect(usePanda.getState().connections['live']!.switching).toBeNull();
+    // The pointer stays on the surviving session; the UI never locks busy.
+    expect(usePanda.getState().connections['live']!.connection.sessionId).toBe('s-1');
+  });
+});

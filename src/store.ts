@@ -64,10 +64,38 @@ export type ConnectionState = {
   sessions: SessionEntry[];
   docs: Record<string, SessionDocument>;
   /**
+   * A transactional session switch in flight (issue #17): the target session
+   * is staged and its history replay is loading. Null once committed or
+   * rolled back — the settled state is `connection.sessionId` +
+   * `activeSessionId`, which only a commit may move.
+   */
+  switching: { sessionId: string } | null;
+  /**
    * Single placeholder until #18 turns permissions into a collection
    * (concurrent / out-of-order / settle paths).
    */
   permission: PermissionRequest | null;
+};
+
+/**
+ * Snapshot taken before a transactional session switch (issue #17) — what
+ * `rollbackStagedSession` restores when `session/load` fails: the routed
+ * session, the target's document (the thing the replay reset destroys), the
+ * pending permission and the settled `connection.sessionId`. The sidebar
+ * entry is deliberately kept — stage's metadata upsert survives (title and
+ * updatedAt retention is the point). Captured before the replay reset runs.
+ */
+export type SessionSwitchSnapshot = {
+  /** The switch's target; identifies the document rollback writes back. */
+  targetSessionId: string;
+  /** The session the port fed before the switch; null = none adopted. */
+  prevSessionId: string | null;
+  /** The target's document before the replay reset it; null = it didn't exist. */
+  targetDoc: SessionDocument | null;
+  /** Pending permission at switch start — the replay reset clears it. */
+  permission: PermissionRequest | null;
+  /** connection.sessionId before the switch. */
+  connectionSessionId: string | null;
 };
 
 /** A session as locally known — sparse fields merge with existing knowledge. */
@@ -118,6 +146,7 @@ export function emptyConnectionState(): ConnectionState {
     capabilities: initialCapabilities,
     sessions: [],
     docs: {},
+    switching: null,
     permission: null,
   };
 }
@@ -202,6 +231,26 @@ export type ConnectionStorePort = {
   /** Applies a live session_info_update; undefined fields are untouched. */
   patchSession(sessionId: string, patch: { title?: string | null; updatedAt?: string | null }): void;
   removeSession(sessionId: string): void;
+  // -- transactional session switch (issue #17) --------------------------------
+  /**
+   * Stages the switch target: routes this port's writes to the target and
+   * guarantees its document exists, but does NOT move the UI pointer or
+   * `connection.sessionId` — those are settled-state, owned by
+   * `commitStagedSession`. Returns the pre-state snapshot for rollback.
+   */
+  stageSession(sessionId: string, cwd: string): SessionSwitchSnapshot;
+  /**
+   * Commits the staged switch: moves `connection.sessionId` and (for the
+   * active connection) `activeSessionId` to the staged session.
+   */
+  commitStagedSession(): void;
+  /**
+   * Rolls the switch back: restores the target's pre-switch document (or
+   * removes the placeholder it never had), the pending permission,
+   * `connection.sessionId` and this port's routing. The UI pointer never
+   * moved, so it needs no restore.
+   */
+  rollbackStagedSession(snapshot: SessionSwitchSnapshot): void;
 };
 
 export function connectionStorePort(connectionId: string): ConnectionStorePort {
@@ -317,6 +366,92 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
         };
       });
     },
+    stageSession: (sessionId, cwd) => {
+      const slot = usePanda.getState().connections[connectionId];
+      const snapshot: SessionSwitchSnapshot = {
+        targetSessionId: sessionId,
+        prevSessionId: currentSessionId,
+        targetDoc: slot?.docs[sessionId] ?? null,
+        permission: slot?.permission ?? null,
+        connectionSessionId: slot?.connection.sessionId ?? null,
+      };
+      currentSessionId = sessionId;
+      usePanda.setState((s) => {
+        const patched = patchConnectionState(s, connectionId, (state) => {
+          const known = state.sessions.find((entry) => entry.sessionId === sessionId);
+          return {
+            docs: { ...state.docs, [sessionId]: state.docs[sessionId] ?? emptySession() },
+            switching: { sessionId },
+            // A new transaction starts from a clean slate — a previous
+            // switch's failure banner must not linger into it.
+            connection: { ...state.connection, error: null },
+            sessions: upsertEntries(state.sessions, [
+              {
+                sessionId,
+                cwd,
+                title: known?.title ?? null,
+                updatedAt: known?.updatedAt ?? null,
+              },
+            ]),
+          };
+        });
+        return patched ?? {};
+      });
+      return snapshot;
+    },
+    commitStagedSession: () => {
+      const sessionId = currentSessionId;
+      if (sessionId === null) {
+        // Never leave `switching` set on this path: a stale marker would lock
+        // the UI busy forever (nothing else can clear it once staged).
+        console.warn(`[store] connection "${connectionId}" commitStagedSession without a staged session — ignored`);
+        usePanda.setState((s) => patchConnectionState(s, connectionId, () => ({ switching: null })) ?? {});
+        return;
+      }
+      usePanda.setState((s) => {
+        const patched = patchConnectionState(s, connectionId, (state) => ({
+          connection: { ...state.connection, sessionId },
+          switching: null,
+        }));
+        return {
+          ...(patched ?? {}),
+          // Only the active connection moves the UI pointer (same rule as
+          // adoptSession) — and only now: a failed switch must leave the
+          // user where they were.
+          ...(s.activeConnectionId === connectionId || s.activeConnectionId === null
+            ? { activeSessionId: sessionId }
+            : {}),
+        };
+      });
+    },
+    rollbackStagedSession: (snapshot) => {
+      currentSessionId = snapshot.prevSessionId;
+      usePanda.setState((s) => {
+        const patched = patchConnectionState(s, connectionId, (state) => {
+          const docs = { ...state.docs };
+          const stillListed = state.sessions.some((entry) => entry.sessionId === snapshot.targetSessionId);
+          if (stillListed) {
+            if (snapshot.targetDoc) docs[snapshot.targetSessionId] = snapshot.targetDoc;
+            else delete docs[snapshot.targetSessionId];
+          } else if (snapshot.targetDoc) {
+            // The target was deleted mid-switch (delete wins over the stale
+            // transaction) — restoring its document would resurrect it.
+            console.warn(
+              `[store] connection "${connectionId}" rollback for deleted session ${snapshot.targetSessionId} — document not restored`,
+            );
+          }
+          // The sidebar entry is deliberately NOT rolled back: stage's
+          // metadata upsert (cwd/title/updatedAt retention) is a keeper.
+          return {
+            docs,
+            permission: snapshot.permission,
+            connection: { ...state.connection, sessionId: snapshot.connectionSessionId },
+            switching: null,
+          };
+        });
+        return patched ?? {};
+      });
+    },
   };
 }
 
@@ -350,3 +485,6 @@ export const useActiveConnection = () => usePanda((s) => activeConnectionState(s
 export const useActiveSessions = () => usePanda((s) => activeConnectionState(s).sessions);
 
 export const useActiveCapabilities = () => usePanda((s) => activeConnectionState(s).capabilities);
+
+/** The in-flight transactional switch on the active connection, or null. */
+export const useActiveSwitching = () => usePanda((s) => activeConnectionState(s).switching);

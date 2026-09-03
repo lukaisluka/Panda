@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   PROTOCOL_VERSION,
   agent,
@@ -11,7 +11,12 @@ import {
   type Stream,
 } from '@agentclientprotocol/sdk';
 import { LiveAcpClient, type LiveClientHandlers } from './LiveAcpClient';
-import { connectionStorePort, usePanda } from '../store';
+import {
+  connectionStorePort,
+  usePanda,
+  type ConnectionStorePort,
+  type SessionSwitchSnapshot,
+} from '../store';
 import type {
   AcpSessionUpdate,
   PermissionRequest,
@@ -39,6 +44,8 @@ type Records = {
   sessionInfos: { sessionId: string; title?: string | null; updatedAt?: string | null }[];
   replays: number[];
   deletedSessions: string[];
+  /** Transactional switch records (issue #17), in emission order. */
+  switchLog: ({ kind: 'stage'; sessionId: string; cwd: string } | { kind: 'commit' } | { kind: 'rollback'; reason: string })[];
 };
 
 type Harness = Records & {
@@ -63,6 +70,10 @@ type FakeAgentOptions = {
   listSessions?: { sessionId: string; cwd: string; title?: string | null; updatedAt?: string | null }[];
   /** Per-session replay history served by session/load. */
   history?: Record<string, { sessionUpdate: string; [key: string]: unknown }[]>;
+  /** Session ids whose session/load request rejects (switch-failure paths). */
+  failLoadFor?: string[];
+  /** Suspends every session/load until the returned promise resolves. */
+  beforeLoad?: () => Promise<void>;
   /** Reconnect target passed to LiveAcpClient.connect. */
   resume?: { sessionId: string };
   onPrompt?: PromptHandler;
@@ -98,6 +109,7 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     sessionInfos: [],
     replays: [],
     deletedSessions: [],
+    switchLog: [],
   };
   const handlers: LiveClientHandlers = {
     onUpdate: (update) => records.updates.push(update),
@@ -111,6 +123,9 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     onSessionInfo: (sessionId, info) => records.sessionInfos.push({ sessionId, ...info }),
     onReplayStart: () => records.replays.push(records.replays.length + 1),
     onSessionDeleted: (sessionId) => records.deletedSessions.push(sessionId),
+    onSessionSwitchStage: (sessionId, cwd) => records.switchLog.push({ kind: 'stage', sessionId, cwd }),
+    onSessionSwitchCommit: () => records.switchLog.push({ kind: 'commit' }),
+    onSessionSwitchRollback: (reason) => records.switchLog.push({ kind: 'rollback', reason }),
   };
 
   const agentState = {
@@ -143,6 +158,10 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
       sessions: opts.listSessions ?? [],
     }))
     .onRequest(methods.agent.session.load, async (ctx) => {
+      await opts.beforeLoad?.();
+      if (opts.failLoadFor?.includes(ctx.params.sessionId)) {
+        throw new Error(`session ${ctx.params.sessionId} 不存在`);
+      }
       const history = opts.history?.[ctx.params.sessionId] ?? [];
       for (const update of history) {
         await ctx.client.notify(methods.client.session.update, {
@@ -618,7 +637,11 @@ describe('LiveAcpClient', () => {
     });
     expect(h.agentState.resumeRequests).toEqual([]);
     expect(h.replays).toHaveLength(1);
-    expect(h.sessionIds).toContain('s-99');
+    // The fallback goes through the transactional stage → commit path too.
+    expect(h.switchLog).toEqual([
+      { kind: 'stage', sessionId: 's-99', cwd: '/tmp/project' },
+      { kind: 'commit' },
+    ]);
     expect(h.updates).toContainEqual(
       expect.objectContaining({
         sessionUpdate: 'user_message',
@@ -661,7 +684,11 @@ describe('LiveAcpClient', () => {
     expect(h.sessionIds).toEqual(['s-1']);
     await h.acpClient.loadSession('s-2', '/tmp/other');
     expect(h.replays).toHaveLength(1);
-    expect(h.sessionIds).toEqual(['s-1', 's-2']);
+    // The switch is staged, not adopted — only a commit settles it.
+    expect(h.switchLog).toEqual([
+      { kind: 'stage', sessionId: 's-2', cwd: '/tmp/other' },
+      { kind: 'commit' },
+    ]);
     expect(h.updates).toContainEqual(
       expect.objectContaining({
         sessionUpdate: 'agent_message_chunk',
@@ -669,6 +696,84 @@ describe('LiveAcpClient', () => {
         content: { type: 'text', text: '历史消息' },
       }),
     );
+    h.closeAll();
+  });
+
+  it('loadSession failure rolls the client back without disconnecting (issue #17)', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const h = await setup({
+      capabilities: { loadSession: true },
+      failLoadFor: ['s-2'],
+    });
+    expect(h.sessionIds).toEqual(['s-1']);
+    await h.acpClient.loadSession('s-2', '/tmp/other');
+    // Stage → rollback, and the connection survived the session-scoped error.
+    // (The fake's handler throw surfaces as the SDK's generic Internal error.)
+    expect(h.switchLog).toEqual([
+      { kind: 'stage', sessionId: 's-2', cwd: '/tmp/other' },
+      { kind: 'rollback', reason: expect.any(String) },
+    ]);
+    expect(h.disconnected).toEqual([]);
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[panda/acp] session/load failed — rolled back to the previous session',
+      expect.any(Error),
+    );
+    errorSpy.mockRestore();
+    h.closeAll();
+  });
+
+  it('send is routed back to the previous session after a failed switch', async () => {
+    const prompts: { sessionId: string }[] = [];
+    const h = await setup({
+      capabilities: { loadSession: true },
+      failLoadFor: ['s-2'],
+      onPrompt: async (ctx) => {
+        prompts.push({ sessionId: ctx.params.sessionId });
+        return { stopReason: 'end_turn' };
+      },
+    });
+    await h.acpClient.loadSession('s-2', '/tmp/other'); // fails, rolls back
+    await h.acpClient.send([{ type: 'text', text: 'back home' }]);
+    // this.sessionId was restored — the turn goes to s-1, not the dead target.
+    expect(prompts).toEqual([{ sessionId: 's-1' }]);
+    h.closeAll();
+  });
+
+  it('refuses a second switch, a send, a new session and a delete while one switch is still in flight', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let releaseLoad: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => (releaseLoad = resolve));
+    const h = await setup({
+      capabilities: { loadSession: true, delete: true },
+      history: { 's-2': [] },
+      beforeLoad: () => gate,
+    });
+    const first = h.acpClient.loadSession('s-2', '/tmp/other');
+    await h.acpClient.loadSession('s-2', '/tmp/other'); // refused while in flight
+    await h.acpClient.send([{ type: 'text', text: 'nope' }]); // refused
+    await h.acpClient.newSession('/tmp/other'); // refused
+    await h.acpClient.deleteSession('s-2'); // refused (deleting the staged target)
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[panda/acp] loadSession ignored: another switch is still in flight',
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[panda/acp] send ignored: a session switch is still in flight',
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[panda/acp] newSession ignored: a session switch is still in flight',
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[panda/acp] deleteSession ignored: a session switch is still in flight',
+    );
+    expect(h.updates).toEqual([]); // the refused send produced no optimistic echo
+    expect(h.agentState.deleteRequests).toEqual([]);
+    releaseLoad!();
+    await first;
+    expect(h.switchLog).toEqual([
+      { kind: 'stage', sessionId: 's-2', cwd: '/tmp/other' },
+      { kind: 'commit' },
+    ]);
+    warnSpy.mockRestore();
     h.closeAll();
   });
 
@@ -852,6 +957,44 @@ describe('LiveAcpClient', () => {
 // -- store integration (issue #16) ------------------------------------------
 
 describe('LiveAcpClient × connectionStorePort', () => {
+  /**
+   * The three transactional-switch handlers, wired exactly the way
+   * useLiveSession wires them — one snapshot, consumed by exactly one commit
+   * or rollback.
+   */
+  function wireSwitchHandlers(port: ConnectionStorePort) {
+    let staged: SessionSwitchSnapshot | null = null;
+    return {
+      onSessionSwitchStage: (id: string, cwd: string) => {
+        staged = port.stageSession(id, cwd);
+      },
+      onSessionSwitchCommit: () => {
+        staged = null;
+        port.commitStagedSession();
+      },
+      onSessionSwitchRollback: (reason: string) => {
+        const snapshot = staged;
+        staged = null;
+        if (!snapshot) {
+          // Mirrors useLiveSession: loud, no restore.
+          console.error('[panda/acp] session switch rollback without a staged snapshot');
+          return;
+        }
+        port.rollbackStagedSession(snapshot);
+        port.setConnection({ error: `切换会话失败: ${reason}` });
+      },
+    };
+  }
+
+  beforeEach(() => {
+    usePanda.setState({
+      mode: 'demo',
+      connections: {},
+      activeConnectionId: null,
+      activeSessionId: null,
+    });
+  });
+
   it('replays session/load onto a clean document on every revisit (A→B→A, no duplication)', async () => {
     usePanda.getState().ensureConnection('live');
     const port = connectionStorePort('live');
@@ -890,6 +1033,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onSessionInfo: () => {},
       onReplayStart: () => port.resetDocument(),
       onSessionDeleted: () => {},
+      ...wireSwitchHandlers(port),
     });
     await acpClient.connect(clientStream, '/tmp/project');
 
@@ -901,10 +1045,161 @@ describe('LiveAcpClient × connectionStorePort', () => {
       docs[id]!.turns
         .flatMap((turn) => turn.blocks)
         .filter((b): b is Extract<typeof b, { kind: 'user_message' }> => b.kind === 'user_message')
-        .flatMap((b) => b.content.filter((c): c is { type: 'text'; text: string } => c.type === 'text'))
+        .flatMap((b) => b.content.filter((c): c is { type: 'text', text: string } => c.type === 'text'))
         .map((c) => c.text);
     expect(userText('A')).toEqual(['prompt-A']); // exactly once, not twice
     expect(userText('B')).toEqual(['prompt-B']);
+    expect(usePanda.getState().activeSessionId).toBe('A');
+    acpClient.disconnect();
+  });
+
+  it('rolls back to the previous session when session/load fails, and the switch is retryable (issue #17)', async () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    const failLoadFor = ['B'];
+    const { clientStream, serverStream } = streamPair();
+    agent({ name: 'fake-agent' })
+      .onRequest(methods.agent.initialize, () => ({
+        protocolVersion: PROTOCOL_VERSION,
+        agentInfo: { name: 'fake-agent', version: '0.0.0' },
+        agentCapabilities: { loadSession: true },
+      }))
+      .onRequest(methods.agent.session.new, () => ({ sessionId: 'A' }))
+      .onRequest(methods.agent.session.load, async (ctx) => {
+        if (failLoadFor.includes(ctx.params.sessionId)) throw new Error('session 不存在');
+        await ctx.client.notify(methods.client.session.update, {
+          sessionId: ctx.params.sessionId,
+          update: { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: `prompt-${ctx.params.sessionId}` } },
+        });
+        return {};
+      })
+      .connect(serverStream);
+    const acpClient = new LiveAcpClient({
+      onUpdate: (update) => port.update(update),
+      onStatus: () => {},
+      onPermission: () => {},
+      onConnected: () => {},
+      onSessionId: (id, cwd) => port.adoptSession(id, cwd),
+      onDisconnected: () => {},
+      onCapabilities: () => {},
+      onSessions: () => {},
+      onSessionInfo: () => {},
+      onReplayStart: () => port.resetDocument(),
+      onSessionDeleted: () => {},
+      ...wireSwitchHandlers(port),
+    });
+    await acpClient.connect(clientStream, '/tmp/project');
+    port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'original turn' }] });
+    const before = usePanda.getState().connections['live']!.docs['A']!;
+
+    await acpClient.loadSession('B', '/tmp/project'); // fails
+
+    const state = usePanda.getState();
+    const slot = state.connections['live']!;
+    // The previous session is fully intact: transcript identity, pointer,
+    // connection.sessionId — and no half-staged document or switch state.
+    expect(slot.docs['A']).toBe(before);
+    expect(slot.docs['B']).toBeUndefined();
+    expect(slot.connection.sessionId).toBe('A');
+    expect(slot.switching).toBeNull();
+    expect(state.activeSessionId).toBe('A');
+    expect(slot.connection.error).toContain('切换会话失败');
+
+    // Retry after the agent recovers: the switch succeeds this time.
+    failLoadFor.length = 0;
+    await acpClient.loadSession('B', '/tmp/project');
+    const after = usePanda.getState();
+    expect(after.connections['live']!.connection.sessionId).toBe('B');
+    expect(after.activeSessionId).toBe('B');
+    expect(after.connections['live']!.docs['B']!.turns).toHaveLength(1);
+    expect(after.connections['live']!.connection.error).toBeNull();
+    acpClient.disconnect();
+  });
+
+  it('keeps the transcript when reconnecting via session/resume (no replay)', async () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    let replays = 0;
+    const { clientStream, serverStream } = streamPair();
+    agent({ name: 'fake-agent' })
+      .onRequest(methods.agent.initialize, () => ({
+        protocolVersion: PROTOCOL_VERSION,
+        agentInfo: { name: 'fake-agent', version: '0.0.0' },
+        agentCapabilities: { sessionCapabilities: { resume: {} } },
+      }))
+      .onRequest(methods.agent.session.resume, () => ({}))
+      .connect(serverStream);
+    const acpClient = new LiveAcpClient({
+      onUpdate: (update) => port.update(update),
+      onStatus: () => {},
+      onPermission: () => {},
+      onConnected: () => {},
+      onSessionId: (id, cwd) => port.adoptSession(id, cwd),
+      onDisconnected: () => {},
+      onCapabilities: () => {},
+      onSessions: () => {},
+      onSessionInfo: () => {},
+      onReplayStart: () => { replays += 1; },
+      onSessionDeleted: () => {},
+      ...wireSwitchHandlers(port),
+    });
+    // Pre-existing transcript from the previous connection to this session.
+    port.adoptSession('A', '/tmp/project');
+    port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'kept turn' }] });
+    const before = usePanda.getState().connections['live']!.docs['A']!;
+
+    await acpClient.connect(clientStream, '/tmp/project', { sessionId: 'A' });
+
+    expect(replays).toBe(0); // resume restores agent context, never replays
+    expect(usePanda.getState().connections['live']!.docs['A']).toBe(before);
+    expect(usePanda.getState().activeSessionId).toBe('A');
+    acpClient.disconnect();
+  });
+
+  it('restores the transcript when a resume-fallback session/load fails during connect', async () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    const { clientStream, serverStream } = streamPair();
+    agent({ name: 'fake-agent' })
+      .onRequest(methods.agent.initialize, () => ({
+        protocolVersion: PROTOCOL_VERSION,
+        agentInfo: { name: 'fake-agent', version: '0.0.0' },
+        agentCapabilities: { loadSession: true }, // no resume — falls back to load
+      }))
+      .onRequest(methods.agent.session.load, () => {
+        throw new Error('session 不存在');
+      })
+      .connect(serverStream);
+    const acpClient = new LiveAcpClient({
+      onUpdate: (update) => port.update(update),
+      onStatus: () => {},
+      onPermission: () => {},
+      onConnected: () => {},
+      onSessionId: (id, cwd) => port.adoptSession(id, cwd),
+      onDisconnected: (reason) =>
+        port.setConnection(
+          reason
+            ? { status: 'error', error: reason }
+            : { status: 'disconnected', error: null, sessionId: null },
+        ),
+      onCapabilities: () => {},
+      onSessions: () => {},
+      onSessionInfo: () => {},
+      onReplayStart: () => port.resetDocument(),
+      onSessionDeleted: () => {},
+      ...wireSwitchHandlers(port),
+    });
+    port.adoptSession('A', '/tmp/project');
+    port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'kept turn' }] });
+    const before = usePanda.getState().connections['live']!.docs['A']!;
+
+    await acpClient.connect(clientStream, '/tmp/project', { sessionId: 'A' }); // load fails
+
+    const slot = usePanda.getState().connections['live']!;
+    expect(slot.docs['A']).toBe(before); // rolled back, not wiped
+    expect(slot.switching).toBeNull();
+    expect(slot.connection.status).toBe('error');
+    expect(slot.connection.sessionId).toBe('A'); // resumable pointer kept
     expect(usePanda.getState().activeSessionId).toBe('A');
     acpClient.disconnect();
   });

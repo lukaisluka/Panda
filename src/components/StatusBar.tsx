@@ -6,10 +6,12 @@ import { ContentColumn } from './ContentColumn';
 const formatTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
 /** Session state + live connection on the left, context-usage meter and cost on the right. */
-export function StatusBar({ doc, connection, mode }: {
+export function StatusBar({ doc, connection, mode, switching }: {
   doc: SessionDocument;
   connection: ConnectionInfo;
   mode: SessionMode;
+  /** A transactional session switch is in flight (issue #17). */
+  switching: boolean;
 }) {
   const { status, usage } = doc;
   const pct = usage.size > 0 ? Math.min(100, (usage.used / usage.size) * 100) : 0;
@@ -21,12 +23,25 @@ export function StatusBar({ doc, connection, mode }: {
           {mode === 'live' && (
             <span className="flex items-center gap-1.5">
               {connection.status === 'connected' ? (
-                <>
-                  <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-                  <span className="max-w-40 truncate text-faint" title={connection.url ?? undefined}>
-                    {connection.agentName}
+                switching ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin text-accent" />
+                    <span className="text-faint">切换会话中…</span>
+                  </>
+                ) : connection.error ? (
+                  // A failed switch (or similar non-fatal failure) leaves the
+                  // connection up with a reason to show (issue #17).
+                  <span className="max-w-72 truncate text-danger" title={connection.error}>
+                    {connection.error}
                   </span>
-                </>
+                ) : (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                    <span className="max-w-40 truncate text-faint" title={connection.url ?? undefined}>
+                      {connection.agentName}
+                    </span>
+                  </>
+                )
               ) : connection.status === 'connecting' ? (
                 <>
                   <Loader2 size={12} className="animate-spin text-accent" />
