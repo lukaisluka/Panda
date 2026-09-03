@@ -10,8 +10,8 @@ import {
   type RequestPermissionRequest,
   type RequestPermissionResponse,
   type SessionNotification,
-  type Stream,
 } from '@agentclientprotocol/sdk';
+import type { AcpTransport } from './transport/AcpTransport';
 import type {
   AcpContentBlock,
   AcpSessionUpdate,
@@ -28,9 +28,11 @@ import {
 } from './wire';
 
 /**
- * Live ACP client (Phase 1+2): speaks v1 ACP over an injected stream to an
- * already-running ACP service — Panda never spawns or manages the agent
- * process, it only consumes the protocol.
+ * Live ACP client (Phase 1+2): speaks v1 ACP over an injected `AcpTransport`
+ * (issue #20) to an already-running ACP service — Panda never spawns or
+ * manages the agent process, it only consumes the protocol. The transport is
+ * caller-injected, so nothing in this class knows whether the wire is a
+ * browser WebSocket, stdio or anything else.
  *
  * Feeds the same handlers the replay driver feeds (update / status /
  * permission) plus connection and session bookkeeping, so the store wiring
@@ -155,6 +157,12 @@ function readCaps(caps: AgentCapabilities | null | undefined): AgentCaps {
 export class LiveAcpClient {
   private readonly handlers: LiveClientHandlers;
   private connection: ClientConnection | null = null;
+  /**
+   * The transport of the most recent connect attempt (issue #20) — owned
+   * before its `connect()` resolves, so a cleanup during a pending open
+   * still tears that attempt down.
+   */
+  private transport: AcpTransport | null = null;
   private sessionId: string | null = null;
   private capabilities: AgentCaps = {
     image: false,
@@ -188,66 +196,79 @@ export class LiveAcpClient {
   }
 
   /**
-   * Connects and establishes a session: initialize (+ capabilities, session
-   * list) → resume / load / new. Failures are reported through
-   * `onDisconnected`, never thrown — the connection state in the store is the
-   * source of truth for the UI.
+   * Connects and establishes a session: transport open → initialize (+
+   * capabilities, session list) → resume / load / new. Failures — including
+   * transport-level ones — are reported through `onDisconnected`, never
+   * thrown; the connection state in the store is the source of truth for
+   * the UI.
    */
-  async connect(stream: Stream, cwd: string, resume?: { sessionId: string }): Promise<void> {
+  async connect(transport: AcpTransport, cwd: string, resume?: { sessionId: string }): Promise<void> {
     // Replace any prior connection silently — its close handler is muted by
     // the connection-identity check below, and its era by the generation
     // counter (issue #19).
     this.cleanupConnection();
     this.disconnectReported = false;
     const generation = this.connectionGeneration;
-    const app = client({ name: 'panda' });
-    // The SDK's built-in session/update router strictly zod-parses before any
-    // handler runs and drops schema-invalid notifications (unknown kinds) —
-    // remove it so the lenient parser below is the only parse seam.
-    removeSdkStrictSessionUpdateRouter(app);
-    const connection = app
-      .onNotification(
-        methods.client.session.update,
-        parseSessionNotification,
-        (ctx) => {
-          // Second line of defense above the session filter (issue #19): a
-          // replaced connection may still drain buffered messages while its
-          // socket winds down — those belong to a dead era and are dropped.
-          if (generation !== this.connectionGeneration) {
-            console.warn('[panda/acp] session/update from a superseded connection — dropped');
-            return;
-          }
-          this.handleUpdate(ctx.params);
-        },
-      )
-      .onRequest(methods.client.session.requestPermission, (ctx) => {
-        if (generation !== this.connectionGeneration) {
-          console.warn(
-            '[panda/acp] session/request_permission from a superseded connection — answered cancelled',
-          );
-          return Promise.resolve({ outcome: { outcome: 'cancelled' } });
-        }
-        return this.handlePermissionRequest(ctx.params, ctx.signal);
-      })
-      .connect(stream);
-    this.connection = connection;
-    // Only an *unexpected* close reports a disconnect — a replaced or already
-    // cleaned-up connection no longer owns `this.connection`.
-    connection.closed
-      .catch(() => {})
-      .then(() => {
-        if (this.connection === connection) this.reportDisconnect('与服务器的连接已断开');
-      });
+    this.transport = transport;
 
     /** True while this connect's era is still the current one. */
     const isCurrent = () => generation === this.connectionGeneration;
+    let connection: ClientConnection | null = null;
     /** A superseded connect's result: close quietly, never report — the newer era owns the state. */
     const discardSuperseded = (where: string) => {
       console.info(`[panda/acp] connect superseded by a newer connection (${where}) — discarded`);
-      connection.close();
+      connection?.close();
+      transport.disconnect();
     };
 
     try {
+      // The transport seam (issue #20): stream acquisition lives inside the
+      // try — a transport-level failure (invalid URL, refused socket)
+      // reports as a connect failure instead of an unhandled rejection.
+      const stream = await transport.connect();
+      if (!isCurrent()) {
+        discardSuperseded('transport open');
+        return;
+      }
+      const app = client({ name: 'panda' });
+      // The SDK's built-in session/update router strictly zod-parses before any
+      // handler runs and drops schema-invalid notifications (unknown kinds) —
+      // remove it so the lenient parser below is the only parse seam.
+      removeSdkStrictSessionUpdateRouter(app);
+      connection = app
+        .onNotification(
+          methods.client.session.update,
+          parseSessionNotification,
+          (ctx) => {
+            // Second line of defense above the session filter (issue #19): a
+            // replaced connection may still drain buffered messages while its
+            // socket winds down — those belong to a dead era and are dropped.
+            if (generation !== this.connectionGeneration) {
+              console.warn('[panda/acp] session/update from a superseded connection — dropped');
+              return;
+            }
+            this.handleUpdate(ctx.params);
+          },
+        )
+        .onRequest(methods.client.session.requestPermission, (ctx) => {
+          if (generation !== this.connectionGeneration) {
+            console.warn(
+              '[panda/acp] session/request_permission from a superseded connection — answered cancelled',
+            );
+            return Promise.resolve({ outcome: { outcome: 'cancelled' } });
+          }
+          return this.handlePermissionRequest(ctx.params, ctx.signal);
+        })
+        .connect(stream);
+      this.connection = connection;
+      // Only an *unexpected* close reports a disconnect — a replaced or already
+      // cleaned-up connection no longer owns `this.connection`.
+      connection.closed
+        .catch(() => {})
+        .then(() => {
+          if (this.connection === connection) this.reportDisconnect('与服务器的连接已断开');
+        });
+
       const init: InitializeResponse = await connection.agent.request(methods.agent.initialize, {
         protocolVersion: PROTOCOL_VERSION,
         clientCapabilities: {},
@@ -893,6 +914,10 @@ export class LiveAcpClient {
     this.finishAllPermissions();
     this.connection?.close();
     this.connection = null;
+    // Explicit transport teardown (issue #20): the SDK's close usually
+    // already killed the wire — this is the guarantee, not the hope.
+    this.transport?.disconnect();
+    this.transport = null;
     this.sessionId = null;
     this.sessionSwitch = false;
   }

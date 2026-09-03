@@ -11,6 +11,8 @@ import {
   type Stream,
 } from '@agentclientprotocol/sdk';
 import { LiveAcpClient, type LiveClientHandlers } from './LiveAcpClient';
+import { StreamTransport } from './transport/StreamTransport';
+import type { AcpTransport } from './transport/AcpTransport';
 import {
   connectionStorePort,
   usePanda,
@@ -100,6 +102,25 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void
   while (!predicate()) {
     if (Date.now() > deadline) throw new Error('waitFor timed out');
     await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
+/** Transport seam doubles for client-level failure paths (issue #20). */
+class FailingTransport implements AcpTransport {
+  constructor(private readonly err: Error) {}
+  async connect(): Promise<Stream> {
+    throw this.err;
+  }
+  disconnect(): void {}
+}
+
+/** Fails only after a gate resolves — superseded-while-opening scenarios. */
+class GatedFailingTransport implements AcpTransport {
+  readonly disconnect = vi.fn();
+  constructor(private readonly gate: Promise<void>, private readonly err: Error) {}
+  async connect(): Promise<Stream> {
+    await this.gate;
+    throw this.err;
   }
 }
 
@@ -210,7 +231,7 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     .connect(serverStream);
 
   const acpClient = new LiveAcpClient(handlers);
-  await acpClient.connect(clientStream, '/tmp/project', opts.resume);
+  await acpClient.connect(new StreamTransport(clientStream), '/tmp/project', opts.resume);
 
   return {
     ...records,
@@ -1338,7 +1359,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onSessionDeleted: () => {},
       ...wireSwitchHandlers(port),
     });
-    await acpClient.connect(clientStream, '/tmp/project');
+    await acpClient.connect(new StreamTransport(clientStream), '/tmp/project');
 
     await acpClient.loadSession('B', '/tmp/project');
     await acpClient.loadSession('A', '/tmp/project'); // revisit — must not duplicate
@@ -1390,7 +1411,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onSessionDeleted: () => {},
       ...wireSwitchHandlers(port),
     });
-    await acpClient.connect(clientStream, '/tmp/project');
+    await acpClient.connect(new StreamTransport(clientStream), '/tmp/project');
     port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'original turn' }] });
     const before = usePanda.getState().connections['live']!.docs['A']!;
 
@@ -1449,7 +1470,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
     port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'kept turn' }] });
     const before = usePanda.getState().connections['live']!.docs['A']!;
 
-    await acpClient.connect(clientStream, '/tmp/project', { sessionId: 'A' });
+    await acpClient.connect(new StreamTransport(clientStream), '/tmp/project', { sessionId: 'A' });
 
     expect(replays).toBe(0); // resume restores agent context, never replays
     expect(usePanda.getState().connections['live']!.docs['A']).toBe(before);
@@ -1493,7 +1514,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
     port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'kept turn' }] });
     const before = usePanda.getState().connections['live']!.docs['A']!;
 
-    await acpClient.connect(clientStream, '/tmp/project', { sessionId: 'A' }); // load fails
+    await acpClient.connect(new StreamTransport(clientStream), '/tmp/project', { sessionId: 'A' }); // load fails
 
     const slot = usePanda.getState().connections['live']!;
     expect(slot.docs['A']).toBe(before); // rolled back, not wiped
@@ -1541,7 +1562,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onSessionSwitchCommit: () => {},
       onSessionSwitchRollback: () => {},
     });
-    const era1 = acpClient.connect(era1Client, '/tmp/project');
+    const era1 = acpClient.connect(new StreamTransport(era1Client), '/tmp/project');
     await waitFor(() => era1InitSeen);
 
     // Era 2: a plain reconnect on a second server — it wins the race.
@@ -1554,7 +1575,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       }))
       .onRequest(methods.agent.session.new, () => ({ sessionId: 's-3' }))
       .connect(era2Server);
-    await acpClient.connect(era2Client, '/tmp/project');
+    await acpClient.connect(new StreamTransport(era2Client), '/tmp/project');
 
     releaseEra1(); // era 1's initialize finally resolves — superseded
     await era1;
@@ -1563,6 +1584,76 @@ describe('LiveAcpClient × connectionStorePort', () => {
     expect(connected).toEqual(['Fake Agent 2']); // era 1 never surfaced
     expect(sessionIds).toEqual(['s-3']);
     expect(disconnected).toEqual([]); // superseded ≠ disconnect, no error report
+    acpClient.disconnect();
+  });
+
+  it('reports a transport-level failure as a connect failure, never an unhandled rejection (issue #20)', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const disconnected: (string | null)[] = [];
+    const acpClient = new LiveAcpClient({
+      onUpdate: () => {},
+      onStatus: () => {},
+      onConnected: () => {},
+      onSessionId: () => {},
+      onDisconnected: (reason) => disconnected.push(reason),
+      onCapabilities: () => {},
+      onSessions: () => {},
+      onSessionInfo: () => {},
+      onReplayStart: () => {},
+      onSessionDeleted: () => {},
+      onSessionSwitchStage: () => {},
+      onSessionSwitchCommit: () => {},
+      onSessionSwitchRollback: () => {},
+    });
+
+    await acpClient.connect(new FailingTransport(new Error('Invalid URL')), '/tmp/project');
+
+    expect(disconnected).toEqual(['连接失败: Invalid URL']);
+    errorSpy.mockRestore();
+  });
+
+  it('discards a connect superseded while its transport was still opening (issue #20)', async () => {
+    let releaseEra1!: () => void;
+    const era1Gate = new Promise<void>((resolve) => (releaseEra1 = resolve));
+    const era1Transport = new GatedFailingTransport(era1Gate, new Error('era-1 transport died'));
+    const connected: string[] = [];
+    const disconnected: (string | null)[] = [];
+    const acpClient = new LiveAcpClient({
+      onUpdate: () => {},
+      onStatus: () => {},
+      onConnected: (info) => connected.push(info.agentName),
+      onSessionId: () => {},
+      onDisconnected: (reason) => disconnected.push(reason),
+      onCapabilities: () => {},
+      onSessions: () => {},
+      onSessionInfo: () => {},
+      onReplayStart: () => {},
+      onSessionDeleted: () => {},
+      onSessionSwitchStage: () => {},
+      onSessionSwitchCommit: () => {},
+      onSessionSwitchRollback: () => {},
+    });
+    const era1 = acpClient.connect(era1Transport, '/tmp/project');
+
+    // Era 2 replaces the connection BEFORE era 1's transport even opened:
+    // the cleanup must reach the pending attempt's transport (owned before
+    // its connect() resolves) and the late rejection must be discarded.
+    const { clientStream: era2Client, serverStream: era2Server } = streamPair();
+    agent({ name: 'fake-agent-2' })
+      .onRequest(methods.agent.initialize, () => ({
+        protocolVersion: PROTOCOL_VERSION,
+        agentInfo: { name: 'fake-agent-2', title: 'Fake Agent 2', version: '0.0.0' },
+        agentCapabilities: {},
+      }))
+      .onRequest(methods.agent.session.new, () => ({ sessionId: 's-2' }))
+      .connect(era2Server);
+    await acpClient.connect(new StreamTransport(era2Client), '/tmp/project');
+    releaseEra1();
+    await era1;
+
+    expect(connected).toEqual(['Fake Agent 2']);
+    expect(disconnected).toEqual([]); // era-1's failure belongs to a dead era
+    expect(era1Transport.disconnect).toHaveBeenCalledTimes(1); // torn down by era-2's cleanup
     acpClient.disconnect();
   });
 
@@ -1719,7 +1810,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onSessionDeleted: () => {},
       ...switchWiring,
     });
-    await acpClient.connect(era1Client, '/tmp/project');
+    await acpClient.connect(new StreamTransport(era1Client), '/tmp/project');
     port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'era-1 turn' }] });
     const era1Doc = usePanda.getState().connections['live']!.docs['A']!;
 
@@ -1739,7 +1830,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       }))
       .onRequest(methods.agent.session.new, () => ({ sessionId: 'C' }))
       .connect(era2Server);
-    await acpClient.connect(era2Client, '/tmp/project');
+    await acpClient.connect(new StreamTransport(era2Client), '/tmp/project');
     await switching;
     era1ServerConnection.close();
 
