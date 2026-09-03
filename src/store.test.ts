@@ -8,6 +8,7 @@ beforeEach(() => {
     connections: {},
     activeConnectionId: null,
     activeSessionId: null,
+    selectionGeneration: 0,
   });
 });
 
@@ -108,7 +109,12 @@ describe('transactional session switch (issue #17)', () => {
 
     const snapshot = port.stageSession('s-2', '/b');
     expect(snapshot).toMatchObject({ targetSessionId: 's-2', prevSessionId: 's-1', connectionSessionId: 's-1' });
-    expect(usePanda.getState().connections['live']!.switching).toEqual({ sessionId: 's-2' });
+    // The marker carries the minted token (issue #19) — a settle may only
+    // clear the marker its own transaction set.
+    expect(usePanda.getState().connections['live']!.switching).toMatchObject({
+      sessionId: 's-2',
+      selectionToken: snapshot.selectionToken,
+    });
     // Staged, not settled: writes route to the target but the pointer stays.
     port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'replayed' }] });
     expect(usePanda.getState().activeSessionId).toBe('s-1');
@@ -264,7 +270,7 @@ describe('selection generation (issue #19)', () => {
     let state = usePanda.getState();
     expect(state.activeSessionId).toBe('s-1');
     expect(state.connections['live']!.connection.sessionId).toBe('s-1');
-    expect(state.connections['live']!.switching).toEqual({ sessionId: 's-B' });
+    expect(state.connections['live']!.switching).toMatchObject({ sessionId: 's-B' });
     // A's history stays filed under its own session document.
     expect(state.connections['live']!.docs['s-A']!.turns).toHaveLength(1);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('superseded'));
@@ -323,5 +329,25 @@ describe('selection generation (issue #19)', () => {
     port.commitStagedSession(snapshot);
 
     expect(usePanda.getState().activeSessionId).toBe('s-2'); // the switch settles
+  });
+
+  it('deleting the SETTLED session invalidates an in-flight switch (late commit moves nothing)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+    const snapshot = port.stageSession('s-2', '/b');
+
+    port.removeSession('s-1'); // the session the connection had settled on
+    port.commitStagedSession(snapshot); // the in-flight load lands late
+
+    const state = usePanda.getState();
+    // The delete bumped the generation: the commit is superseded — it must
+    // not route the connection onto a world whose predecessor was deleted.
+    expect(state.activeSessionId).toBeNull(); // cleared by the delete itself
+    expect(state.connections['live']!.connection.sessionId).toBe('s-1'); // untouched by the stale commit
+    expect(state.connections['live']!.switching).toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('superseded'));
+    warnSpy.mockRestore();
   });
 });

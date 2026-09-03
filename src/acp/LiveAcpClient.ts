@@ -87,12 +87,15 @@ export type LiveClientHandlers = {
    * A session/load switch begins: the driver stages the target session
    * (routes document writes to it, snapshots the pre-state) and the replay
    * reset follows via `onReplayStart`. The settled pointer does not move yet.
+   * `era` is the client's connectionGeneration at transaction start — the
+   * driver matches it before consuming commit/rollback (issue #19), so a
+   * dead era's late settle can never consume a live era's snapshot.
    */
-  onSessionSwitchStage(sessionId: string, cwd: string): void;
+  onSessionSwitchStage(sessionId: string, cwd: string, era: number): void;
   /** The switch's session/load resolved — the driver commits the staged target. */
-  onSessionSwitchCommit(): void;
+  onSessionSwitchCommit(era: number): void;
   /** The switch's session/load failed — the driver rolls back to the snapshot. */
-  onSessionSwitchRollback(reason: string): void;
+  onSessionSwitchRollback(reason: string, era: number): void;
 };
 
 type PendingPermission = {
@@ -264,6 +267,10 @@ export class LiveAcpClient {
       this.capabilities = readCaps(init.agentCapabilities);
       this.handlers.onCapabilities(this.capabilities);
       if (this.capabilities.list) await this.fetchSessionList(connection, generation);
+      if (!isCurrent()) {
+        discardSuperseded('session list');
+        return;
+      }
 
       if (resume?.sessionId) {
         if (this.capabilities.resume) {
@@ -315,6 +322,7 @@ export class LiveAcpClient {
   /** Sends `session/new` on the live connection and adopts the new session. */
   async newSession(cwd: string): Promise<void> {
     const connection = this.connection;
+    const generation = this.connectionGeneration;
     if (!connection) {
       console.warn('[panda/acp] newSession ignored: not connected');
       return;
@@ -324,8 +332,15 @@ export class LiveAcpClient {
       return;
     }
     try {
-      await this.establishSession(connection, cwd);
+      await this.establishSession(connection, cwd, generation);
     } catch (err) {
+      if (generation !== this.connectionGeneration) {
+        // The request outlived its era (a reconnect replaced the connection
+        // and rejected it): the failure belongs to a dead era — reporting it
+        // would kill the new connection's state.
+        console.info('[panda/acp] superseded newSession failed after replacement — failure discarded');
+        return;
+      }
       console.error('[panda/acp] session/new failed', err);
       this.reportDisconnect(`新建会话失败: ${describeError(err)}`);
     }
@@ -340,6 +355,7 @@ export class LiveAcpClient {
    */
   async loadSession(sessionId: string, cwd: string): Promise<void> {
     const connection = this.connection;
+    const generation = this.connectionGeneration;
     if (!connection) {
       console.warn('[panda/acp] loadSession ignored: not connected');
       return;
@@ -357,12 +373,18 @@ export class LiveAcpClient {
       return;
     }
     try {
-      await this.loadSessionInternal(connection, sessionId, cwd);
+      await this.loadSessionInternal(connection, sessionId, cwd, generation);
       console.info(`[panda/acp] switched to session ${sessionId} (history replayed)`);
     } catch (err) {
+      if (generation !== this.connectionGeneration) {
+        // The store was already rolled back inside loadSessionInternal (its
+        // restores are era-scoped); the failure itself belongs to a dead era.
+        console.info('[panda/acp] superseded session/load failed after replacement — failure discarded');
+        return;
+      }
       // The store was already rolled back inside loadSessionInternal; report
       // loudly but keep the connection — a failed switch is session-scoped,
-      // not transport-scoped (#19 adds generation guards for rapid retries).
+      // not transport-scoped.
       console.error('[panda/acp] session/load failed — rolled back to the previous session', err);
     }
   }
@@ -370,6 +392,7 @@ export class LiveAcpClient {
   /** Removes a session from the agent (`session/delete`, capability-gated). */
   async deleteSession(sessionId: string): Promise<void> {
     const connection = this.connection;
+    const generation = this.connectionGeneration;
     if (!connection) {
       console.warn('[panda/acp] deleteSession ignored: not connected');
       return;
@@ -386,12 +409,23 @@ export class LiveAcpClient {
     }
     try {
       await connection.agent.request(methods.agent.session.delete, { sessionId });
+      if (generation !== this.connectionGeneration) {
+        // The delete succeeded on the old service but the era is gone — the
+        // sidebar refresh of the new connection reflects reality; folding
+        // the removal from here would race the new era's own list.
+        console.info('[panda/acp] session/delete completed after the connection was replaced — result discarded');
+        return;
+      }
       if (this.sessionId === sessionId) {
         console.warn('[panda/acp] deleted the ACTIVE session — local session id cleared');
         this.sessionId = null;
       }
       this.handlers.onSessionDeleted(sessionId);
     } catch (err) {
+      if (generation !== this.connectionGeneration) {
+        console.info('[panda/acp] superseded deleteSession failed after replacement — failure discarded');
+        return;
+      }
       console.error('[panda/acp] session/delete failed', err);
       this.reportDisconnect(`删除会话失败: ${describeError(err)}`);
     }
@@ -411,9 +445,11 @@ export class LiveAcpClient {
     if (!this.capabilities.image && content.some((block) => block.type === 'image')) {
       throw new Error('agent 未声明 promptCapabilities.image，拒绝发送图片');
     }
+    const generation = this.connectionGeneration;
     // The reducer is the only path that opens a user turn — echo locally as
     // optimistic (reconciled against the agent's echo, see pendingOutbound).
-    this.pendingOutbound = { prompt: content, buffered: [], echoWindowClosed: false };
+    const pendingOutbound: PendingOutbound = { prompt: content, buffered: [], echoWindowClosed: false };
+    this.pendingOutbound = pendingOutbound;
     this.handlers.onUpdate({ sessionUpdate: 'user_message', content, optimistic: true });
     this.handlers.onStatus('running');
     const wirePrompt: ContentBlock[] = content;
@@ -426,15 +462,28 @@ export class LiveAcpClient {
       const response = await prompt;
       console.info(`[panda/acp] turn complete: ${response.stopReason}`);
     } catch (err) {
-      console.error('[panda/acp] session/prompt failed', err);
-      // The turn is dead — any permission still on screen must be answered.
-      this.finishAllPermissions();
+      if (generation !== this.connectionGeneration) {
+        // The turn outlived its era: the replacement's close() rejected the
+        // request and its cleanup already settled this era's waiters. Sweeping
+        // the shared map again could cancel the NEW era's permissions (P1).
+        console.info('[panda/acp] superseded session/prompt failed after replacement — failure discarded');
+      } else {
+        console.error('[panda/acp] session/prompt failed', err);
+        // The turn is dead — any permission still on screen must be answered.
+        this.finishAllPermissions();
+      }
     } finally {
-      this.pendingPrompt = null;
-      // Turn over: render any echo still held un-reconciled, then drop the
-      // pending state — with or without protocol confirmation.
-      this.settlePendingOutbound();
-      this.handlers.onStatus('idle');
+      // Slot ownership, not era equality (issue #19): a replaced era's turn
+      // must never touch a newer turn's slots — but when the era merely DIED,
+      // cleanup already cleared them and settling the dead turn's status is
+      // exactly right (the turn is over, the document goes idle).
+      if (this.pendingPrompt === prompt) this.pendingPrompt = null;
+      if (this.pendingOutbound === pendingOutbound) {
+        // Turn over: render any echo still held un-reconciled, then drop the
+        // pending state — with or without protocol confirmation.
+        this.settlePendingOutbound();
+      }
+      if (this.pendingPrompt === null) this.handlers.onStatus('idle');
     }
   }
 
@@ -487,11 +536,7 @@ export class LiveAcpClient {
 
   // -- internals ------------------------------------------------------------
 
-  private async establishSession(
-    connection: ClientConnection,
-    cwd: string,
-    generation: number = this.connectionGeneration,
-  ): Promise<void> {
+  private async establishSession(connection: ClientConnection, cwd: string, generation: number): Promise<void> {
     const session = await connection.agent.request(methods.agent.session.new, {
       cwd,
       mcpServers: [],
@@ -522,7 +567,7 @@ export class LiveAcpClient {
     connection: ClientConnection,
     sessionId: string,
     cwd: string,
-    generation: number = this.connectionGeneration,
+    generation: number,
   ): Promise<void> {
     const prevSessionId = this.sessionId;
     this.sessionSwitch = true;
@@ -531,31 +576,41 @@ export class LiveAcpClient {
       // synchronously, the catch must still roll back and the finally must
       // still release the in-flight flag — otherwise the client locks up.
       this.sessionId = sessionId;
-      this.handlers.onSessionSwitchStage(sessionId, cwd);
+      this.handlers.onSessionSwitchStage(sessionId, cwd, generation);
       this.handlers.onReplayStart();
       await connection.agent.request(methods.agent.session.load, { sessionId, cwd, mcpServers: [] });
       if (generation !== this.connectionGeneration) {
         console.warn(
           `[panda/acp] session/load for ${sessionId} completed after the connection was replaced — rolled back`,
         );
-        this.sessionId = prevSessionId;
-        this.handlers.onSessionSwitchRollback('连接已被更新的连接替换');
+        // No this.sessionId restore here: cleanup already nulled it and the
+        // newer era owns the field (P1-1) — writing prevSessionId back would
+        // re-route a dead era onto the new connection.
+        this.handlers.onSessionSwitchRollback('连接已被更新的连接替换', generation);
         return;
       }
-      this.handlers.onSessionSwitchCommit();
+      this.handlers.onSessionSwitchCommit(generation);
     } catch (err) {
+      if (generation !== this.connectionGeneration) {
+        // The replacement's close() rejected the request — expected. Still
+        // roll the staged switch back (its snapshot restore is era-scoped and
+        // the marker clear prevents a busy lock), but never touch
+        // this.sessionId: the newer era owns it (P1-1).
+        console.info(
+          '[panda/acp] superseded session/load failed after replacement — staged switch rolled back, routing untouched',
+        );
+        this.handlers.onSessionSwitchRollback(describeError(err), generation);
+        throw err;
+      }
       this.sessionId = prevSessionId;
-      this.handlers.onSessionSwitchRollback(describeError(err));
+      this.handlers.onSessionSwitchRollback(describeError(err), generation);
       throw err;
     } finally {
       this.sessionSwitch = false;
     }
   }
 
-  private async fetchSessionList(
-    connection: ClientConnection,
-    generation: number = this.connectionGeneration,
-  ): Promise<void> {
+  private async fetchSessionList(connection: ClientConnection, generation: number): Promise<void> {
     try {
       const entries: SessionSummary[] = [];
       let cursor: string | null = null;
@@ -832,6 +887,9 @@ export class LiveAcpClient {
     // Clear the turn before settling waiters: with no prompt left, their
     // status convergence lands on idle instead of a phantom running.
     this.pendingPrompt = null;
+    // The dead era's echo state must not leak into the next connection: its
+    // buffered chunks belong to a superseded transcript (issue #19).
+    this.pendingOutbound = null;
     this.finishAllPermissions();
     this.connection?.close();
     this.connection = null;
