@@ -298,26 +298,30 @@ describe('LiveAcpClient', () => {
       sessionUpdate: 'user_message',
       content: [{ type: 'text', text: 'hi' }],
     });
-    expect(h.updates).toContainEqual({
-      sessionUpdate: 'agent_message_chunk',
-      messageId: 'm-1',
-      content: { type: 'text', text: '你好' },
-    });
-    expect(h.updates).toContainEqual({
-      sessionUpdate: 'tool_call',
-      toolCallId: 't-1',
-      title: 'Read file',
-      kind: 'read',
-      status: 'pending',
-      rawInput: undefined,
-      locations: undefined,
-    });
-    expect(h.updates).toContainEqual({
-      sessionUpdate: 'usage_update',
-      used: 100,
-      size: 1000,
-      cost: { amount: 0.1, currency: 'USD' },
-    });
+    expect(h.updates).toContainEqual(
+      expect.objectContaining({
+        sessionUpdate: 'agent_message_chunk',
+        messageId: 'm-1',
+        content: { type: 'text', text: '你好' },
+      }),
+    );
+    expect(h.updates).toContainEqual(
+      expect.objectContaining({
+        sessionUpdate: 'tool_call',
+        toolCallId: 't-1',
+        title: 'Read file',
+        kind: 'read',
+        status: 'pending',
+      }),
+    );
+    expect(h.updates).toContainEqual(
+      expect.objectContaining({
+        sessionUpdate: 'usage_update',
+        used: 100,
+        size: 1000,
+        cost: { amount: 0.1, currency: 'USD' },
+      }),
+    );
     // v1 status synthesis: running on send, idle when the prompt resolves.
     expect(h.statuses[0]).toBe('running');
     expect(h.statuses.at(-1)).toBe('idle');
@@ -426,9 +430,10 @@ describe('LiveAcpClient', () => {
     h.closeAll();
   });
 
-  it('drops unknown update variants and foreign sessions loudly, not silently', async () => {
+  it('preserves unknown update kinds as unsupported events and drops foreign sessions loudly', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const onPrompt: PromptHandler = async (ctx) => {
+      await notifyUpdate(ctx, { sessionUpdate: 'vendor_extension', payload: { x: 1 } });
       await notifyUpdate(ctx, { sessionUpdate: 'current_mode_update', currentModeId: 'code' });
       await ctx.client.notify(methods.client.session.update, {
         sessionId: 'not-our-session',
@@ -443,11 +448,34 @@ describe('LiveAcpClient', () => {
     const h = await setup({ onPrompt });
     await h.acpClient.send([{ type: 'text', text: 'hi' }]);
 
-    expect(h.updates).toEqual([
-      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }] },
-      { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'real' } },
-    ]);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('current_mode_update'));
+    expect(h.updates[0]).toEqual({
+      sessionUpdate: 'user_message',
+      content: [{ type: 'text', text: 'hi' }],
+    });
+    // Unknown kinds become explicit unsupported events carrying the raw notification.
+    expect(h.updates).toContainEqual(
+      expect.objectContaining({
+        sessionUpdate: 'unsupported',
+        raw: {
+          sessionId: 's-1',
+          update: { sessionUpdate: 'vendor_extension', payload: { x: 1 } },
+        },
+      }),
+    );
+    // Known session-level kinds are recorded as session_state, not dropped.
+    expect(h.updates).toContainEqual(
+      expect.objectContaining({
+        sessionUpdate: 'session_state',
+        kind: 'current_mode_update',
+      }),
+    );
+    expect(h.updates).toContainEqual(
+      expect.objectContaining({
+        sessionUpdate: 'agent_message_chunk',
+        content: { type: 'text', text: 'real' },
+      }),
+    );
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('vendor_extension'));
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('not-our-session'));
     warnSpy.mockRestore();
     h.closeAll();
@@ -487,46 +515,49 @@ describe('LiveAcpClient', () => {
     const h = await setup({ onPrompt });
     await h.acpClient.send([{ type: 'text', text: 'go' }]);
 
-    expect(h.updates).toContainEqual({
-      sessionUpdate: 'user_message',
-      content: [{ type: 'text', text: 'earlier' }],
-    });
-    expect(h.updates).toContainEqual({
-      sessionUpdate: 'agent_message_chunk',
-      messageId: undefined,
-      content: { type: 'text', text: 'chunk' },
-    });
-    expect(h.updates).toContainEqual({
-      sessionUpdate: 'agent_message_chunk',
-      messageId: undefined,
-      content: { type: 'image', data: 'aGk=', mimeType: 'image/png' },
-    });
-    expect(h.updates).toContainEqual({
-      sessionUpdate: 'tool_call',
-      toolCallId: 't-9',
-      title: 'Edit',
-      kind: 'edit',
-      status: undefined,
-      rawInput: undefined,
-      locations: undefined,
-    });
+    expect(h.updates).toContainEqual(
+      expect.objectContaining({
+        sessionUpdate: 'user_message',
+        content: [{ type: 'text', text: 'earlier' }],
+      }),
+    );
+    expect(h.updates).toContainEqual(
+      expect.objectContaining({
+        sessionUpdate: 'agent_message_chunk',
+        messageId: undefined,
+        content: { type: 'text', text: 'chunk' },
+      }),
+    );
+    expect(h.updates).toContainEqual(
+      expect.objectContaining({
+        sessionUpdate: 'agent_message_chunk',
+        content: { type: 'image', data: 'aGk=', mimeType: 'image/png' },
+      }),
+    );
+    expect(h.updates).toContainEqual(
+      expect.objectContaining({
+        sessionUpdate: 'tool_call',
+        toolCallId: 't-9',
+        title: 'Edit',
+        kind: 'edit',
+      }),
+    );
     // Content on a tool_call create is re-emitted as a follow-up update.
-    expect(h.updates).toContainEqual({
-      sessionUpdate: 'tool_call_update',
-      toolCallId: 't-9',
-      title: undefined,
-      status: undefined,
-      content: [{ type: 'diff', path: '/tmp/a.ts', oldText: null, newText: 'new' }],
-      locations: undefined,
-    });
-    expect(h.updates).toContainEqual({
-      sessionUpdate: 'tool_call_update',
-      toolCallId: 't-9',
-      title: undefined,
-      status: 'completed',
-      content: [{ type: 'content', content: { type: 'image', data: 'aGk=', mimeType: 'image/png' } }],
-      locations: undefined,
-    });
+    expect(h.updates).toContainEqual(
+      expect.objectContaining({
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 't-9',
+        content: [{ type: 'diff', path: '/tmp/a.ts', oldText: null, newText: 'new' }],
+      }),
+    );
+    expect(h.updates).toContainEqual(
+      expect.objectContaining({
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 't-9',
+        status: 'completed',
+        content: [{ type: 'content', content: { type: 'image', data: 'aGk=', mimeType: 'image/png' } }],
+      }),
+    );
     h.closeAll();
   });
 
@@ -585,15 +616,19 @@ describe('LiveAcpClient', () => {
     expect(h.agentState.resumeRequests).toEqual([]);
     expect(h.replays).toHaveLength(1);
     expect(h.sessionIds).toContain('s-99');
-    expect(h.updates).toContainEqual({
-      sessionUpdate: 'user_message',
-      content: [{ type: 'text', text: 'earlier' }],
-    });
-    expect(h.updates).toContainEqual({
-      sessionUpdate: 'agent_message_chunk',
-      messageId: 'm',
-      content: { type: 'text', text: 'reply' },
-    });
+    expect(h.updates).toContainEqual(
+      expect.objectContaining({
+        sessionUpdate: 'user_message',
+        content: [{ type: 'text', text: 'earlier' }],
+      }),
+    );
+    expect(h.updates).toContainEqual(
+      expect.objectContaining({
+        sessionUpdate: 'agent_message_chunk',
+        messageId: 'm',
+        content: { type: 'text', text: 'reply' },
+      }),
+    );
     h.closeAll();
   });
 
@@ -624,11 +659,13 @@ describe('LiveAcpClient', () => {
     await h.acpClient.loadSession('s-2', '/tmp/other');
     expect(h.replays).toHaveLength(1);
     expect(h.sessionIds).toEqual(['s-1', 's-2']);
-    expect(h.updates).toContainEqual({
-      sessionUpdate: 'agent_message_chunk',
-      messageId: 'old',
-      content: { type: 'text', text: '历史消息' },
-    });
+    expect(h.updates).toContainEqual(
+      expect.objectContaining({
+        sessionUpdate: 'agent_message_chunk',
+        messageId: 'old',
+        content: { type: 'text', text: '历史消息' },
+      }),
+    );
     h.closeAll();
   });
 

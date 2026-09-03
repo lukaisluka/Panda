@@ -10,9 +10,11 @@
 import type {
   AcpContentBlock,
   AcpPlanEntry,
+  AcpSessionLevelKind,
   AcpSessionUpdate,
   Block,
   SessionDocument,
+  SessionNotification,
   ToolCallState,
   Turn,
 } from './types';
@@ -22,6 +24,8 @@ export function emptySession(): SessionDocument {
     turns: [],
     status: 'idle',
     usage: { used: 0, size: 0, cost: null },
+    latestNotifications: {},
+    unhandledNotifications: [],
   };
 }
 
@@ -31,13 +35,13 @@ export function applyUpdate(
 ): SessionDocument {
   switch (update.sessionUpdate) {
     case 'user_message':
-      return appendUserMessage(doc, update.content);
+      return appendUserMessage(doc, update.content, update.raw);
 
     case 'agent_message_chunk':
-      return appendChunk(doc, 'agent_message', update.messageId, update.content);
+      return appendChunk(doc, 'agent_message', update.messageId, update.content, update.raw);
 
     case 'agent_thought_chunk':
-      return appendChunk(doc, 'thought', update.messageId, update.content);
+      return appendChunk(doc, 'thought', update.messageId, update.content, update.raw);
 
     case 'tool_call':
       return upsertToolCall(doc, {
@@ -48,6 +52,7 @@ export function applyUpdate(
         rawInput: update.rawInput,
         content: [],
         locations: update.locations ?? [],
+        ...(update.raw ? { rawNotifications: [update.raw] } : {}),
       });
 
     case 'tool_call_update': {
@@ -58,28 +63,75 @@ export function applyUpdate(
         console.warn(`[reducer] tool_call_update for unknown toolCallId: ${update.toolCallId}`);
         return doc;
       }
-      return upsertToolCall(doc, {
+      const merged: ToolCallState = {
         ...existing,
         title: update.title ?? existing.title,
         status: update.status ?? existing.status,
         content: update.content ?? existing.content,
         locations: update.locations ?? existing.locations,
-      });
+      };
+      if (update.raw) {
+        merged.rawNotifications = [...(existing.rawNotifications ?? []), update.raw];
+      }
+      return upsertToolCall(doc, merged);
     }
 
     case 'plan':
-      return updatePlan(doc, update.entries);
+      return withLatest(updatePlan(doc, update.entries), 'plan', update.raw);
 
     case 'usage_update':
-      return {
-        ...doc,
-        usage: {
-          used: update.used,
-          size: update.size,
-          cost: update.cost ?? doc.usage.cost,
+      return withLatest(
+        {
+          ...doc,
+          usage: {
+            used: update.used,
+            size: update.size,
+            cost: update.cost ?? doc.usage.cost,
+          },
         },
-      };
+        'usage_update',
+        update.raw,
+      );
+
+    case 'session_state':
+      return withLatest(doc, update.kind, update.raw);
+
+    case 'unsupported':
+      return appendUnsupported(doc, update.raw);
   }
+}
+
+/** Records the latest raw notification of a session-level kind, if present. */
+function withLatest(
+  doc: SessionDocument,
+  kind: AcpSessionLevelKind,
+  raw: SessionNotification | undefined,
+): SessionDocument {
+  if (!raw) return doc;
+  return { ...doc, latestNotifications: { ...doc.latestNotifications, [kind]: raw } };
+}
+
+/**
+ * Unknown-kind notifications: appended to the unhandled bucket and rendered
+ * as an in-flow fallback block so their position in the conversation is
+ * visible and the raw payload inspectable.
+ */
+function appendUnsupported(doc: SessionDocument, notification: SessionNotification): SessionDocument {
+  const bucketed: SessionDocument = {
+    ...doc,
+    unhandledNotifications: [...doc.unhandledNotifications, notification],
+  };
+  return appendBlock(bucketed, { kind: 'unsupported', notification }, false);
+}
+
+/** Appends `raw` to a block's attribution list, keeping identity when absent. */
+function withRaw<T extends { rawNotifications?: SessionNotification[] }>(
+  block: T,
+  raw: SessionNotification | undefined,
+): T {
+  return raw
+    ? { ...block, rawNotifications: [...(block.rawNotifications ?? []), raw] }
+    : block;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,17 +161,26 @@ function appendBlock(doc: SessionDocument, block: Block, newTurn: boolean): Sess
  * Keep those parts in one user block; a chunk arriving after any agent-side
  * block starts the next turn.
  */
-function appendUserMessage(doc: SessionDocument, content: AcpContentBlock[]): SessionDocument {
+function appendUserMessage(
+  doc: SessionDocument,
+  content: AcpContentBlock[],
+  raw: SessionNotification | undefined,
+): SessionDocument {
   const turn = currentTurn(doc);
   const last = turn?.blocks.at(-1);
   if (turn && last?.kind === 'user_message') {
     const blocks: Block[] = [
       ...turn.blocks.slice(0, -1),
-      { ...last, content: [...last.content, ...content] },
+      withRaw({ ...last, content: [...last.content, ...content] }, raw),
     ];
     return replaceLastTurn(doc, { ...turn, blocks });
   }
-  return appendBlock(doc, { kind: 'user_message', content }, true);
+  const block: Block = {
+    kind: 'user_message',
+    content,
+    ...(raw ? { rawNotifications: [raw] } : {}),
+  };
+  return appendBlock(doc, block, true);
 }
 
 /**
@@ -133,6 +194,7 @@ function appendChunk(
   blockKind: 'agent_message' | 'thought',
   messageId: string | undefined,
   chunk: AcpContentBlock,
+  raw: SessionNotification | undefined,
 ): SessionDocument {
   const lastBlock = currentTurn(doc)?.blocks.at(-1);
   if (
@@ -142,17 +204,18 @@ function appendChunk(
     const turn = currentTurn(doc)!;
     const blocks: Block[] = turn.blocks.map((b) => {
       if ((b.kind === 'agent_message' || b.kind === 'thought') && b === lastBlock) {
-        return { ...b, parts: appendPart(b.parts, chunk) };
+        return withRaw({ ...b, parts: appendPart(b.parts, chunk) }, raw);
       }
       return b;
     });
     return replaceLastTurn(doc, { ...turn, blocks });
   }
 
-  const block: Block =
+  const base =
     blockKind === 'agent_message'
-      ? { kind: 'agent_message', messageId: messageId ?? autoMessageId(doc, 'msg'), parts: [chunk] }
-      : { kind: 'thought', messageId: messageId ?? autoMessageId(doc, 'thought'), parts: [chunk] };
+      ? { kind: 'agent_message' as const, messageId: messageId ?? autoMessageId(doc, 'msg'), parts: [chunk] }
+      : { kind: 'thought' as const, messageId: messageId ?? autoMessageId(doc, 'thought'), parts: [chunk] };
+  const block: Block = { ...base, ...(raw ? { rawNotifications: [raw] } : {}) };
   return appendBlock(doc, block, false);
 }
 

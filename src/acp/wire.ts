@@ -1,6 +1,8 @@
 import type {
+  ClientApp,
   ContentBlock,
   RequestPermissionRequest,
+  SessionNotification,
   SessionUpdate,
   ToolCall,
   ToolCallContent,
@@ -17,28 +19,100 @@ import type {
 
 /**
  * Wire → internal mapping: folds the SDK's v1 `SessionUpdate` variants into
- * Panda's `AcpSessionUpdate` rendering subset.
+ * Panda's `AcpSessionUpdate` rendering subset. Nothing is ever dropped:
  *
- * Conscious subset (documented, not errors — anything outside it is logged
- * and skipped so nothing disappears silently):
- *  - Chunk content supports text and image; audio/resource blocks are skipped.
- *  - Tool-call content supports `content` (text/image) and `diff`; `terminal`
- *    content is skipped. Content sent on a `tool_call` create is re-emitted as
- *    a follow-up `tool_call_update` (the rendering model only accepts content
- *    there).
- *  - `tool_call_update` consumes title/status/content/locations only; `kind`
- *    and `rawInput`/`rawOutput` on updates are dropped (the rendering model
- *    does not patch them).
- *  - Variants Panda does not render at all (plan_update, current_mode_update,
- *    compaction_*, session_info_update, …) warn and skip.
+ *  - Every mapped event carries its source `SessionNotification` as `raw`,
+ *    so the document preserves protocol data by ownership (message blocks,
+ *    tool calls, session-level latest) even where rendering is partial —
+ *    e.g. audio/resource content blocks or `terminal` tool content are not
+ *    rendered, but their notification stays attached to the owning entity.
+ *  - A chunk whose only content block is unsupported (audio/resource)
+ *    becomes an explicit `unsupported` event: rendered as a fallback block
+ *    and kept in the document.
+ *  - Session-level kinds Panda recognizes but does not render in the flow
+ *    (modes, config, commands, compaction, …) become `session_state` events
+ *    recorded as the latest raw notification of their kind.
+ *  - Unknown `sessionUpdate` kinds (future protocol versions, vendor
+ *    extensions) become `unsupported` events — logged loudly, never lost.
+ *
+ *  - Content sent on a `tool_call` create is re-emitted as a follow-up
+ *    `tool_call_update` (the rendering model only accepts content there);
+ *    the raw notification is attributed to the create event only, so it is
+ *    attached exactly once.
  */
 
 const warn = (message: string) => console.warn(`[panda/acp] ${message}`);
 
+/**
+ * Lenient parser for `session/update` notification params, registered in place
+ * of the SDK's strict zod schema. The SDK parses params before any handler
+ * runs and, when the parse throws, just console.errors the raw message and
+ * drops it — which would silently lose unknown `sessionUpdate` kinds, the
+ * exact forward-compat case the raw-preservation model exists for. This
+ * public API seam (`onNotification(method, parser, handler)`) is the only
+ * delivery path for schema-invalid notifications.
+ *
+ * Contract: a structurally sound notification (`sessionId` string, `update`
+ * object with a `sessionUpdate` string) passes through unvalidated — kind
+ * interpretation happens once, in `toAcpUpdates` below. Anything else throws,
+ * and the SDK then logs the raw message while the connection survives.
+ * Field-level validation of known kinds is traded away consciously: a
+ * malformed known kind now fails inside `toAcpUpdates` with the same
+ * loud-drop outcome, just with our stack trace instead of zod's.
+ */
+export function parseSessionNotification(params: unknown): SessionNotification {
+  if (typeof params !== 'object' || params === null) {
+    throw new Error(`session/update 参数不是对象: ${JSON.stringify(params)}`);
+  }
+  const { sessionId, update } = params as { sessionId?: unknown; update?: unknown };
+  if (typeof sessionId !== 'string') {
+    throw new Error(`session/update 缺少合法 sessionId: ${JSON.stringify(params)}`);
+  }
+  if (
+    typeof update !== 'object' ||
+    update === null ||
+    typeof (update as { sessionUpdate?: unknown }).sessionUpdate !== 'string'
+  ) {
+    throw new Error(`session/update 缺少合法 update.sessionUpdate: ${JSON.stringify(params)}`);
+  }
+  return params as SessionNotification;
+}
+
+/**
+ * Removes the SDK's built-in `client-session-update-router` from the app's
+ * handler chain. That router runs before any app-registered handler and
+ * strictly zod-parses every `session/update` notification; on failure the
+ * connection layer console.errors and drops the message — so unknown
+ * `sessionUpdate` kinds would never even reach `parseSessionNotification`.
+ * The router only feeds the SDK's `ActiveSession`/attach helpers
+ * (`connection.agent.session(...)`), which Panda does not use — it talks raw
+ * `session/*` requests — so removing it loses nothing.
+ *
+ * `ClientApp.builder` is private API: if its shape changes on an SDK upgrade,
+ * the filter no-ops, which is detected and reported loudly. Raw preservation
+ * of unknown kinds then degrades to the SDK's drop-with-console.error
+ * behavior, but the connection itself keeps working.
+ */
+export function removeSdkStrictSessionUpdateRouter(app: ClientApp): void {
+  const { builder } = app as unknown as {
+    builder: { handlers: { describe?: () => string }[] };
+  };
+  const before = builder.handlers.length;
+  builder.handlers = builder.handlers.filter(
+    (handler) => handler.describe?.() !== 'client-session-update-router',
+  );
+  if (builder.handlers.length === before) {
+    console.error(
+      '[panda/acp] 未能移除 SDK 的 session/update 严格校验 router（SDK 内部结构变化？）' +
+        ' — 未知 sessionUpdate kind 将被 SDK 丢弃',
+    );
+  }
+}
+
 function toContentBlock(block: ContentBlock, context: string): AcpContentBlock | null {
   if (block.type === 'text') return { type: 'text', text: block.text };
   if (block.type === 'image') return { type: 'image', data: block.data, mimeType: block.mimeType };
-  warn(`${context}: content block "${block.type}" not supported yet — skipped`);
+  warn(`${context}: content block "${block.type}" not supported yet — preserved as raw only`);
   return null;
 }
 
@@ -59,7 +133,7 @@ function toToolContent(items: ToolCallContent[] | null | undefined, toolCallId: 
       const content = toContentBlock(item.content, `tool_call ${toolCallId} content`);
       if (content) mapped.push({ type: 'content', content });
     } else {
-      warn(`tool_call ${toolCallId}: content type "terminal" not supported yet — skipped`);
+      warn(`tool_call ${toolCallId}: content type "terminal" not supported yet — preserved as raw only`);
     }
   }
   return mapped;
@@ -72,7 +146,7 @@ function toToolLocations(
   return locations.map(({ path, line }) => ({ path, line: line ?? undefined }));
 }
 
-function toToolCall(call: ToolCall): AcpSessionUpdate[] {
+function toToolCall(call: ToolCall, raw: SessionNotification): AcpSessionUpdate[] {
   const created: AcpSessionUpdate = {
     sessionUpdate: 'tool_call',
     toolCallId: call.toolCallId,
@@ -81,6 +155,7 @@ function toToolCall(call: ToolCall): AcpSessionUpdate[] {
     status: call.status,
     rawInput: toRawInput(call.rawInput, call.toolCallId),
     locations: toToolLocations(call.locations),
+    raw,
   };
   // The wire allows content on the create event, but the rendering model only
   // accepts it on updates — emit a follow-up so nothing is silently dropped.
@@ -89,7 +164,7 @@ function toToolCall(call: ToolCall): AcpSessionUpdate[] {
   return [created, { sessionUpdate: 'tool_call_update', toolCallId: call.toolCallId, content }];
 }
 
-function toToolCallUpdate(call: ToolCallUpdate): AcpSessionUpdate {
+function toToolCallUpdate(call: ToolCallUpdate, raw: SessionNotification): AcpSessionUpdate {
   return {
     sessionUpdate: 'tool_call_update',
     toolCallId: call.toolCallId,
@@ -97,37 +172,43 @@ function toToolCallUpdate(call: ToolCallUpdate): AcpSessionUpdate {
     status: call.status ?? undefined,
     content: toToolContent(call.content, call.toolCallId),
     locations: toToolLocations(call.locations),
+    raw,
   };
 }
 
-/** Maps one wire `session/update` payload; empty array means "logged and skipped". */
-export function toAcpUpdates(update: SessionUpdate): AcpSessionUpdate[] {
+/** Maps one wire `session/update` notification; the result is never empty-lossy — unsupported data becomes explicit events. */
+export function toAcpUpdates(notification: SessionNotification): AcpSessionUpdate[] {
+  const update: SessionUpdate = notification.update;
+  const raw = notification;
   switch (update.sessionUpdate) {
     case 'user_message_chunk': {
       const block = toContentBlock(update.content, 'user_message_chunk');
-      return block ? [{ sessionUpdate: 'user_message', content: [block] }] : [];
+      return block
+        ? [{ sessionUpdate: 'user_message', content: [block], raw }]
+        : [{ sessionUpdate: 'unsupported', raw }];
     }
     case 'agent_message_chunk': {
       const block = toContentBlock(update.content, 'agent_message_chunk');
       return block
-        ? [{ sessionUpdate: 'agent_message_chunk', messageId: update.messageId ?? undefined, content: block }]
-        : [];
+        ? [{ sessionUpdate: 'agent_message_chunk', messageId: update.messageId ?? undefined, content: block, raw }]
+        : [{ sessionUpdate: 'unsupported', raw }];
     }
     case 'agent_thought_chunk': {
       const block = toContentBlock(update.content, 'agent_thought_chunk');
       return block
-        ? [{ sessionUpdate: 'agent_thought_chunk', messageId: update.messageId ?? undefined, content: block }]
-        : [];
+        ? [{ sessionUpdate: 'agent_thought_chunk', messageId: update.messageId ?? undefined, content: block, raw }]
+        : [{ sessionUpdate: 'unsupported', raw }];
     }
     case 'tool_call':
-      return toToolCall(update);
+      return toToolCall(update, raw);
     case 'tool_call_update':
-      return [toToolCallUpdate(update)];
+      return [toToolCallUpdate(update, raw)];
     case 'plan':
       return [
         {
           sessionUpdate: 'plan',
           entries: update.entries.map(({ content, priority, status }) => ({ content, priority, status })),
+          raw,
         },
       ];
     case 'usage_update':
@@ -137,11 +218,23 @@ export function toAcpUpdates(update: SessionUpdate): AcpSessionUpdate[] {
           used: update.used,
           size: update.size,
           cost: update.cost ?? undefined,
+          raw,
         },
       ];
+    // Recognized session-level kinds without in-flow rendering: keep the
+    // latest raw notification of each kind.
+    case 'plan_update':
+    case 'plan_removed':
+    case 'available_commands_update':
+    case 'current_mode_update':
+    case 'config_option_update':
+    case 'session_info_update':
+    case 'compaction_update':
+    case 'compaction_summary_chunk':
+      return [{ sessionUpdate: 'session_state', kind: update.sessionUpdate, raw }];
     default:
-      warn(`sessionUpdate "${update.sessionUpdate}" not supported yet — skipped`);
-      return [];
+      warn(`sessionUpdate "${(update as { sessionUpdate: string }).sessionUpdate}" not supported yet — preserved as unsupported`);
+      return [{ sessionUpdate: 'unsupported', raw }];
   }
 }
 

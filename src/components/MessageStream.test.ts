@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { flatten } from './MessageStream';
-import type { PermissionRequest, SessionDocument, ToolCallState } from '../protocol/types';
+import type {
+  PermissionRequest,
+  SessionDocument,
+  SessionNotification,
+  ToolCallState,
+} from '../protocol/types';
 
 const permission: PermissionRequest = {
   toolCallId: 'permission-id',
@@ -17,6 +22,8 @@ function documentWith(...calls: ToolCallState[]): SessionDocument {
     turns: [{ id: 'turn-1', blocks: calls.map((call) => ({ kind: 'tool_call' as const, call })) }],
     status: 'requires_action',
     usage: { used: 0, size: 0, cost: null },
+    latestNotifications: {},
+    unhandledNotifications: [],
   };
 }
 
@@ -42,5 +49,37 @@ describe('flatten permission placement', () => {
 
     expect(items).toHaveLength(3);
     expect(items[2]).toMatchObject({ kind: 'permission', request: permission });
+  });
+});
+
+describe('flatten unsupported fallback blocks', () => {
+  it('keeps unsupported blocks in flow order between rendered blocks', () => {
+    const notification = {
+      sessionId: 's-1',
+      update: { sessionUpdate: 'vendor_extension', payload: { x: 1 } },
+    } as unknown as SessionNotification;
+    const doc: SessionDocument = {
+      turns: [
+        {
+          id: 'turn-1',
+          blocks: [
+            { kind: 'user_message', content: [{ type: 'text', text: 'hi' }] },
+            { kind: 'unsupported', notification },
+            { kind: 'agent_message', messageId: 'm-1', parts: [{ type: 'text', text: 'hey' }] },
+          ],
+        },
+      ],
+      status: 'idle',
+      usage: { used: 0, size: 0, cost: null },
+      latestNotifications: {},
+      unhandledNotifications: [notification],
+    };
+
+    const items = flatten(doc, null, null);
+    expect(items.map((item) => (item.kind === 'block' ? item.block.kind : item.kind))).toEqual([
+      'user_message',
+      'unsupported',
+      'agent_message',
+    ]);
   });
 });
