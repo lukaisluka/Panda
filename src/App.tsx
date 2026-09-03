@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Menu } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { MessageStream } from './components/MessageStream';
@@ -32,10 +32,15 @@ export default function App() {
   const send = liveActive ? live.send : demo.send;
   const resolvePermission = liveActive ? live.resolvePermission : demo.resolvePermission;
   // Pending permission cards, insertion-ordered (issue #18): several can be
-  // on screen at once, each answered independently.
-  const pendingPermissions = Object.values(doc.permissions)
-    .filter((permission) => permission.status === 'pending')
-    .map((permission) => permission.request);
+  // on screen at once, each answered independently. Memoized so the array
+  // identity (a MessageStream dep) only changes when a permission does.
+  const pendingPermissions = useMemo(
+    () =>
+      Object.values(doc.permissions)
+        .filter((permission) => permission.status === 'pending')
+        .map((permission) => permission.request),
+    [doc.permissions],
+  );
 
   // A session switch in flight is busy too: the composer must not send into a
   // session that has not settled yet, and the sidebar locks other switches.

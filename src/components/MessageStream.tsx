@@ -274,6 +274,8 @@ export function flatten(
  * the current turn's single pending call (some ACP bridges emit an interrupt
  * ID for request_permission instead of the preceding tool_call ID — attach
  * only when that leaves no doubt), else as an independent card at the end.
+ * A block is only ever claimed by one permission — a second one degrades to
+ * an independent card instead of silently evicting the first.
  */
 function attachPermission(items: FlatItem[], doc: SessionDocument, permission: PermissionRequest): void {
   const exactMatch = items.find(
@@ -282,7 +284,7 @@ function attachPermission(items: FlatItem[], doc: SessionDocument, permission: P
       item.block.kind === 'tool_call' &&
       item.block.call.id === permission.toolCallId,
   );
-  if (exactMatch) {
+  if (exactMatch && exactMatch.permission === null) {
     exactMatch.permission = permission;
     return;
   }
@@ -292,14 +294,15 @@ function attachPermission(items: FlatItem[], doc: SessionDocument, permission: P
     (block): block is Extract<Block, { kind: 'tool_call' }> =>
       block.kind === 'tool_call' && block.call.status === 'pending',
   ) ?? [];
-  if (pendingCalls.length === 1) {
-    const fallbackMatch = items.find(
-      (item): item is BlockFlatItem => item.kind === 'block' && item.block === pendingCalls[0],
-    );
-    if (fallbackMatch) {
-      fallbackMatch.permission = permission;
-      return;
-    }
+  const fallbackMatch =
+    pendingCalls.length === 1
+      ? items.find(
+          (item): item is BlockFlatItem => item.kind === 'block' && item.block === pendingCalls[0],
+        )
+      : undefined;
+  if (fallbackMatch && fallbackMatch.permission === null) {
+    fallbackMatch.permission = permission;
+    return;
   }
 
   items.push({

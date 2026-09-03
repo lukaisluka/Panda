@@ -18,6 +18,7 @@ import { applyUpdate, emptySession } from '../protocol/reducer';
 import type {
   AcpContentBlock,
   AcpSessionUpdate,
+  PermissionRequest,
   SessionStatus,
 } from '../protocol/types';
 
@@ -117,8 +118,6 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
     sessionInfos: [],
     replayStarts: 0,
   };
-  /** 已批准的权限请求游标(权限请求会跨用例累积,按游标推进) */
-  let approvedCursor = 0;
 
   beforeAll(async () => {
     sandboxDir = mkdtempSync(join(tmpdir(), 'panda-e2e-sandbox-'));
@@ -200,23 +199,17 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  /** 未决权限请求(requested − resolved),按到达序等待并逐一批准。 */
+  /** 未决权限请求:按事件流时序折叠(requested 置入、resolved 移除)——同一 id 被 agent 重问时重新挂起。 */
   const pendingPermissionRequests = () => {
-    const resolved = new Set(
-      records.updates
-        .filter(
-          (u): u is Extract<typeof u, { sessionUpdate: 'permission_resolved' }> =>
-            u.sessionUpdate === 'permission_resolved',
-        )
-        .map((u) => u.toolCallId),
-    );
-    return records.updates
-      .filter(
-        (u): u is Extract<typeof u, { sessionUpdate: 'permission_requested' }> =>
-          u.sessionUpdate === 'permission_requested',
-      )
-      .filter((u) => !resolved.has(u.request.toolCallId))
-      .map((u) => u.request);
+    const pending = new Map<string, PermissionRequest>();
+    for (const update of records.updates) {
+      if (update.sessionUpdate === 'permission_requested') {
+        pending.set(update.request.toolCallId, update.request);
+      } else if (update.sessionUpdate === 'permission_resolved') {
+        pending.delete(update.toolCallId);
+      }
+    }
+    return [...pending.values()];
   };
 
   /** 依次批准 ask 模式下的每个权限请求,直到回合结束。 */
@@ -225,11 +218,10 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
       await waitFor(
         () => pendingPermissionRequests().length > 0,
         30_000,
-        `第 ${approvedCursor + 1} 个权限请求`,
+        `第 ${i + 1}/${expected} 个权限请求`,
       );
       const pending = pendingPermissionRequests();
       acpClient.resolvePermission(pending[0]!.toolCallId, 'allow_once');
-      approvedCursor++;
     }
   };
 
@@ -423,7 +415,6 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
       );
       // 回合明确卡在权限上时取消——确定性的取消时机
       acpClient.cancel();
-      approvedCursor++;
       await turn;
       expect(records.statuses.at(-1)).toBe('idle');
 

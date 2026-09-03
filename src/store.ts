@@ -210,7 +210,7 @@ export type ConnectionStorePort = {
   update(update: AcpSessionUpdate): void;
   setStatus(status: SessionStatus): void;
   setConnection(patch: Partial<ConnectionInfo>): void;
-  /** Clears the adopted session's document and the pending permission. */
+  /** Clears the adopted session's document (permissions live inside it). */
   resetDocument(): void;
   setCapabilities(caps: AgentCapabilityInfo): void;
   /** Upserts entries by sessionId; locally-known sessions are preserved. */
@@ -237,9 +237,9 @@ export type ConnectionStorePort = {
   commitStagedSession(): void;
   /**
    * Rolls the switch back: restores the target's pre-switch document (or
-   * removes the placeholder it never had), the pending permission,
-   * `connection.sessionId` and this port's routing. The UI pointer never
-   * moved, so it needs no restore.
+   * removes the placeholder it never had) — pending permissions ride on
+   * the document (issue #18) — plus `connection.sessionId` and this port's
+   * routing. The UI pointer never moved, so it needs no restore.
    */
   rollbackStagedSession(snapshot: SessionSwitchSnapshot): void;
 };

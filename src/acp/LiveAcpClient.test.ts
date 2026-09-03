@@ -71,6 +71,8 @@ type FakeAgentOptions = {
   beforeLoad?: () => Promise<void>;
   /** Reconnect target passed to LiveAcpClient.connect. */
   resume?: { sessionId: string };
+  /** Sees every JSON-RPC message the fake agent sends (wire-level assertions). */
+  spyAgentOutgoing?: (message: AnyMessage) => void;
   onPrompt?: PromptHandler;
 };
 
@@ -135,7 +137,23 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     ...(caps.delete ? { delete: {} } : {}),
   };
 
-  const { clientStream, serverStream } = streamPair();
+  const { clientStream, serverStream: rawServerStream } = streamPair();
+  // Optional wire tap on the agent's outgoing messages (e.g. to learn the
+  // JSON-RPC id of a server-initiated request before cancelling it).
+  const serverStream = (() => {
+    if (!opts.spyAgentOutgoing) return rawServerStream;
+    const writer = rawServerStream.writable.getWriter();
+    return {
+      readable: rawServerStream.readable,
+      writable: new WritableStream<AnyMessage>({
+        write: (chunk) => {
+          opts.spyAgentOutgoing!(chunk);
+          return writer.write(chunk);
+        },
+        abort: (reason) => writer.abort(reason),
+      }),
+    };
+  })();
   const serverConnection: AgentConnection = agent({ name: 'fake-agent' })
     .onRequest(methods.agent.initialize, () => ({
       protocolVersion: opts.protocolVersion ?? PROTOCOL_VERSION,
@@ -530,6 +548,155 @@ describe('LiveAcpClient', () => {
       { sessionUpdate: 'permission_resolved', toolCallId: 'edit-2', response: { outcome: 'cancelled' } },
     ]);
     expect(h.statuses.at(-1)).toBe('idle');
+    h.closeAll();
+  });
+
+  it('supersedes a duplicate request for the same tool call — old cancelled, new answerable (issue #18)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const harnessRef: { h?: Harness } = {};
+    const onPrompt: PromptHandler = async (ctx) => {
+      const first = askPermission(ctx, harnessRef.h!);
+      await waitFor(() => permissionEvents(harnessRef.h!).length >= 1);
+      const second = askPermission(ctx, harnessRef.h!); // same toolCallId: edit-1
+      await Promise.all([first, second]);
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt });
+    harnessRef.h = h;
+
+    const turn = h.acpClient.send([{ type: 'text', text: 'edit it' }]);
+    // requested → superseded (cancelled) → requested again
+    await waitForPermissionEvents(h, 3);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('superseding the stale waiter'));
+
+    h.acpClient.resolvePermission('edit-1', 'allow_once');
+    await turn;
+
+    const events = permissionEvents(h);
+    expect(events).toHaveLength(4);
+    expect(events[1]).toEqual({
+      sessionUpdate: 'permission_resolved',
+      toolCallId: 'edit-1',
+      response: { outcome: 'cancelled' },
+    });
+    expect(h.agentState.permissionResponses).toEqual([
+      { outcome: { outcome: 'cancelled' } },
+      { outcome: { outcome: 'selected', optionId: 'allow-once' } },
+    ]);
+    expect(h.statuses.at(-1)).toBe('idle');
+    warnSpy.mockRestore();
+    h.closeAll();
+  });
+
+  it('answers a sessionless lookup by toolCallId suffix, loudly (issue #18)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const harnessRef: { h?: Harness } = {};
+    const onPrompt: PromptHandler = async (ctx) => {
+      await askPermission(ctx, harnessRef.h!);
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt, capabilities: { delete: true } });
+    harnessRef.h = h;
+
+    const turn = h.acpClient.send([{ type: 'text', text: 'edit it' }]);
+    await waitForPermissionEvents(h, 1);
+
+    // Deleting the active session clears the client's session routing; the
+    // UI still answers by toolCallId, so the exact key misses and the
+    // suffix scan carries the answer — announced, never silent.
+    await h.acpClient.deleteSession('s-1');
+    h.acpClient.resolvePermission('edit-1', 'allow_once');
+    await turn;
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('by toolCallId suffix'));
+    expect(h.agentState.permissionResponses).toEqual([
+      { outcome: { outcome: 'selected', optionId: 'allow-once' } },
+    ]);
+    expect(h.statuses.at(-1)).toBe('idle');
+    warnSpy.mockRestore();
+    h.closeAll();
+  });
+
+  it('settles the waiter as cancelled when the agent aborts its request ($/cancel_request, issue #18)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const outgoing: AnyMessage[] = [];
+    const harnessRef: { h?: Harness } = {};
+    const onPrompt: PromptHandler = async (ctx) => {
+      const pending = askPermission(ctx, harnessRef.h!);
+      await waitFor(() => permissionEvents(harnessRef.h!).length >= 1);
+      const request = outgoing.find(
+        (message): message is AnyMessage & { id: number | string; method: string } =>
+          'method' in message && message.method === 'session/request_permission',
+      );
+      if (!request) throw new Error('permission request never hit the wire');
+      await ctx.client.notify('$/cancel_request', { requestId: request.id });
+      await pending;
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt, spyAgentOutgoing: (message) => outgoing.push(message) });
+    harnessRef.h = h;
+
+    await h.acpClient.send([{ type: 'text', text: 'edit it' }]);
+
+    expect(permissionEvents(h)).toEqual([
+      { sessionUpdate: 'permission_requested', request: expect.objectContaining({ toolCallId: 'edit-1' }) },
+      { sessionUpdate: 'permission_resolved', toolCallId: 'edit-1', response: { outcome: 'cancelled' } },
+    ]);
+    expect(h.agentState.permissionResponses).toEqual([{ outcome: { outcome: 'cancelled' } }]);
+    expect(h.statuses).toContain('requires_action');
+    expect(h.statuses.at(-1)).toBe('idle');
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('aborted by the agent'));
+    warnSpy.mockRestore();
+    h.closeAll();
+  });
+
+  it('answers a foreign-session permission request cancelled without folding it into the stream', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let foreignResponse: RequestPermissionResponse | undefined;
+    const onPrompt: PromptHandler = async (ctx) => {
+      foreignResponse = await ctx.client.request(methods.client.session.requestPermission, {
+        sessionId: 'not-our-session',
+        toolCall: { toolCallId: 'edit-9', title: 'Edit file: src/x.ts', kind: 'edit', status: 'pending' },
+        options: [{ optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' }],
+      });
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt });
+
+    await h.acpClient.send([{ type: 'text', text: 'edit it' }]);
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('answered cancelled'));
+    expect(foreignResponse).toEqual({ outcome: { outcome: 'cancelled' } });
+    expect(permissionEvents(h)).toEqual([]); // never folded into this stream
+    warnSpy.mockRestore();
+    h.closeAll();
+  });
+
+  it('ignores resolvePermission for an unknown tool call; cancels when the kind was not offered', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const harnessRef: { h?: Harness } = {};
+    const onPrompt: PromptHandler = async (ctx) => {
+      await askPermission(ctx, harnessRef.h!);
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt });
+    harnessRef.h = h;
+
+    h.acpClient.resolvePermission('ghost', 'allow_once'); // unknown — ignored
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('ghost'));
+    expect(h.updates).toEqual([]);
+
+    const turn = h.acpClient.send([{ type: 'text', text: 'edit it' }]);
+    await waitForPermissionEvents(h, 1);
+    h.acpClient.resolvePermission('edit-1', 'allow_always'); // not among the offered options
+    await turn;
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('allow_always'));
+    expect(h.agentState.permissionResponses).toEqual([{ outcome: { outcome: 'cancelled' } }]);
+    expect(h.statuses.at(-1)).toBe('idle');
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
     h.closeAll();
   });
 

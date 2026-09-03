@@ -4,7 +4,7 @@
 
 决策依据（2026-09 对 react-acp、acp-components 的源码核实，详见 `docs/panda-acp-architecture-conclusion.md`）：
 
-- Panda 的 `LiveAcpClient` 本就是**实例级**的——一条连接 + 自有 pendingPrompt / pendingPermission + connection identity 校验，且接受注入的 Stream。多连接 = 多实例，客户端类无需改造；真正的阻碍是 store 的全局单例（`doc` / `connection` / `permission` / `sessions` 各一份）。
+- Panda 的 `LiveAcpClient` 本就是**实例级**的——一条连接 + 自有 pendingPrompt / pendingPermission + connection identity 校验，且接受注入的 Stream。多连接 = 多实例，客户端类无需改造；真正的阻碍是 store 的全局单例（`doc` / `connection` / `sessions` 各一份；`permission` 单例在 #18 中已随权限集合并入 `doc`）。
 - acp-components 验证了该状态模型可行：`agents: Map`（多 agent 连接）+ 每会话独立 store + 全局 `activeSessionId`，`removeAgent` 时做孤儿会话清理。
 - react-acp 验证了配套机制：按 session 隔离的状态仓库 + `selectionGeneration`（切换 latest-wins）+ 事务性 attach（快照 / 回滚）。
 

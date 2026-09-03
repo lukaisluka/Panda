@@ -336,7 +336,12 @@ function requestPermission(doc: SessionDocument, request: PermissionRequest): Se
 /**
  * Settles a permission: pending → resolved/cancelled with the response kept.
  * A resolve for an unknown toolCallId is a driver/reducer contract violation
- * — surfaced loudly, never silently applied.
+ * — surfaced loudly, never silently applied. When the tool will never run
+ * (cancelled, or the user picked a reject option), a still-pending tool
+ * record is retired to `cancelled` — otherwise the placeholder planted for
+ * an out-of-order request would linger as "awaiting approval" forever with
+ * nothing left to answer it. A later real `tool_call` for the same id still
+ * overwrites the record through the normal upsert path.
  */
 function resolvePermission(
   doc: SessionDocument,
@@ -348,7 +353,7 @@ function resolvePermission(
     console.warn(`[reducer] permission_resolved for unknown toolCallId ${toolCallId} — ignored`);
     return doc;
   }
-  return {
+  const withRecord: SessionDocument = {
     ...doc,
     permissions: {
       ...doc.permissions,
@@ -359,6 +364,34 @@ function resolvePermission(
       },
     },
   };
+  const toolWillNotRun =
+    response.outcome === 'cancelled' ||
+    (response.outcome === 'selected' &&
+      (response.kind === 'reject_once' || response.kind === 'reject_always'));
+  return toolWillNotRun ? retirePendingToolCall(withRecord, toolCallId) : withRecord;
+}
+
+/**
+ * Marks a still-pending tool record cancelled. Reference-preserving when
+ * nothing matches (or the call already started) so untouched turns keep
+ * their identities for the memoized block views.
+ */
+function retirePendingToolCall(doc: SessionDocument, toolCallId: string): SessionDocument {
+  let changed = false;
+  const turns = doc.turns.map((turn) => {
+    let blocksChanged = false;
+    const blocks = turn.blocks.map((block) => {
+      if (block.kind === 'tool_call' && block.call.id === toolCallId && block.call.status === 'pending') {
+        blocksChanged = true;
+        return { kind: 'tool_call' as const, call: { ...block.call, status: 'cancelled' as const } };
+      }
+      return block;
+    });
+    if (!blocksChanged) return turn;
+    changed = true;
+    return { ...turn, blocks };
+  });
+  return changed ? { ...doc, turns } : doc;
 }
 
 /**

@@ -244,9 +244,10 @@ export type SessionDocument = {
   /**
    * Permission lifecycle per tool call (issue #18), keyed by toolCallId and
    * kept for the whole session — pending requests render as cards, resolved
-   * ones stay as records. Insertion-ordered: JS object string keys iterate
-   * in assignment order, so replayed sessions restore the original card
-   * order.
+   * ones stay as records. Card order follows key insertion order: JS keeps
+   * string keys in assignment order, so replayed sessions restore the
+   * original card order (integer-like ids would sort numerically — a
+   * reordering, never a loss).
    */
   permissions: Record<string, PermissionState>;
   /**

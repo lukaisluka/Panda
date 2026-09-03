@@ -81,6 +81,19 @@ describe('flatten permission placement', () => {
     expect(items[2]).toMatchObject({ kind: 'permission', request: permission });
     expect(items[3]).toMatchObject({ kind: 'permission', request: secondPermission });
   });
+
+  it('never evicts a mounted permission — an unmatched one degrades to an independent card', () => {
+    // The exact match claims the tool call; the second permission's
+    // sole-pending-call fallback would land on the same block.
+    const items = flatten(
+      documentWith(toolCall('permission-id')),
+      [permission, secondPermission],
+      null,
+    );
+
+    expect(items[0]).toMatchObject({ kind: 'block', permission });
+    expect(items[1]).toMatchObject({ kind: 'permission', request: secondPermission });
+  });
 });
 
 describe('flatten unsupported fallback blocks', () => {
