@@ -12,6 +12,8 @@ import type { AcpTransport } from './AcpTransport';
 export class WebSocketTransport implements AcpTransport {
   private readonly url: string;
   private stream: Stream | null = null;
+  /** One instance, one connection attempt — EVER, including failed ones. */
+  private connected = false;
   /** First settlement wins: one close-or-error event per connection. */
   private settled = false;
   private readonly closeHandlers = new Set<() => void>();
@@ -22,11 +24,12 @@ export class WebSocketTransport implements AcpTransport {
   }
 
   async connect(): Promise<Stream> {
-    if (this.stream) {
-      // One instance, one connection attempt — a silent reopen would detach
-      // the caller's close/error observers from the live socket.
+    if (this.connected) {
+      // Never silently reopen: a second attempt would detach the caller's
+      // close/error observers from the live socket (the interface's MUST).
       throw new Error('[panda/acp] WebSocketTransport.connect called twice on one instance');
     }
+    this.connected = true;
     // Async is the seam, not the work: the SDK builds the stream synchronously
     // (an invalid URL throws here and rejects this promise — the client
     // reports it as a connect failure); future transports genuinely await.
@@ -62,25 +65,46 @@ export class WebSocketTransport implements AcpTransport {
     // `closed` is a standard web-streams property the runtime exposes, but
     // TS 7's DOM lib types Readable/WritableStream without it — read it
     // structurally instead of pinning the project to a lib workaround.
-    const settled = (side: object): Promise<unknown> =>
-      (side as { closed?: Promise<unknown> }).closed ?? Promise.resolve();
+    const settled = (side: object, name: string): Promise<unknown> => {
+      const closed = (side as { closed?: Promise<unknown> }).closed;
+      // Fail fast, never invent a phantom close: without a `closed` promise
+      // this transport cannot honor its close/error contract at all.
+      if (!closed) {
+        throw new Error(`[panda/acp] transport stream ${name} has no closed promise — closure not observable`);
+      }
+      return closed;
+    };
     const settle = (err: unknown) => {
       if (this.settled) return;
       this.settled = true;
       if (err === undefined) {
         for (const handler of this.closeHandlers) handler();
       } else {
-        const error = err instanceof Error ? err : new Error(String(err));
+        const error = toError(err);
         for (const handler of this.errorHandlers) handler(error);
       }
     };
-    settled(stream.readable).then(
+    settled(stream.readable, 'readable').then(
       () => settle(undefined),
       (err: unknown) => settle(err),
     );
-    settled(stream.writable).then(
+    settled(stream.writable, 'writable').then(
       () => settle(undefined),
       (err: unknown) => settle(err),
     );
   }
+}
+
+/**
+ * Human-readable error for any rejected value — browser WebSocket failures
+ * reject with a raw Event (stringifies to "[object Event]"); same treatment
+ * as LiveAcpClient.describeError.
+ */
+function toError(err: unknown): Error {
+  if (err instanceof Error) return err;
+  if (typeof err === 'object' && err !== null) {
+    const type = (err as { type?: unknown }).type;
+    if (typeof type === 'string') return new Error(`WebSocket ${type}`);
+  }
+  return new Error(String(err));
 }

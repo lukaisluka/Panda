@@ -14,10 +14,13 @@ import type { Stream } from '@agentclientprotocol/sdk';
 export interface AcpTransport {
   /**
    * Opens the transport. Resolves with the ACP `Stream` to hand to the
-   * client; rejects on transport-level failure (bad URL, refused socket,
-   * failed spawn) — the client reports that as a connect failure.
-   * One instance serves one connection attempt: a second `connect()` on a
-   * used transport must fail loudly rather than silently reopen.
+   * client. Rejection timing is implementation-dependent: a transport that
+   * cannot even begin (invalid URL, failed spawn) rejects here; one that
+   * opens and dies mid-handshake (refused socket) may resolve first and
+   * fail through the stream — the client reports both as connect failures.
+   * One instance serves exactly one connection attempt (a failed attempt
+   * counts): a second `connect()` must fail loudly rather than silently
+   * reopen.
    */
   connect(): Promise<Stream>;
   /**

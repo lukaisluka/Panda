@@ -77,10 +77,13 @@ describe('WebSocketTransport (issue #20)', () => {
     await expect(new WebSocketTransport(BAD_URL).connect()).rejects.toThrow('Invalid URL');
   });
 
-  it('refuses a second connect on one instance, loudly', async () => {
+  it('refuses a second connect on one instance, loudly — even after disconnect (P2)', async () => {
     staged = stageFakeStream();
     const transport = new WebSocketTransport('ws://x');
     await transport.connect();
+    transport.disconnect();
+    // The once-guard must survive its own teardown: a silent reopen would
+    // leave the new connection's close/error observation dead (settled).
     await expect(transport.connect()).rejects.toThrow('called twice');
   });
 
@@ -120,6 +123,21 @@ describe('WebSocketTransport (issue #20)', () => {
     expect(closed).not.toHaveBeenCalled();
   });
 
+  it('wraps a DOM-Event-like rejection as "WebSocket <type>", not "[object Event]"', async () => {
+    const stream = stageFakeStream();
+    staged = stream;
+    const transport = new WebSocketTransport('ws://x');
+    const errored = vi.fn();
+    transport.onError(errored);
+    await transport.connect();
+
+    // Browser sockets reject `closed` with the raw error Event.
+    stream.settleRead({ type: 'error' });
+    await Promise.resolve();
+
+    expect(errored.mock.calls[0]![0].message).toBe('WebSocket error');
+  });
+
   it('unsubscribed handlers are not fired', async () => {
     const stream = stageFakeStream();
     staged = stream;
@@ -135,10 +153,12 @@ describe('WebSocketTransport (issue #20)', () => {
     expect(closed).not.toHaveBeenCalled();
   });
 
-  it('disconnect() tears both stream sides down and is idempotent', async () => {
+  it('disconnect() tears both stream sides down, fires onClose, and is idempotent', async () => {
     const stream = stageFakeStream();
     staged = stream;
     const transport = new WebSocketTransport('ws://x');
+    const closed = vi.fn();
+    transport.onClose(closed);
     await transport.connect();
 
     transport.disconnect();
@@ -146,6 +166,10 @@ describe('WebSocketTransport (issue #20)', () => {
 
     expect(stream.readable.cancel).toHaveBeenCalledTimes(1);
     expect(stream.writable.abort).toHaveBeenCalledTimes(1);
+    // Deliberate teardown is a closure like any other (interface contract).
+    stream.settleRead();
+    await Promise.resolve();
+    expect(closed).toHaveBeenCalledTimes(1);
   });
 
   it('disconnect() before connect() is a safe no-op', () => {
