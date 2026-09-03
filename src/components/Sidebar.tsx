@@ -16,7 +16,7 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
   connection: ConnectionInfo;
   capabilities: AgentCapabilityInfo;
   sessions: SessionEntry[];
-  /** A turn in flight — switching sessions mid-turn would orphan the prompt. */
+  /** A turn or a session switch in flight — mid-switch mutations would interleave with the transaction. */
   busy: boolean;
   onConnect(url: string, cwd: string, opts?: ConnectOptions): void;
   onSelectProfile(profile: AgentProfile): void;
@@ -67,13 +67,15 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
             onNewSession(connection.cwd!);
             onMobileClose();
           }}
-          disabled={!live || !connected || !connection.cwd}
+          disabled={!live || !connected || !connection.cwd || busy}
           className="flex h-5 w-5 items-center justify-center rounded text-faint transition-colors enabled:hover:bg-raised enabled:hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
           aria-label="新建会话"
           title={
-            live && connected && connection.cwd
+            live && connected && connection.cwd && !busy
               ? '新建会话（session/new）'
-              : '连接 agent 后可新建会话'
+              : busy
+                ? '等待当前回合或切换完成'
+                : '连接 agent 后可新建会话'
           }
         >
           <Plus size={13} />
@@ -105,9 +107,11 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
                     title={
                       isActive
                         ? undefined
-                        : canSwitch
-                          ? entry.cwd
-                          : 'agent 不支持历史回放（session/load）'
+                        : !canSwitch && busy
+                          ? '等待当前回合或切换完成'
+                          : canSwitch
+                            ? entry.cwd
+                            : 'agent 不支持历史回放（session/load）'
                     }
                     className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] ${
                       isActive
@@ -120,7 +124,7 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
                     <MessagesSquare size={13} className="shrink-0 text-faint" />
                     <span className="truncate">{label}</span>
                   </button>
-                  {capabilities.delete && connected && !isActive && (
+                  {capabilities.delete && connected && !isActive && !busy && (
                     <button
                       onClick={() => onDeleteSession(entry.sessionId)}
                       className="absolute right-1.5 top-1/2 hidden h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-faint transition-colors hover:text-danger group-hover:flex"

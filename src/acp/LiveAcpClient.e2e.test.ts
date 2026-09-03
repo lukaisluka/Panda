@@ -186,7 +186,7 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
       onSessionInfo: (sessionId, info) => records.sessionInfos.push({ sessionId, ...info }),
       onReplayStart: () => records.replayStarts++,
       onSessionDeleted: () => {},
-      onSessionStage: () => {},
+      onSessionSwitchStage: () => {},
       onSessionSwitchCommit: () => {},
       onSessionSwitchRollback: () => {},
     };

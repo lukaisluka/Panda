@@ -108,10 +108,9 @@ describe('transactional session switch (issue #17)', () => {
 
     const snapshot = port.stageSession('s-2', '/b');
     expect(snapshot).toMatchObject({ targetSessionId: 's-2', prevSessionId: 's-1', connectionSessionId: 's-1' });
-    const mid = usePanda.getState();
+    expect(usePanda.getState().connections['live']!.switching).toEqual({ sessionId: 's-2' });
     // Staged, not settled: writes route to the target but the pointer stays.
     port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'replayed' }] });
-    expect(mid.connections['live']!.switching).toEqual({ sessionId: 's-2' });
     expect(usePanda.getState().activeSessionId).toBe('s-1');
     expect(usePanda.getState().connections['live']!.connection.sessionId).toBe('s-1');
     expect(usePanda.getState().connections['live']!.docs['s-2']!.turns).toHaveLength(1);
@@ -204,11 +203,10 @@ describe('transactional session switch (issue #17)', () => {
     expect(slot.connection.error).toBeNull();
   });
 
-  it('commitStagedSession without a staged session warns and does nothing', () => {
+  it('commitStagedSession without a staged session warns, clears switching, never deadlocks', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     usePanda.getState().ensureConnection('live');
-    const port = connectionStorePort('live');
-    usePanda.getState().ensureConnection('live'); // no session ever adopted
+    const port = connectionStorePort('live'); // no session ever adopted
 
     port.commitStagedSession();
 
@@ -218,5 +216,21 @@ describe('transactional session switch (issue #17)', () => {
     expect(usePanda.getState().connections['live']!.connection.sessionId).toBeNull();
     expect(usePanda.getState().activeSessionId).toBeNull();
     warnSpy.mockRestore();
+  });
+
+  it('commitStagedSession clears switching when the staged session was dropped mid-switch', () => {
+    // The delete-mid-switch path: removeSession nulls the port's routing, the
+    // pending load later succeeds — commit must not leave a stale marker.
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+    port.stageSession('s-2', '/b');
+    port.removeSession('s-2');
+
+    port.commitStagedSession();
+
+    expect(usePanda.getState().connections['live']!.switching).toBeNull();
+    // The pointer stays on the surviving session; the UI never locks busy.
+    expect(usePanda.getState().connections['live']!.connection.sessionId).toBe('s-1');
   });
 });

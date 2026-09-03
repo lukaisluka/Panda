@@ -123,7 +123,7 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     onSessionInfo: (sessionId, info) => records.sessionInfos.push({ sessionId, ...info }),
     onReplayStart: () => records.replays.push(records.replays.length + 1),
     onSessionDeleted: (sessionId) => records.deletedSessions.push(sessionId),
-    onSessionStage: (sessionId, cwd) => records.switchLog.push({ kind: 'stage', sessionId, cwd }),
+    onSessionSwitchStage: (sessionId, cwd) => records.switchLog.push({ kind: 'stage', sessionId, cwd }),
     onSessionSwitchCommit: () => records.switchLog.push({ kind: 'commit' }),
     onSessionSwitchRollback: (reason) => records.switchLog.push({ kind: 'rollback', reason }),
   };
@@ -739,20 +739,34 @@ describe('LiveAcpClient', () => {
     h.closeAll();
   });
 
-  it('refuses a second switch while one is still in flight', async () => {
+  it('refuses a second switch, a send, a new session and a delete while one switch is still in flight', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     let releaseLoad: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => (releaseLoad = resolve));
     const h = await setup({
-      capabilities: { loadSession: true },
+      capabilities: { loadSession: true, delete: true },
       history: { 's-2': [] },
       beforeLoad: () => gate,
     });
     const first = h.acpClient.loadSession('s-2', '/tmp/other');
     await h.acpClient.loadSession('s-2', '/tmp/other'); // refused while in flight
+    await h.acpClient.send([{ type: 'text', text: 'nope' }]); // refused
+    await h.acpClient.newSession('/tmp/other'); // refused
+    await h.acpClient.deleteSession('s-2'); // refused (deleting the staged target)
     expect(warnSpy).toHaveBeenCalledWith(
       '[panda/acp] loadSession ignored: another switch is still in flight',
     );
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[panda/acp] send ignored: a session switch is still in flight',
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[panda/acp] newSession ignored: a session switch is still in flight',
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[panda/acp] deleteSession ignored: a session switch is still in flight',
+    );
+    expect(h.updates).toEqual([]); // the refused send produced no optimistic echo
+    expect(h.agentState.deleteRequests).toEqual([]);
     releaseLoad!();
     await first;
     expect(h.switchLog).toEqual([
@@ -951,7 +965,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
   function wireSwitchHandlers(port: ConnectionStorePort) {
     let staged: SessionSwitchSnapshot | null = null;
     return {
-      onSessionStage: (id: string, cwd: string) => {
+      onSessionSwitchStage: (id: string, cwd: string) => {
         staged = port.stageSession(id, cwd);
       },
       onSessionSwitchCommit: () => {
@@ -961,7 +975,11 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onSessionSwitchRollback: (reason: string) => {
         const snapshot = staged;
         staged = null;
-        if (!snapshot) throw new Error('rollback without a staged snapshot');
+        if (!snapshot) {
+          // Mirrors useLiveSession: loud, no restore.
+          console.error('[panda/acp] session switch rollback without a staged snapshot');
+          return;
+        }
         port.rollbackStagedSession(snapshot);
         port.setConnection({ error: `切换会话失败: ${reason}` });
       },

@@ -89,7 +89,7 @@ export type LiveClientHandlers = {
    * (routes document writes to it, snapshots the pre-state) and the replay
    * reset follows via `onReplayStart`. The settled pointer does not move yet.
    */
-  onSessionStage(sessionId: string, cwd: string): void;
+  onSessionSwitchStage(sessionId: string, cwd: string): void;
   /** The switch's session/load resolved — the driver commits the staged target. */
   onSessionSwitchCommit(): void;
   /** The switch's session/load failed — the driver rolls back to the snapshot. */
@@ -260,6 +260,10 @@ export class LiveAcpClient {
       console.warn('[panda/acp] newSession ignored: not connected');
       return;
     }
+    if (this.sessionSwitch) {
+      console.warn('[panda/acp] newSession ignored: a session switch is still in flight');
+      return;
+    }
     try {
       await this.establishSession(connection, cwd);
     } catch (err) {
@@ -299,7 +303,7 @@ export class LiveAcpClient {
     } catch (err) {
       // The store was already rolled back inside loadSessionInternal; report
       // loudly but keep the connection — a failed switch is session-scoped,
-      // not transport-scoped (#19 adds generation guards for rapid retried).
+      // not transport-scoped (#19 adds generation guards for rapid retries).
       console.error('[panda/acp] session/load failed — rolled back to the previous session', err);
     }
   }
@@ -313,6 +317,12 @@ export class LiveAcpClient {
     }
     if (!this.capabilities.delete) {
       console.warn('[panda/acp] deleteSession ignored: agent does not support session/delete');
+      return;
+    }
+    if (this.sessionSwitch) {
+      // Deleting the staged target mid-switch would make the pending
+      // commit/rollback land on a session that no longer exists.
+      console.warn('[panda/acp] deleteSession ignored: a session switch is still in flight');
       return;
     }
     try {
@@ -432,10 +442,13 @@ export class LiveAcpClient {
   ): Promise<void> {
     const prevSessionId = this.sessionId;
     this.sessionSwitch = true;
-    this.sessionId = sessionId;
-    this.handlers.onSessionStage(sessionId, cwd);
-    this.handlers.onReplayStart();
     try {
+      // The whole transaction lives inside the try: if a handler ever throws
+      // synchronously, the catch must still roll back and the finally must
+      // still release the in-flight flag — otherwise the client locks up.
+      this.sessionId = sessionId;
+      this.handlers.onSessionSwitchStage(sessionId, cwd);
+      this.handlers.onReplayStart();
       await connection.agent.request(methods.agent.session.load, { sessionId, cwd, mcpServers: [] });
       this.handlers.onSessionSwitchCommit();
     } catch (err) {
@@ -621,5 +634,6 @@ export class LiveAcpClient {
     this.connection = null;
     this.sessionId = null;
     this.pendingPrompt = null;
+    this.sessionSwitch = false;
   }
 }

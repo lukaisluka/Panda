@@ -78,9 +78,12 @@ export type ConnectionState = {
 };
 
 /**
- * Snapshot taken before a transactional session switch (issue #17) — the
- * exact pre-state `rollbackStagedSession` restores when `session/load` fails.
- * Captured before the replay reset destroys anything.
+ * Snapshot taken before a transactional session switch (issue #17) — what
+ * `rollbackStagedSession` restores when `session/load` fails: the routed
+ * session, the target's document (the thing the replay reset destroys), the
+ * pending permission and the settled `connection.sessionId`. The sidebar
+ * entry is deliberately kept — stage's metadata upsert survives (title and
+ * updatedAt retention is the point). Captured before the replay reset runs.
  */
 export type SessionSwitchSnapshot = {
   /** The switch's target; identifies the document rollback writes back. */
@@ -399,7 +402,10 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
     commitStagedSession: () => {
       const sessionId = currentSessionId;
       if (sessionId === null) {
+        // Never leave `switching` set on this path: a stale marker would lock
+        // the UI busy forever (nothing else can clear it once staged).
         console.warn(`[store] connection "${connectionId}" commitStagedSession without a staged session — ignored`);
+        usePanda.setState((s) => patchConnectionState(s, connectionId, () => ({ switching: null })) ?? {});
         return;
       }
       usePanda.setState((s) => {
@@ -423,8 +429,19 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
       usePanda.setState((s) => {
         const patched = patchConnectionState(s, connectionId, (state) => {
           const docs = { ...state.docs };
-          if (snapshot.targetDoc) docs[snapshot.targetSessionId] = snapshot.targetDoc;
-          else delete docs[snapshot.targetSessionId];
+          const stillListed = state.sessions.some((entry) => entry.sessionId === snapshot.targetSessionId);
+          if (stillListed) {
+            if (snapshot.targetDoc) docs[snapshot.targetSessionId] = snapshot.targetDoc;
+            else delete docs[snapshot.targetSessionId];
+          } else if (snapshot.targetDoc) {
+            // The target was deleted mid-switch (delete wins over the stale
+            // transaction) — restoring its document would resurrect it.
+            console.warn(
+              `[store] connection "${connectionId}" rollback for deleted session ${snapshot.targetSessionId} — document not restored`,
+            );
+          }
+          // The sidebar entry is deliberately NOT rolled back: stage's
+          // metadata upsert (cwd/title/updatedAt retention) is a keeper.
           return {
             docs,
             permission: snapshot.permission,

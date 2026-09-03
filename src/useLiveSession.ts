@@ -143,7 +143,7 @@ export function useLiveSession() {
       onSessionInfo: (sessionId, info) => port.patchSession(sessionId, info),
       onReplayStart: () => port.resetDocument(),
       onSessionDeleted: (sessionId) => port.removeSession(sessionId),
-      onSessionStage: (sessionId, cwd) => {
+      onSessionSwitchStage: (sessionId, cwd) => {
         stagedSwitchRef.current = port.stageSession(sessionId, cwd);
       },
       onSessionSwitchCommit: () => {
@@ -160,9 +160,11 @@ export function useLiveSession() {
           return;
         }
         port.rollbackStagedSession(snapshot);
-        // Surface the failure without tearing down the connection; cleared
-        // again by the next stage or successful connect.
-        port.setConnection({ error: `切换会话失败: ${reason}` });
+        // Surface the failure on a live connection only: after a disconnect
+        // (reason=null already reported) a stale error banner must not linger.
+        if (usePanda.getState().connections[LIVE_CONNECTION_ID]?.connection.status === 'connected') {
+          port.setConnection({ error: `切换会话失败: ${reason}` });
+        }
       },
     });
   }
