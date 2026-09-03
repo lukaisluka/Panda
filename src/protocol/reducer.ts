@@ -44,16 +44,21 @@ export function applyUpdate(
       return appendChunk(doc, 'thought', update.messageId, update.content, update.raw);
 
     case 'tool_call':
-      return upsertToolCall(doc, {
-        id: update.toolCallId,
-        title: update.title,
-        kind: update.kind ?? 'other',
-        status: update.status ?? 'pending',
-        rawInput: update.rawInput,
-        content: [],
-        locations: update.locations ?? [],
-        ...(update.raw ? { rawNotifications: [update.raw] } : {}),
-      });
+      return upsertToolCall(
+        doc,
+        withRaw(
+          {
+            id: update.toolCallId,
+            title: update.title,
+            kind: update.kind ?? 'other',
+            status: update.status ?? 'pending',
+            rawInput: update.rawInput,
+            content: [],
+            locations: update.locations ?? [],
+          },
+          update.raw,
+        ),
+      );
 
     case 'tool_call_update': {
       const existing = findToolCall(doc, update.toolCallId);
@@ -63,16 +68,16 @@ export function applyUpdate(
         console.warn(`[reducer] tool_call_update for unknown toolCallId: ${update.toolCallId}`);
         return doc;
       }
-      const merged: ToolCallState = {
-        ...existing,
-        title: update.title ?? existing.title,
-        status: update.status ?? existing.status,
-        content: update.content ?? existing.content,
-        locations: update.locations ?? existing.locations,
-      };
-      if (update.raw) {
-        merged.rawNotifications = [...(existing.rawNotifications ?? []), update.raw];
-      }
+      const merged = withRaw(
+        {
+          ...existing,
+          title: update.title ?? existing.title,
+          status: update.status ?? existing.status,
+          content: update.content ?? existing.content,
+          locations: update.locations ?? existing.locations,
+        },
+        update.raw,
+      );
       return upsertToolCall(doc, merged);
     }
 
@@ -125,13 +130,10 @@ function appendUnsupported(doc: SessionDocument, notification: SessionNotificati
 }
 
 /** Appends `raw` to a block's attribution list, keeping identity when absent. */
-function withRaw<T extends { rawNotifications?: SessionNotification[] }>(
-  block: T,
-  raw: SessionNotification | undefined,
-): T {
-  return raw
-    ? { ...block, rawNotifications: [...(block.rawNotifications ?? []), raw] }
-    : block;
+function withRaw<T extends object>(block: T, raw: SessionNotification | undefined): T {
+  if (!raw) return block;
+  const existing = (block as { rawNotifications?: SessionNotification[] }).rawNotifications;
+  return { ...block, rawNotifications: [...(existing ?? []), raw] };
 }
 
 // ---------------------------------------------------------------------------
@@ -175,11 +177,7 @@ function appendUserMessage(
     ];
     return replaceLastTurn(doc, { ...turn, blocks });
   }
-  const block: Block = {
-    kind: 'user_message',
-    content,
-    ...(raw ? { rawNotifications: [raw] } : {}),
-  };
+  const block: Block = withRaw({ kind: 'user_message', content }, raw);
   return appendBlock(doc, block, true);
 }
 
@@ -215,7 +213,7 @@ function appendChunk(
     blockKind === 'agent_message'
       ? { kind: 'agent_message' as const, messageId: messageId ?? autoMessageId(doc, 'msg'), parts: [chunk] }
       : { kind: 'thought' as const, messageId: messageId ?? autoMessageId(doc, 'thought'), parts: [chunk] };
-  const block: Block = { ...base, ...(raw ? { rawNotifications: [raw] } : {}) };
+  const block: Block = withRaw(base, raw);
   return appendBlock(doc, block, false);
 }
 

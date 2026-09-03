@@ -9,12 +9,13 @@ import type {
   ToolCallLocation,
   ToolCallUpdate,
 } from '@agentclientprotocol/sdk';
-import type {
-  AcpContentBlock,
-  AcpSessionUpdate,
-  AcpToolCallContent,
-  AcpToolCallLocation,
-  PermissionRequest,
+import {
+  isSessionStateKind,
+  type AcpContentBlock,
+  type AcpSessionUpdate,
+  type AcpToolCallContent,
+  type AcpToolCallLocation,
+  type PermissionRequest,
 } from '../protocol/types';
 
 /**
@@ -62,18 +63,18 @@ const warn = (message: string) => console.warn(`[panda/acp] ${message}`);
  */
 export function parseSessionNotification(params: unknown): SessionNotification {
   if (typeof params !== 'object' || params === null) {
-    throw new Error(`session/update 参数不是对象: ${JSON.stringify(params)}`);
+    throw new Error(`session/update params is not an object: ${JSON.stringify(params)}`);
   }
   const { sessionId, update } = params as { sessionId?: unknown; update?: unknown };
   if (typeof sessionId !== 'string') {
-    throw new Error(`session/update 缺少合法 sessionId: ${JSON.stringify(params)}`);
+    throw new Error(`session/update has no valid sessionId: ${JSON.stringify(params)}`);
   }
   if (
     typeof update !== 'object' ||
     update === null ||
     typeof (update as { sessionUpdate?: unknown }).sessionUpdate !== 'string'
   ) {
-    throw new Error(`session/update 缺少合法 update.sessionUpdate: ${JSON.stringify(params)}`);
+    throw new Error(`session/update has no valid update.sessionUpdate: ${JSON.stringify(params)}`);
   }
   return params as SessionNotification;
 }
@@ -94,17 +95,26 @@ export function parseSessionNotification(params: unknown): SessionNotification {
  * behavior, but the connection itself keeps working.
  */
 export function removeSdkStrictSessionUpdateRouter(app: ClientApp): void {
-  const { builder } = app as unknown as {
-    builder: { handlers: { describe?: () => string }[] };
-  };
+  const builder = (app as unknown as {
+    builder?: { handlers?: { describe?: () => string }[] };
+  }).builder;
+  if (!builder || !Array.isArray(builder.handlers)) {
+    console.error(
+      '[panda/acp] cannot remove the SDK strict session/update router ' +
+        '(SDK private builder shape changed?) — unknown sessionUpdate kinds ' +
+        'will be dropped by the SDK',
+    );
+    return;
+  }
   const before = builder.handlers.length;
   builder.handlers = builder.handlers.filter(
     (handler) => handler.describe?.() !== 'client-session-update-router',
   );
   if (builder.handlers.length === before) {
     console.error(
-      '[panda/acp] 未能移除 SDK 的 session/update 严格校验 router（SDK 内部结构变化？）' +
-        ' — 未知 sessionUpdate kind 将被 SDK 丢弃',
+      '[panda/acp] failed to remove the SDK strict session/update router ' +
+        '(SDK private builder shape changed?) — unknown sessionUpdate kinds ' +
+        'will be dropped by the SDK',
     );
   }
 }
@@ -221,20 +231,15 @@ export function toAcpUpdates(notification: SessionNotification): AcpSessionUpdat
           raw,
         },
       ];
-    // Recognized session-level kinds without in-flow rendering: keep the
-    // latest raw notification of each kind.
-    case 'plan_update':
-    case 'plan_removed':
-    case 'available_commands_update':
-    case 'current_mode_update':
-    case 'config_option_update':
-    case 'session_info_update':
-    case 'compaction_update':
-    case 'compaction_summary_chunk':
-      return [{ sessionUpdate: 'session_state', kind: update.sessionUpdate, raw }];
-    default:
+    default: {
+      // Recognized session-level kinds without in-flow rendering: keep the
+      // latest raw notification of each kind (list owned by types.ts).
+      if (isSessionStateKind(update.sessionUpdate)) {
+        return [{ sessionUpdate: 'session_state', kind: update.sessionUpdate, raw }];
+      }
       warn(`sessionUpdate "${(update as { sessionUpdate: string }).sessionUpdate}" not supported yet — preserved as unsupported`);
       return [{ sessionUpdate: 'unsupported', raw }];
+    }
   }
 }
 

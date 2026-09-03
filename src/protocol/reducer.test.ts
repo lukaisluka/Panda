@@ -33,7 +33,7 @@ const rawNote = (label: string): SessionNotification =>
     },
   }) as unknown as SessionNotification;
 
-const withRaw = (update: AcpSessionUpdate, raw: SessionNotification): AcpSessionUpdate => ({
+const carryingRaw = (update: AcpSessionUpdate, raw: SessionNotification): AcpSessionUpdate => ({
   ...update,
   raw,
 });
@@ -172,8 +172,8 @@ describe('reducer raw notification ownership', () => {
     const r1 = rawNote('r1');
     const r2 = rawNote('r2');
     const doc = fold([
-      withRaw(textChunk('m1', 'a'), r1),
-      withRaw(textChunk('m1', 'b'), r2),
+      carryingRaw(textChunk('m1', 'a'), r1),
+      carryingRaw(textChunk('m1', 'b'), r2),
     ]);
     expect(doc.turns[0]!.blocks[0]).toMatchObject({
       kind: 'agent_message',
@@ -185,7 +185,7 @@ describe('reducer raw notification ownership', () => {
     const r = rawNote('u');
     const doc = fold([
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'a' }] },
-      withRaw({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'b' }] }, r),
+      carryingRaw({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'b' }] }, r),
     ]);
     expect(doc.turns[0]!.blocks[0]).toMatchObject({
       kind: 'user_message',
@@ -199,11 +199,11 @@ describe('reducer raw notification ownership', () => {
     const doc = fold([
       // Tool calls and plans attach to the current turn; open one first.
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
-      withRaw(
+      carryingRaw(
         { sessionUpdate: 'tool_call', toolCallId: 't-1', title: 'Read', kind: 'read' },
         r1,
       ),
-      withRaw(
+      carryingRaw(
         { sessionUpdate: 'tool_call_update', toolCallId: 't-1', status: 'completed' },
         r2,
       ),
@@ -231,7 +231,7 @@ describe('reducer session-level latest notifications', () => {
     const rp = rawNote('p1');
     const doc = fold([
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
-      withRaw(
+      carryingRaw(
         {
           sessionUpdate: 'usage_update',
           used: 10,
@@ -240,7 +240,7 @@ describe('reducer session-level latest notifications', () => {
         },
         ru,
       ),
-      withRaw({ sessionUpdate: 'plan', entries: [] }, rp),
+      carryingRaw({ sessionUpdate: 'plan', entries: [] }, rp),
     ]);
     expect(doc.usage).toEqual({ used: 10, size: 100, cost: { amount: 0.1, currency: 'USD' } });
     expect(doc.latestNotifications.usage_update).toBe(ru);
@@ -292,7 +292,7 @@ describe('reducer unsupported events', () => {
     const r = rawNote('determinism');
     const events = [
       textChunk('m1', 'a'),
-      withRaw(textChunk('m1', 'b'), r),
+      carryingRaw(textChunk('m1', 'b'), r),
       unsupported(rawNote('later')),
     ];
     expect(fold(events)).toEqual(fold([...events]));

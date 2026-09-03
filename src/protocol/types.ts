@@ -119,18 +119,31 @@ export type AcpSessionUpdate =
    */
   | { sessionUpdate: 'unsupported'; raw: SessionNotification };
 
-/** Session-level update kinds that own a `latestNotifications` slot. */
-export type AcpSessionLevelKind =
-  | 'plan'
-  | 'plan_update'
-  | 'plan_removed'
-  | 'usage_update'
-  | 'available_commands_update'
-  | 'current_mode_update'
-  | 'config_option_update'
-  | 'session_info_update'
-  | 'compaction_update'
-  | 'compaction_summary_chunk';
+/**
+ * Session-level kinds mapped to `session_state` events (latest-wins recording,
+ * no in-flow rendering). Single source of truth: adding a kind here updates
+ * the wire mapping and the `latestNotifications` key type together.
+ * `plan` / `usage_update` are session-level too (reducer records their latest
+ * alongside their dedicated in-flow events) but keep dedicated wire cases.
+ */
+export const SESSION_STATE_KINDS = [
+  'plan_update',
+  'plan_removed',
+  'available_commands_update',
+  'current_mode_update',
+  'config_option_update',
+  'session_info_update',
+  'compaction_update',
+  'compaction_summary_chunk',
+] as const;
+
+/** All kinds that own a `latestNotifications` slot. */
+export type AcpSessionLevelKind = 'plan' | 'usage_update' | (typeof SESSION_STATE_KINDS)[number];
+
+/** Narrowing guard for the session-state kinds without a dedicated wire case. */
+export function isSessionStateKind(kind: string): kind is (typeof SESSION_STATE_KINDS)[number] {
+  return (SESSION_STATE_KINDS as readonly string[]).includes(kind);
+}
 
 // ---------------------------------------------------------------------------
 // Rendering model

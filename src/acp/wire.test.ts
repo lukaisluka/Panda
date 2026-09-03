@@ -30,12 +30,21 @@ describe('toAcpUpdates raw preservation', () => {
 
   it('turns a chunk whose only content block is unsupported into an unsupported event', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const n = note({
+    const audio = note({
       sessionUpdate: 'agent_message_chunk',
       content: { type: 'audio', data: 'AQID', mimeType: 'audio/wav' },
     } as object);
-    expect(toAcpUpdates(n)).toEqual([{ sessionUpdate: 'unsupported', raw: n }]);
+    expect(toAcpUpdates(audio)).toEqual([{ sessionUpdate: 'unsupported', raw: audio }]);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('audio'));
+    const resource = note({
+      sessionUpdate: 'agent_message_chunk',
+      content: {
+        type: 'resource',
+        resource: { uri: 'file:///tmp/x.txt', mimeType: 'text/plain', text: 'x' },
+      },
+    } as object);
+    expect(toAcpUpdates(resource)).toEqual([{ sessionUpdate: 'unsupported', raw: resource }]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('resource'));
     warnSpy.mockRestore();
   });
 
@@ -138,7 +147,14 @@ describe('removeSdkStrictSessionUpdateRouter', () => {
     removeSdkStrictSessionUpdateRouter(
       { builder: { handlers: [] } } as unknown as Parameters<typeof removeSdkStrictSessionUpdateRouter>[0],
     );
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('严格校验 router'));
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('strict session/update router'));
     errorSpy.mockRestore();
   });
 });
+
+  it('reports loudly when the builder is missing entirely (no crash)', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    removeSdkStrictSessionUpdateRouter({} as Parameters<typeof removeSdkStrictSessionUpdateRouter>[0]);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('strict session/update router'));
+    errorSpy.mockRestore();
+  });
