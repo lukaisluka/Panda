@@ -11,6 +11,7 @@ import {
   type Stream,
 } from '@agentclientprotocol/sdk';
 import { LiveAcpClient, type LiveClientHandlers } from './LiveAcpClient';
+import { connectionStorePort, usePanda } from '../store';
 import type {
   AcpSessionUpdate,
   PermissionRequest,
@@ -847,3 +848,64 @@ describe('LiveAcpClient', () => {
     expect(h.statuses.at(-1)).toBe('idle');
     h.closeAll();
   });
+
+// -- store integration (issue #16) ------------------------------------------
+
+describe('LiveAcpClient × connectionStorePort', () => {
+  it('replays session/load onto a clean document on every revisit (A→B→A, no duplication)', async () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    const historyFor = (sessionId: string) => [
+      { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: `prompt-${sessionId}` } },
+      { sessionUpdate: 'agent_message_chunk', messageId: 'm', content: { type: 'text', text: `reply-${sessionId}` } },
+    ];
+    const { clientStream, serverStream } = streamPair();
+    agent({ name: 'fake-agent' })
+      .onRequest(methods.agent.initialize, () => ({
+        protocolVersion: PROTOCOL_VERSION,
+        agentInfo: { name: 'fake-agent', version: '0.0.0' },
+        agentCapabilities: { loadSession: true },
+      }))
+      .onRequest(methods.agent.session.new, () => ({ sessionId: 'A' }))
+      .onRequest(methods.agent.session.load, async (ctx) => {
+        for (const update of historyFor(ctx.params.sessionId)) {
+          await ctx.client.notify(methods.client.session.update, {
+            sessionId: ctx.params.sessionId,
+            update,
+          });
+        }
+        return {};
+      })
+      .onRequest(methods.agent.session.prompt, () => ({ stopReason: 'end_turn' }))
+      .connect(serverStream);
+    const acpClient = new LiveAcpClient({
+      onUpdate: (update) => port.update(update),
+      onStatus: () => {},
+      onPermission: () => {},
+      onConnected: () => {},
+      onSessionId: (id, cwd) => port.adoptSession(id, cwd),
+      onDisconnected: () => {},
+      onCapabilities: () => {},
+      onSessions: () => {},
+      onSessionInfo: () => {},
+      onReplayStart: () => port.resetDocument(),
+      onSessionDeleted: () => {},
+    });
+    await acpClient.connect(clientStream, '/tmp/project');
+
+    await acpClient.loadSession('B', '/tmp/project');
+    await acpClient.loadSession('A', '/tmp/project'); // revisit — must not duplicate
+
+    const docs = usePanda.getState().connections['live']!.docs;
+    const userText = (id: string) =>
+      docs[id]!.turns
+        .flatMap((turn) => turn.blocks)
+        .filter((b): b is Extract<typeof b, { kind: 'user_message' }> => b.kind === 'user_message')
+        .flatMap((b) => b.content.filter((c): c is { type: 'text'; text: string } => c.type === 'text'))
+        .map((c) => c.text);
+    expect(userText('A')).toEqual(['prompt-A']); // exactly once, not twice
+    expect(userText('B')).toEqual(['prompt-B']);
+    expect(usePanda.getState().activeSessionId).toBe('A');
+    acpClient.disconnect();
+  });
+});

@@ -4,6 +4,8 @@ import { createBrowserWebSocketStream } from './acp/browserWebSocketStream';
 import type { AcpContentBlock, PermissionOptionKind } from './protocol/types';
 import {
   connectionStorePort,
+  useActiveConnection,
+  useActiveSessions,
   usePanda,
   type ConnectionStorePort,
   type SessionEntry,
@@ -158,7 +160,9 @@ export function useLiveSession() {
       const resumeSessionId = opts?.resume
         ? usePanda.getState().connections[LIVE_CONNECTION_ID]?.connection.sessionId ?? null
         : null;
-      if (!resumeSessionId) port.resetDocument();
+      // Fresh connect: drop a stale permission card; the previous session's
+      // document stays in the slot (the pointer moves once a session adopts).
+      if (!resumeSessionId) port.setPermission(null);
       usePanda.getState().setMode('live');
       port.setConnection({
         status: 'connecting',
@@ -222,7 +226,8 @@ export function useLiveSession() {
         return;
       }
       remember(CWD_KEY, trimmedCwd);
-      port.resetDocument();
+      // The new session adopts a fresh document; the old one is retained.
+      port.setPermission(null);
       await acpClient.newSession(trimmedCwd);
     },
     [acpClient],
@@ -252,12 +257,8 @@ export function useLiveSession() {
   const cancel = useCallback(() => acpClient.cancel(), [acpClient]);
 
   // Persist the session list per service endpoint.
-  const connectionUrl = usePanda(
-    (s) => (s.activeConnectionId ? s.connections[s.activeConnectionId]?.connection.url : undefined) ?? null,
-  );
-  const sessions = usePanda(
-    (s) => (s.activeConnectionId ? s.connections[s.activeConnectionId]?.sessions : undefined) ?? [],
-  );
+  const connectionUrl = useActiveConnection().url;
+  const sessions = useActiveSessions();
   useEffect(() => {
     if (connectionUrl) persistSessions(connectionUrl, sessions);
   }, [connectionUrl, sessions]);

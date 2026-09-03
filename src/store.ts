@@ -208,20 +208,23 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
   /** The session this port's driver currently feeds; set via adoptSession. */
   let currentSessionId: string | null = null;
 
+  /** Patches this port's slot under the store's immutability + guard rules. */
+  const patchSlot = (patch: (state: ConnectionState) => Partial<ConnectionState>) =>
+    usePanda.setState((s) => patchConnectionState(s, connectionId, patch) ?? {});
+
   /** Patches the adopted session's document inside this port's slot. */
-  const patchDoc = (fn: (doc: SessionDocument) => SessionDocument) =>
-    usePanda.setState((s) =>
-      patchConnectionState(s, connectionId, (state) =>
-        currentSessionId
-          ? {
-              docs: {
-                ...state.docs,
-                [currentSessionId]: fn(state.docs[currentSessionId] ?? EMPTY_DOC),
-              },
-            }
-          : {},
-      ) ?? {},
-    );
+  const patchDoc = (fn: (doc: SessionDocument) => SessionDocument) => {
+    if (currentSessionId === null) {
+      // Defensive double guard — public actions already checked via
+      // requireSession; if this ever fires the call chain drifted.
+      console.warn(`[store] connection "${connectionId}" doc write before adopting a session — dropped`);
+      return;
+    }
+    const sessionId = currentSessionId;
+    patchSlot((state) => ({
+      docs: { ...state.docs, [sessionId]: fn(state.docs[sessionId] ?? EMPTY_DOC) },
+    }));
+  };
 
   const requireSession = (action: string): boolean => {
     if (currentSessionId !== null) return true;
@@ -265,66 +268,55 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
       if (!requireSession('status')) return;
       patchDoc((doc) => ({ ...doc, status }));
     },
-    setPermission: (request) =>
-      usePanda.setState((s) => patchConnectionState(s, connectionId, () => ({ permission: request })) ?? {}),
+    setPermission: (request) => patchSlot(() => ({ permission: request })),
     setConnection: (patch) =>
-      usePanda.setState(
-        (s) =>
-          patchConnectionState(s, connectionId, (state) => ({
-            connection: { ...state.connection, ...patch },
-          })) ?? {},
-      ),
+      patchSlot((state) => ({ connection: { ...state.connection, ...patch } })),
     resetDocument: () => {
-      if (!requireSession('resetDocument')) return;
-      usePanda.setState(
-        (s) =>
-          patchConnectionState(s, connectionId, (state) => ({
-            docs: { ...state.docs, [currentSessionId!]: emptySession() },
-            permission: null,
-          })) ?? {},
-      );
+      // Resetting with no adopted session is a no-op, not a warning: drivers
+      // legitimately reset on a fresh connect before any session exists.
+      if (currentSessionId === null) return;
+      const sessionId = currentSessionId;
+      patchSlot((state) => ({
+        docs: { ...state.docs, [sessionId]: emptySession() },
+        permission: null,
+      }));
     },
-    setCapabilities: (caps) =>
-      usePanda.setState((s) => patchConnectionState(s, connectionId, () => ({ capabilities: caps })) ?? {}),
+    setCapabilities: (caps) => patchSlot(() => ({ capabilities: caps })),
     mergeSessions: (entries) =>
-      usePanda.setState(
-        (s) => patchConnectionState(s, connectionId, (state) => ({ sessions: upsertEntries(state.sessions, entries) })) ?? {},
-      ),
+      patchSlot((state) => ({ sessions: upsertEntries(state.sessions, entries) })),
     replaceSessions: (entries) =>
-      usePanda.setState(
-        (s) => patchConnectionState(s, connectionId, () => ({ sessions: upsertEntries([], entries) })) ?? {},
-      ),
+      patchSlot(() => ({ sessions: upsertEntries([], entries) })),
     upsertSession: (entry) =>
-      usePanda.setState(
-        (s) =>
-          patchConnectionState(s, connectionId, (state) => {
-            const existing = state.sessions.find((e) => e.sessionId === entry.sessionId);
-            const merged: SessionEntry = {
-              sessionId: entry.sessionId,
-              cwd: entry.cwd,
-              title: entry.title ?? existing?.title ?? null,
-              updatedAt: entry.updatedAt ?? existing?.updatedAt ?? null,
-            };
-            return { sessions: upsertEntries(state.sessions, [merged]) };
-          }) ?? {},
-      ),
+      patchSlot((state) => {
+        const existing = state.sessions.find((e) => e.sessionId === entry.sessionId);
+        const merged: SessionEntry = {
+          sessionId: entry.sessionId,
+          cwd: entry.cwd,
+          title: entry.title ?? existing?.title ?? null,
+          updatedAt: entry.updatedAt ?? existing?.updatedAt ?? null,
+        };
+        return { sessions: upsertEntries(state.sessions, [merged]) };
+      }),
     patchSession: (sessionId, patch) =>
-      usePanda.setState(
-        (s) =>
-          patchConnectionState(s, connectionId, (state) => ({
-            sessions: state.sessions.map((entry) =>
-              entry.sessionId === sessionId ? { ...entry, ...patch } : entry,
-            ),
-          })) ?? {},
-      ),
-    removeSession: (sessionId) =>
-      usePanda.setState(
-        (s) =>
-          patchConnectionState(s, connectionId, (state) => ({
-            sessions: state.sessions.filter((entry) => entry.sessionId !== sessionId),
-            docs: Object.fromEntries(Object.entries(state.docs).filter(([id]) => id !== sessionId)),
-          })) ?? {},
-      ),
+      patchSlot((state) => ({
+        sessions: state.sessions.map((entry) =>
+          entry.sessionId === sessionId ? { ...entry, ...patch } : entry,
+        ),
+      })),
+    removeSession: (sessionId) => {
+      currentSessionId = currentSessionId === sessionId ? null : currentSessionId;
+      usePanda.setState((s) => {
+        const patched = patchConnectionState(s, connectionId, (state) => ({
+          sessions: state.sessions.filter((entry) => entry.sessionId !== sessionId),
+          docs: Object.fromEntries(Object.entries(state.docs).filter(([id]) => id !== sessionId)),
+        }));
+        // The deleted session must not stay behind as a dangling UI pointer.
+        return {
+          ...(patched ?? {}),
+          ...(s.activeSessionId === sessionId ? { activeSessionId: null } : {}),
+        };
+      });
+    },
   };
 }
 
