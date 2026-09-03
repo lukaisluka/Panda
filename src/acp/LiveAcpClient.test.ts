@@ -11,6 +11,7 @@ import {
   type Stream,
 } from '@agentclientprotocol/sdk';
 import { LiveAcpClient, type LiveClientHandlers } from './LiveAcpClient';
+import { StreamTransport } from './transport/StreamTransport';
 import {
   connectionStorePort,
   usePanda,
@@ -210,7 +211,7 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     .connect(serverStream);
 
   const acpClient = new LiveAcpClient(handlers);
-  await acpClient.connect(clientStream, '/tmp/project', opts.resume);
+  await acpClient.connect(new StreamTransport(clientStream), '/tmp/project', opts.resume);
 
   return {
     ...records,
@@ -1338,7 +1339,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onSessionDeleted: () => {},
       ...wireSwitchHandlers(port),
     });
-    await acpClient.connect(clientStream, '/tmp/project');
+    await acpClient.connect(new StreamTransport(clientStream), '/tmp/project');
 
     await acpClient.loadSession('B', '/tmp/project');
     await acpClient.loadSession('A', '/tmp/project'); // revisit — must not duplicate
@@ -1390,7 +1391,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onSessionDeleted: () => {},
       ...wireSwitchHandlers(port),
     });
-    await acpClient.connect(clientStream, '/tmp/project');
+    await acpClient.connect(new StreamTransport(clientStream), '/tmp/project');
     port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'original turn' }] });
     const before = usePanda.getState().connections['live']!.docs['A']!;
 
@@ -1449,7 +1450,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
     port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'kept turn' }] });
     const before = usePanda.getState().connections['live']!.docs['A']!;
 
-    await acpClient.connect(clientStream, '/tmp/project', { sessionId: 'A' });
+    await acpClient.connect(new StreamTransport(clientStream), '/tmp/project', { sessionId: 'A' });
 
     expect(replays).toBe(0); // resume restores agent context, never replays
     expect(usePanda.getState().connections['live']!.docs['A']).toBe(before);
@@ -1493,7 +1494,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
     port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'kept turn' }] });
     const before = usePanda.getState().connections['live']!.docs['A']!;
 
-    await acpClient.connect(clientStream, '/tmp/project', { sessionId: 'A' }); // load fails
+    await acpClient.connect(new StreamTransport(clientStream), '/tmp/project', { sessionId: 'A' }); // load fails
 
     const slot = usePanda.getState().connections['live']!;
     expect(slot.docs['A']).toBe(before); // rolled back, not wiped
@@ -1541,7 +1542,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onSessionSwitchCommit: () => {},
       onSessionSwitchRollback: () => {},
     });
-    const era1 = acpClient.connect(era1Client, '/tmp/project');
+    const era1 = acpClient.connect(new StreamTransport(era1Client), '/tmp/project');
     await waitFor(() => era1InitSeen);
 
     // Era 2: a plain reconnect on a second server — it wins the race.
@@ -1554,7 +1555,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       }))
       .onRequest(methods.agent.session.new, () => ({ sessionId: 's-3' }))
       .connect(era2Server);
-    await acpClient.connect(era2Client, '/tmp/project');
+    await acpClient.connect(new StreamTransport(era2Client), '/tmp/project');
 
     releaseEra1(); // era 1's initialize finally resolves — superseded
     await era1;
@@ -1719,7 +1720,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onSessionDeleted: () => {},
       ...switchWiring,
     });
-    await acpClient.connect(era1Client, '/tmp/project');
+    await acpClient.connect(new StreamTransport(era1Client), '/tmp/project');
     port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'era-1 turn' }] });
     const era1Doc = usePanda.getState().connections['live']!.docs['A']!;
 
@@ -1739,7 +1740,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       }))
       .onRequest(methods.agent.session.new, () => ({ sessionId: 'C' }))
       .connect(era2Server);
-    await acpClient.connect(era2Client, '/tmp/project');
+    await acpClient.connect(new StreamTransport(era2Client), '/tmp/project');
     await switching;
     era1ServerConnection.close();
 

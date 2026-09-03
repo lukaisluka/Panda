@@ -14,6 +14,7 @@ import {
   type AgentCaps,
   type LiveClientHandlers,
 } from './LiveAcpClient';
+import { StreamTransport } from './transport/StreamTransport';
 import { applyUpdate, emptySession } from '../protocol/reducer';
 import type {
   AcpContentBlock,
@@ -181,7 +182,7 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
       onSessionSwitchRollback: () => {},
     };
     acpClient = new LiveAcpClient(handlers);
-    await acpClient.connect(createWebSocketStream(`ws://127.0.0.1:${port}/acp`), '/tmp/project');
+    await acpClient.connect(new StreamTransport(createWebSocketStream(`ws://127.0.0.1:${port}/acp`)), '/tmp/project');
   }, 180_000);
 
   afterAll(async () => {
@@ -377,7 +378,7 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
 
     acpClient.disconnect();
     await acpClient.connect(
-      createWebSocketStream(`ws://127.0.0.1:${port}/acp`),
+      new StreamTransport(createWebSocketStream(`ws://127.0.0.1:${port}/acp`)),
       '/tmp/project',
       { sessionId: sessionId! },
     );

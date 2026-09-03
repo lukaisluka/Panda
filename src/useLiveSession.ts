@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { LiveAcpClient } from './acp/LiveAcpClient';
-import { createBrowserWebSocketStream } from './acp/browserWebSocketStream';
+import { WebSocketTransport } from './acp/transport/WebSocketTransport';
 import type { AcpContentBlock, PermissionOptionKind } from './protocol/types';
 import {
   connectionStorePort,
@@ -238,8 +238,10 @@ export function useLiveSession() {
       // its in-flight switch can never settle — roll it back stale BEFORE
       // the new era begins staging/adopting anything.
       abandonStagedSwitch('connect replacing the connection');
+      // The named transport seam (issue #20): the driver injects a transport
+      // instance, never a raw stream — the wire choice lives one place.
       await acpClient.connect(
-        createBrowserWebSocketStream(trimmedUrl),
+        new WebSocketTransport(trimmedUrl),
         trimmedCwd,
         resumeSessionId ? { sessionId: resumeSessionId } : undefined,
       );

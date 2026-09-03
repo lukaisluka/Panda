@@ -424,6 +424,8 @@ interface AcpTransport {
 
 **Panda 侧核实补充**：`LiveAcpClient.connect` 本就接受注入的 `Stream`，client 层已经是 transport-agnostic 的。真正的差距只有两点：把这个 seam 命名成显式的 `AcpTransport` 接口、以及让 `useLiveSession` 不再在调用点直接 `createBrowserWebSocketStream`（useLiveSession.ts:170）。
 
+**落地（issue #20，PR 已合入）**：`src/acp/transport/` 下 `AcpTransport`（4 成员接口）+ `WebSocketTransport`（包装 `browserWebSocketStream`，close/error 经流的 `closed` promise 观察——不偷读连接消费的流）+ `StreamTransport`（既有流的包装，测试 seam，也是未来 stdio 的形状）。`LiveAcpClient.connect` 改收 `AcpTransport` 实例：流的获取移入 try（传输级失败按“连接失败”上报）、cleanup 显式 `transport.disconnect()`；`useLiveSession` 注入 `new WebSocketTransport(url)`。stdio / Tauri / HTTP 实现留待各自宿主立项。
+
 ## 5.3 Host capability 与 ACP capability 分离（核实修正：初稿高估了 acp-components）
 
 **核实结论：acp-components 并没有这层。** agent 的 `agentCapabilities` 从 initialize 响应直接存入、直接信任，唯一用途是功能性门控；没有与宿主授权清单比对的 policy 层。实际存在的是：
