@@ -11,20 +11,14 @@ import {
   type RequestPermissionResponse,
   type SessionNotification,
   type Stream,
-} from '@agentclientprotocol/sdk';
-import type {
+} from '@agentclientprotocol/sdk';import type {
   AcpContentBlock,
   AcpSessionUpdate,
   PermissionOptionKind,
   PermissionRequest,
   SessionStatus,
 } from '../protocol/types';
-import {
-  parseSessionNotification,
-  removeSdkStrictSessionUpdateRouter,
-  toAcpUpdates,
-  toPermissionRequest,
-} from './wire';
+import { parseSessionNotification, echoRelation, removeSdkStrictSessionUpdateRouter, toAcpUpdates, toPermissionRequest } from './wire';
 
 /**
  * Live ACP client (Phase 1+2): speaks v1 ACP over an injected stream to an
@@ -83,6 +77,25 @@ type PendingPermission = {
   resolve: (response: RequestPermissionResponse) => void;
 };
 
+/**
+ * Echo reconciliation state for the outbound message of the in-flight turn
+ * (issue #15): the agent's `user_message_chunk` echo is compared against what
+ * `send()` dispatched optimistically. Equal → the optimistic block is
+ * protocol-confirmed; different or boundary-closed → the buffered echo is
+ * re-dispatched as real events and renders separately (never merged, never
+ * tampered). Modeled on react-acp's PendingOutbound.
+ */
+type PendingOutbound = {
+  prompt: AcpContentBlock[];
+  /** Echo notifications held while the relation is still `prefix`. */
+  buffered: SessionNotification[];
+  /** Protocol messageId seen on the first echo chunk, if the agent sent one. */
+  protocolMessageId?: string;
+  /** Echo window closed (matched, diverged, or boundary passed) — pass through. */
+  echoDisabled: boolean;
+  confirmed: boolean;
+};
+
 /** Keep in sync with package.json. */
 const CLIENT_INFO = { name: 'panda', title: 'Panda', version: '0.1.0' } as const;
 
@@ -127,6 +140,7 @@ export class LiveAcpClient {
   };
   private pendingPrompt: Promise<unknown> | null = null;
   private pendingPermission: PendingPermission | null = null;
+  private pendingOutbound: PendingOutbound | null = null;
   private disconnectReported = false;
 
   constructor(handlers: LiveClientHandlers) {
@@ -290,8 +304,10 @@ export class LiveAcpClient {
     if (!this.capabilities.image && content.some((block) => block.type === 'image')) {
       throw new Error('agent 未声明 promptCapabilities.image，拒绝发送图片');
     }
-    // The reducer is the only path that opens a user turn — echo locally.
-    this.handlers.onUpdate({ sessionUpdate: 'user_message', content });
+    // The reducer is the only path that opens a user turn — echo locally as
+    // optimistic (reconciled against the agent's echo, see pendingOutbound).
+    this.pendingOutbound = { prompt: content, buffered: [], echoDisabled: false, confirmed: false };
+    this.handlers.onUpdate({ sessionUpdate: 'user_message', content, optimistic: true });
     this.handlers.onStatus('running');
     const wirePrompt: ContentBlock[] = content;
     const prompt = this.connection.agent.request(methods.agent.session.prompt, {
@@ -308,6 +324,9 @@ export class LiveAcpClient {
       this.finishPermission({ outcome: { outcome: 'cancelled' } });
     } finally {
       this.pendingPrompt = null;
+      // Turn over: render any echo still held un-reconciled, then drop the
+      // pending state — with or without protocol confirmation.
+      this.settlePendingOutbound();
       this.handlers.onStatus('idle');
     }
   }
@@ -428,9 +447,75 @@ export class LiveAcpClient {
         updatedAt: params.update.updatedAt,
       });
     }
+    if (this.reconcileUserEcho(params)) return;
     for (const mapped of toAcpUpdates(params)) {
       this.handlers.onUpdate(mapped);
     }
+  }
+
+  /**
+   * Echo reconciliation gate (issue #15). Returns true when the notification
+   * was consumed (held in the echo buffer, or folded into a confirmation).
+   * Any non-echo update while a partial echo is buffered closes the echo
+   * window: the partial echo is flushed as real events before it.
+   */
+  private reconcileUserEcho(params: SessionNotification): boolean {
+    const pending = this.pendingOutbound;
+    if (!pending || pending.echoDisabled) return false;
+    const update = params.update;
+    if (update.sessionUpdate !== 'user_message_chunk') {
+      if (pending.buffered.length > 0) this.flushBufferedEcho();
+      return false;
+    }
+    const incomingId = update.messageId ?? undefined;
+    if (pending.protocolMessageId && incomingId && pending.protocolMessageId !== incomingId) {
+      // A second protocol message started echoing — the buffered one belongs
+      // elsewhere; render the buffer and let this chunk through as-is.
+      this.flushBufferedEcho();
+      return false;
+    }
+    pending.protocolMessageId ??= incomingId;
+    pending.buffered.push(params);
+    const relation = echoRelation(
+      pending.prompt,
+      pending.buffered.map((n) => (n.update as { content: ContentBlock }).content),
+    );
+    if (relation === 'equal') {
+      this.handlers.onUpdate({
+        sessionUpdate: 'user_message_confirmed',
+        protocolMessageId: pending.protocolMessageId,
+        notifications: pending.buffered,
+      });
+      pending.buffered = [];
+      pending.confirmed = true;
+      pending.echoDisabled = true;
+      return true;
+    }
+    if (relation === 'different') {
+      // The agent echoed something else: keep the optimistic block untouched
+      // and render the protocol version as its own message.
+      this.flushBufferedEcho();
+    }
+    return true; // equal handled above; prefix keeps buffering, different flushed
+  }
+
+  /** Renders the held echo notifications as real events and closes the echo window. */
+  private flushBufferedEcho(): void {
+    const pending = this.pendingOutbound;
+    if (!pending || pending.buffered.length === 0) return;
+    for (const notification of pending.buffered) {
+      for (const mapped of toAcpUpdates(notification)) {
+        this.handlers.onUpdate(mapped);
+      }
+    }
+    pending.buffered = [];
+    pending.echoDisabled = true;
+  }
+
+  /** Turn settled: flush anything still held and drop the reconciliation state. */
+  private settlePendingOutbound(): void {
+    this.flushBufferedEcho();
+    this.pendingOutbound = null;
   }
 
   private handlePermissionRequest(

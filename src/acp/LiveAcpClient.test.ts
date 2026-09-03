@@ -232,7 +232,7 @@ describe('LiveAcpClient', () => {
     await h.acpClient.send(content);
 
     expect(prompts).toEqual([content]);
-    expect(h.updates[0]).toEqual({ sessionUpdate: 'user_message', content });
+    expect(h.updates[0]).toEqual({ sessionUpdate: 'user_message', content, optimistic: true });
     h.closeAll();
   });
 
@@ -297,6 +297,7 @@ describe('LiveAcpClient', () => {
     expect(h.updates[0]).toEqual({
       sessionUpdate: 'user_message',
       content: [{ type: 'text', text: 'hi' }],
+      optimistic: true,
     });
     expect(h.updates).toContainEqual(
       expect.objectContaining({
@@ -451,6 +452,7 @@ describe('LiveAcpClient', () => {
     expect(h.updates[0]).toEqual({
       sessionUpdate: 'user_message',
       content: [{ type: 'text', text: 'hi' }],
+      optimistic: true,
     });
     // Unknown kinds become explicit unsupported events carrying the raw notification.
     expect(h.updates).toContainEqual(
@@ -703,3 +705,125 @@ describe('LiveAcpClient', () => {
     h.closeAll();
   });
 });
+
+  // -- echo reconciliation (issue #15) --------------------------------------
+
+  it('confirms the optimistic message when the agent echoes it verbatim', async () => {
+    const onPrompt: PromptHandler = async (ctx) => {
+      await notifyUpdate(ctx, {
+        sessionUpdate: 'user_message_chunk',
+        messageId: 'pm-1',
+        content: { type: 'text', text: 'hi' },
+      });
+      await notifyUpdate(ctx, {
+        sessionUpdate: 'agent_message_chunk',
+        messageId: 'm-1',
+        content: { type: 'text', text: '答案' },
+      });
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt });
+    await h.acpClient.send([{ type: 'text', text: 'hi' }]);
+
+    expect(h.updates).toEqual([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }], optimistic: true },
+      {
+        sessionUpdate: 'user_message_confirmed',
+        protocolMessageId: 'pm-1',
+        notifications: [
+          {
+            sessionId: 's-1',
+            update: { sessionUpdate: 'user_message_chunk', messageId: 'pm-1', content: { type: 'text', text: 'hi' } },
+          },
+        ],
+      },
+      expect.objectContaining({
+        sessionUpdate: 'agent_message_chunk',
+        messageId: 'm-1',
+        content: { type: 'text', text: '答案' },
+      }),
+    ]);
+    h.closeAll();
+  });
+
+  it('flushes a partial echo as the protocol version when a non-echo update closes the window', async () => {
+    const onPrompt: PromptHandler = async (ctx) => {
+      await notifyUpdate(ctx, {
+        sessionUpdate: 'user_message_chunk',
+        messageId: 'pm-1',
+        content: { type: 'text', text: 'hello ' },
+      });
+      // Any non-echo update closes the echo window while the buffer is partial.
+      await notifyUpdate(ctx, {
+        sessionUpdate: 'agent_thought_chunk',
+        messageId: 't-1',
+        content: { type: 'text', text: '思考中' },
+      });
+      await notifyUpdate(ctx, {
+        sessionUpdate: 'user_message_chunk',
+        messageId: 'pm-1',
+        content: { type: 'text', text: 'world' },
+      });
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt });
+    await h.acpClient.send([{ type: 'text', text: 'hello world' }]);
+
+    expect(h.updates[0]).toEqual({
+      sessionUpdate: 'user_message',
+      content: [{ type: 'text', text: 'hello world' }],
+      optimistic: true,
+    });
+    // The partial echo renders as its own protocol message, in wire order,
+    // and the echo window stays closed for the chunk that follows.
+    expect(h.updates[1]).toMatchObject({
+      sessionUpdate: 'user_message',
+      content: [{ type: 'text', text: 'hello ' }],
+    });
+    expect(h.updates[2]).toMatchObject({ sessionUpdate: 'agent_thought_chunk' });
+    expect(h.updates[3]).toMatchObject({
+      sessionUpdate: 'user_message',
+      content: [{ type: 'text', text: 'world' }],
+    });
+    expect(h.updates.some((u) => u.sessionUpdate === 'user_message_confirmed')).toBe(false);
+    h.closeAll();
+  });
+
+  it('renders a divergent echo separately instead of merging into the optimistic message', async () => {
+    const onPrompt: PromptHandler = async (ctx) => {
+      await notifyUpdate(ctx, {
+        sessionUpdate: 'user_message_chunk',
+        messageId: 'pm-1',
+        content: { type: 'text', text: '别的' },
+      });
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt });
+    await h.acpClient.send([{ type: 'text', text: 'hi' }]);
+
+    expect(h.updates).toEqual([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }], optimistic: true },
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: '别的' }], raw: expect.any(Object) },
+    ]);
+    h.closeAll();
+  });
+
+  it('flushes an un-reconciled partial echo when the turn settles', async () => {
+    const onPrompt: PromptHandler = async (ctx) => {
+      await notifyUpdate(ctx, {
+        sessionUpdate: 'user_message_chunk',
+        messageId: 'pm-1',
+        content: { type: 'text', text: 'hel' },
+      });
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt });
+    await h.acpClient.send([{ type: 'text', text: 'hello' }]);
+
+    // The partial echo was held (prefix); the turn ending must render it.
+    expect(h.updates).toEqual([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hello' }], optimistic: true },
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hel' }], raw: expect.any(Object) },
+    ]);
+    h.closeAll();
+  });

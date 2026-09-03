@@ -35,7 +35,10 @@ export function applyUpdate(
 ): SessionDocument {
   switch (update.sessionUpdate) {
     case 'user_message':
-      return appendUserMessage(doc, update.content, update.raw);
+      return appendUserMessage(doc, update.content, update.raw, update.optimistic);
+
+    case 'user_message_confirmed':
+      return confirmUserMessage(doc, update);
 
     case 'agent_message_chunk':
       return appendChunk(doc, 'agent_message', update.messageId, update.content, update.raw);
@@ -160,25 +163,64 @@ function appendBlock(doc: SessionDocument, block: Block, newTurn: boolean): Sess
 
 /**
  * ACP replays a multipart prompt as adjacent `user_message_chunk` events.
- * Keep those parts in one user block; a chunk arriving after any agent-side
- * block starts the next turn.
+ * Keep those parts in one user block — but never merge into a block that is
+ * (or was) a local optimistic echo: reconciliation owns that block's content,
+ * so a divergent or flushed protocol echo must render as its own block.
  */
 function appendUserMessage(
   doc: SessionDocument,
   content: AcpContentBlock[],
   raw: SessionNotification | undefined,
+  optimistic?: true,
 ): SessionDocument {
   const turn = currentTurn(doc);
   const last = turn?.blocks.at(-1);
-  if (turn && last?.kind === 'user_message') {
+  const mergeable =
+    last?.kind === 'user_message' && last.optimistic !== true && last.protocolMessageId === undefined;
+  if (turn && mergeable) {
     const blocks: Block[] = [
       ...turn.blocks.slice(0, -1),
       withRaw({ ...last, content: [...last.content, ...content] }, raw),
     ];
     return replaceLastTurn(doc, { ...turn, blocks });
   }
-  const block: Block = withRaw({ kind: 'user_message', content }, raw);
+  const block: Block = withRaw(
+    optimistic ? { kind: 'user_message', content, optimistic: true } : { kind: 'user_message', content },
+    raw,
+  );
+  // A local prompt always opens a turn. A protocol message rendering while
+  // another user block still trails the turn (flushed divergent echo, late
+  // echo after confirmation) stays in the same turn as its own block.
+  if (!optimistic && turn && last?.kind === 'user_message') {
+    return replaceLastTurn(doc, { ...turn, blocks: [...turn.blocks, block] });
+  }
   return appendBlock(doc, block, true);
+}
+
+/**
+ * Equal-echo reconciliation: the trailing optimistic user block becomes
+ * protocol-confirmed. An event that cannot find its block is a client/reducer
+ * contract violation — surfaced loudly, never silently applied elsewhere.
+ */
+function confirmUserMessage(
+  doc: SessionDocument,
+  update: Extract<AcpSessionUpdate, { sessionUpdate: 'user_message_confirmed' }>,
+): SessionDocument {
+  const turn = currentTurn(doc);
+  const last = turn?.blocks.at(-1);
+  if (!turn || !last || last.kind !== 'user_message' || last.optimistic !== true) {
+    console.warn('[reducer] user_message_confirmed without a trailing optimistic user block — ignored');
+    return doc;
+  }
+  const { optimistic: _dropped, ...rest } = last;
+  let confirmed: Block = {
+    ...rest,
+    ...(update.protocolMessageId ? { protocolMessageId: update.protocolMessageId } : {}),
+  };
+  for (const notification of update.notifications) {
+    confirmed = withRaw(confirmed, notification);
+  }
+  return replaceLastTurn(doc, { ...turn, blocks: [...turn.blocks.slice(0, -1), confirmed] });
 }
 
 /**

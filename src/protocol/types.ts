@@ -64,7 +64,29 @@ export type AcpToolCallContent =
   | { type: 'diff'; path: string; oldText: string | null; newText: string };
 
 export type AcpSessionUpdate =
-  | { sessionUpdate: 'user_message'; content: AcpContentBlock[]; raw?: SessionNotification }
+  | {
+      sessionUpdate: 'user_message';
+      content: AcpContentBlock[];
+      /**
+       * Local optimistic echo from `send()`, not a protocol event. Echo
+       * reconciliation replaces it with `user_message_confirmed` when the
+       * agent's echo matches; it is never forged into a protocol notification.
+       */
+      optimistic?: true;
+      raw?: SessionNotification;
+    }
+  | {
+      /**
+       * The live driver reconciled the agent's echo of the pending outbound
+       * message (issue #15). Equal echo: the trailing optimistic user block
+       * keeps its rendered content, gains the protocol-side messageId and the
+       * buffered echo notifications as attribution, and stops being merely
+       * optimistic.
+       */
+      sessionUpdate: 'user_message_confirmed';
+      protocolMessageId?: string;
+      notifications: SessionNotification[];
+    }
   | {
       sessionUpdate: 'agent_message_chunk';
       /** Same messageId appends to the same message; a new one starts a new message. */
@@ -166,7 +188,15 @@ export type ToolCallState = {
 };
 
 export type Block =
-  | { kind: 'user_message'; content: AcpContentBlock[]; rawNotifications?: SessionNotification[] }
+  | {
+      kind: 'user_message';
+      content: AcpContentBlock[];
+      /** Set while the block is only a local optimistic echo, not protocol data. */
+      optimistic?: true;
+      /** Protocol-side messageId, recorded once the agent's echo matched. */
+      protocolMessageId?: string;
+      rawNotifications?: SessionNotification[];
+    }
   | {
       kind: 'agent_message';
       messageId: string;

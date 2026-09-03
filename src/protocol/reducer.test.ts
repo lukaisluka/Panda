@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { applyUpdate, emptySession } from './reducer';
 import type {
   AcpSessionUpdate,
@@ -33,10 +33,8 @@ const rawNote = (label: string): SessionNotification =>
     },
   }) as unknown as SessionNotification;
 
-const carryingRaw = (update: AcpSessionUpdate, raw: SessionNotification): AcpSessionUpdate => ({
-  ...update,
-  raw,
-});
+const carryingRaw = (update: AcpSessionUpdate, raw: SessionNotification): AcpSessionUpdate =>
+  ({ ...update, raw }) as AcpSessionUpdate;
 
 describe('reducer content parts', () => {
   it('concatenates text chunks of the same messageId into one part', () => {
@@ -296,5 +294,66 @@ describe('reducer unsupported events', () => {
       unsupported(rawNote('later')),
     ];
     expect(fold(events)).toEqual(fold([...events]));
+  });
+});
+
+describe('reducer echo reconciliation (optimistic user messages)', () => {
+  it('marks the optimistic echo block and keeps it distinguishable', () => {
+    const doc = fold([{ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }], optimistic: true }]);
+    expect(doc.turns[0]!.blocks[0]).toEqual({
+      kind: 'user_message',
+      content: [{ type: 'text', text: 'hi' }],
+      optimistic: true,
+    });
+  });
+
+  it('never merges protocol user messages into an optimistic block', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }], optimistic: true },
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: '别的' }] },
+    ]);
+    expect(doc.turns).toHaveLength(1); // flushed echo stays in the same turn
+    expect(doc.turns[0]!.blocks.map((b) => (b.kind === 'user_message' ? b.content : null))).toEqual([
+      [{ type: 'text', text: 'hi' }],
+      [{ type: 'text', text: '别的' }],
+    ]);
+  });
+
+  it('still merges adjacent plain user chunks (replay multipart echo)', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'a' }] },
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'b' }] },
+    ]);
+    expect(doc.turns[0]!.blocks).toHaveLength(1);
+    expect(doc.turns[0]!.blocks[0]).toMatchObject({
+      kind: 'user_message',
+      content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }],
+    });
+  });
+
+  it('confirms the optimistic block: protocolMessageId + echo attribution, flag cleared', () => {
+    const r = rawNote('echo');
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }], optimistic: true },
+      { sessionUpdate: 'user_message_confirmed', protocolMessageId: 'pm-1', notifications: [r] },
+    ]);
+    expect(doc.turns[0]!.blocks[0]).toEqual({
+      kind: 'user_message',
+      content: [{ type: 'text', text: 'hi' }],
+      protocolMessageId: 'pm-1',
+      rawNotifications: [r],
+    });
+    // Confirmed blocks no longer absorb adjacent user chunks either.
+    const after = applyUpdate(doc, { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'late' }] });
+    expect(after.turns[0]!.blocks).toHaveLength(2);
+  });
+
+  it('ignores a confirmation without a trailing optimistic block, loudly', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const doc = fold([{ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }] }]);
+    const confirmed = applyUpdate(doc, { sessionUpdate: 'user_message_confirmed', notifications: [] });
+    expect(confirmed).toBe(doc);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('user_message_confirmed'));
+    warnSpy.mockRestore();
   });
 });
