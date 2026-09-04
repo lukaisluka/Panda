@@ -43,7 +43,7 @@
 
 .tool-card-icon {
   flex-shrink: 0;
-  color: var(--color-muted);
+  color: var(--panda-chrome-text);
 }
 
 .tool-card-title {
@@ -52,7 +52,7 @@
    * color — the name reads as chrome, not content. */
   font-family: var(--font-mono);
   font-size: 13px;
-  color: var(--color-muted);
+  color: var(--panda-chrome-text);
 }
 
 .tool-card-stats {
