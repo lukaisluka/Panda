@@ -134,3 +134,62 @@
 }
 .composer-hint--danger { color: var(--color-danger); }
 .composer-hint--faint { color: var(--color-faint); }
+
+/* -- slash-command autocomplete (agent-advertised commands) --------------- */
+/* Floats above the composer card; the card is its positioning context. */
+.composer-card {
+  position: relative;
+}
+
+.composer-commands {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  overflow: hidden;
+  z-index: 20; /* above the stream and the card's own focus ring */
+}
+
+.composer-command {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-fg);
+}
+
+.composer-command--active {
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+.composer-command-name {
+  font-weight: 600;
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+.composer-command-desc {
+  flex: 1;
+  color: var(--color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-commands-hint {
+  padding: 6px 14px;
+  border-top: 1px solid var(--color-border);
+  font-size: 12px;
+  color: var(--color-faint);
+}

@@ -27,6 +27,7 @@ export function emptySession(): SessionDocument {
     usage: { used: 0, size: 0, cost: null },
     plan: null,
     modes: null,
+    availableCommands: [],
     permissions: {},
     elicitations: {},
     latestNotifications: {},
@@ -132,6 +133,11 @@ export function applyUpdate(
         'mode',
         update.raw,
       );
+
+    case 'commands_update':
+      // Full replacement — the wire notification always carries the complete
+      // list, so an empty update clears the commands.
+      return { ...doc, availableCommands: update.commands };
 
     case 'session_state':
       return withLatest(doc, update.kind, update.raw);

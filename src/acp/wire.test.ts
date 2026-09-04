@@ -6,6 +6,7 @@ import {
   parseSessionNotification,
   removeSdkStrictSessionUpdateRouter,
   toAcpUpdates,
+  toAvailableCommands,
   toElicitationFormRequest,
   toElicitationUrlRequest,
 } from './wire';
@@ -429,5 +430,79 @@ describe('toElicitationUrlRequest (url mode whitelisting)', () => {
     expect(toElicitationUrlRequest(withTool as never).toolCallId).toBe('t-9');
     const requestScoped = { requestId: 'r-1', mode: 'url', message: 'm', elicitationId: 'e-2', url: 'https://example.com/b' };
     expect(toElicitationUrlRequest(requestScoped as never).toolCallId).toBe(null);
+  });
+});
+
+describe('toAvailableCommands (slash-command whitelisting)', () => {
+  it('maps the full list: name, description, and input.hint', () => {
+    const commands = toAvailableCommands({
+      sessionUpdate: 'available_commands_update',
+      availableCommands: [
+        { name: 'status', description: '查看状态' },
+        { name: 'tag', description: '打 tag', input: { hint: '版本号' } },
+        { name: 'ci', description: '触发 CI', input: null },
+      ],
+    } as never);
+    expect(commands).toEqual([
+      { name: 'status', description: '查看状态', inputHint: null },
+      { name: 'tag', description: '打 tag', inputHint: '版本号' },
+      { name: 'ci', description: '触发 CI', inputHint: null },
+    ]);
+  });
+
+  it('degrades a non-string input.hint to null instead of rejecting the command', () => {
+    const commands = toAvailableCommands({
+      sessionUpdate: 'available_commands_update',
+      availableCommands: [{ name: 'tag', description: 'd', input: { hint: 42 } }],
+    } as never);
+    expect(commands).toEqual([{ name: 'tag', description: 'd', inputHint: null }]);
+  });
+
+  it('rejects structural violations: non-array list, non-object entry, missing name/description, non-object input', () => {
+    expect(toAvailableCommands({ sessionUpdate: 'available_commands_update' } as never)).toBe(null);
+    expect(
+      toAvailableCommands({ sessionUpdate: 'available_commands_update', availableCommands: 'nope' } as never),
+    ).toBe(null);
+    expect(
+      toAvailableCommands({ sessionUpdate: 'available_commands_update', availableCommands: ['x'] } as never),
+    ).toBe(null);
+    expect(
+      toAvailableCommands({
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [{ description: 'no name' }],
+      } as never),
+    ).toBe(null);
+    expect(
+      toAvailableCommands({
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [{ name: 'x', input: { hint: 'h' } }],
+      } as never),
+    ).toBe(null);
+    expect(
+      toAvailableCommands({
+        sessionUpdate: 'available_commands_update',
+        availableCommands: [{ name: 'x', description: 'd', input: 'oops' }],
+      } as never),
+    ).toBe(null);
+  });
+
+  it('routes a well-formed update to commands_update, a malformed one to unsupported + warn', () => {
+    const good = note({
+      sessionUpdate: 'available_commands_update',
+      availableCommands: [{ name: 'status', description: '查看状态' }],
+    });
+    expect(toAcpUpdates(good)).toEqual([
+      {
+        sessionUpdate: 'commands_update',
+        commands: [{ name: 'status', description: '查看状态', inputHint: null }],
+        raw: good,
+      },
+    ]);
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const bad = note({ sessionUpdate: 'available_commands_update', availableCommands: 7 });
+    expect(toAcpUpdates(bad)).toEqual([{ sessionUpdate: 'unsupported', raw: bad }]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('available_commands_update'));
+    warnSpy.mockRestore();
   });
 });

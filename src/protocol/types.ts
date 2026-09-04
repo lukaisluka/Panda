@@ -179,6 +179,19 @@ export type AcpSessionModeState = {
   availableModes: AcpSessionMode[];
 };
 
+/**
+ * A slash command the agent advertised via `available_commands_update`.
+ * Whitelisted from the wire `AvailableCommand`: `input` collapses to its
+ * `hint` string (the only v1 input shape — an unstructured text argument),
+ * null when the command takes no input. Executing a command is just sending
+ * `/name 参数` as a normal prompt; the agent recognizes the prefix itself.
+ */
+export type AcpAvailableCommand = {
+  name: string;
+  description: string;
+  inputHint: string | null;
+};
+
 export type AcpToolCallContent =
   | { type: 'content'; content: AcpContentBlock }
   | { type: 'diff'; path: string; oldText: string | null; newText: string }
@@ -281,8 +294,15 @@ export type AcpSessionUpdate =
    */
   | { sessionUpdate: 'mode_changed'; modeId: string; raw?: SessionNotification }
   /**
+   * The agent's slash-command list arrived or changed (wire
+   * `available_commands_update`). Full-replacement semantics — the wire
+   * notification always carries the complete list. An empty list clears the
+   * commands; the composer's `/` autocomplete reads from this.
+   */
+  | { sessionUpdate: 'commands_update'; commands: AcpAvailableCommand[]; raw?: SessionNotification }
+  /**
    * A known session-level update kind Panda recognizes but does not render
-   * in the message flow (config, commands, compaction, …). Recorded
+   * in the message flow (config, compaction, …). Recorded
    * as the latest raw notification of its kind — nothing is dropped.
    */
   | { sessionUpdate: 'session_state'; kind: AcpSessionLevelKind; raw: SessionNotification }
@@ -324,11 +344,12 @@ export type AcpSessionUpdate =
  * the wire mapping and the `latestNotifications` key type together.
  * `plan` / `plan_removed` / `usage_update` / `mode` are session-level too
  * (reducer records their latest alongside their dedicated events) but keep
- * dedicated wire cases.
+ * dedicated wire cases. `available_commands` went further — a dedicated
+ * wire case *and* a dedicated document field (`availableCommands`), so it is
+ * not part of this fallback channel at all.
  */
 export const SESSION_STATE_KINDS = [
   'plan_update',
-  'available_commands_update',
   'config_option_update',
   'session_info_update',
   'compaction_update',
@@ -434,8 +455,14 @@ export type SessionDocument = {
    */
   elicitations: Record<string, ElicitationState>;
   /**
+   * Slash commands advertised by the agent (wire `available_commands_update`,
+   * full-replacement semantics — an empty update clears the list). The
+   * composer's `/` autocomplete reads from this; `[]` hides the panel.
+   */
+  availableCommands: AcpAvailableCommand[];
+  /**
    * Latest raw notification per session-level kind (plan/usage/mode/config/
-   * commands/session_info/…). Bounded by the kind set — history per kind is
+   * session_info/…). Bounded by the kind set — history per kind is
    * intentionally not kept.
    */
   latestNotifications: Partial<Record<AcpSessionLevelKind, SessionNotification>>;

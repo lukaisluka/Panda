@@ -21,6 +21,7 @@ import type {
 } from '@agentclientprotocol/sdk';
 import {
   isSessionStateKind,
+  type AcpAvailableCommand,
   type AcpContentBlock,
   type AcpElicitationField,
   type AcpElicitationOption,
@@ -357,6 +358,14 @@ export function toAcpUpdates(notification: SessionNotification): AcpSessionUpdat
       }
       return [{ sessionUpdate: 'mode_changed', modeId, raw }];
     }
+    case 'available_commands_update': {
+      const commands = toAvailableCommands(update);
+      if (commands === null) {
+        warn('available_commands_update with a malformed availableCommands list — preserved as unsupported');
+        return [{ sessionUpdate: 'unsupported', raw }];
+      }
+      return [{ sessionUpdate: 'commands_update', commands, raw }];
+    }
     default: {
       // Recognized session-level kinds without in-flow rendering: keep the
       // latest raw notification of each kind (list owned by types.ts).
@@ -367,6 +376,40 @@ export function toAcpUpdates(notification: SessionNotification): AcpSessionUpdat
       return [{ sessionUpdate: 'unsupported', raw }];
     }
   }
+}
+
+/**
+ * Whitelists the wire `available_commands_update` payload into the UI model.
+ * Notifications are not schema-validated, so structural violations (the list
+ * is not an array, an entry is not an object, `name`/`description` are not
+ * strings, `input` is a non-object) reject the whole update (null → the
+ * caller keeps it as `unsupported` + warn): the protocol gives the list
+ * full-replacement semantics, and a half-parsed list would silently mislead
+ * the autocomplete. Display-only `input.hint` degrades to null instead.
+ */
+export function toAvailableCommands(
+  update: SessionUpdate & { sessionUpdate: 'available_commands_update' },
+): AcpAvailableCommand[] | null {
+  const list = (update as { availableCommands?: unknown }).availableCommands;
+  if (!Array.isArray(list)) return null;
+  const commands: AcpAvailableCommand[] = [];
+  for (const entry of list) {
+    if (typeof entry !== 'object' || entry === null) return null;
+    const { name, description, input } = entry as {
+      name?: unknown;
+      description?: unknown;
+      input?: unknown;
+    };
+    if (typeof name !== 'string' || typeof description !== 'string') return null;
+    let inputHint: string | null = null;
+    if (input !== null && input !== undefined) {
+      if (typeof input !== 'object') return null;
+      const hint = (input as { hint?: unknown }).hint;
+      if (typeof hint === 'string') inputHint = hint;
+    }
+    commands.push({ name, description, inputHint });
+  }
+  return commands;
 }
 
 /** Maps a wire `session/request_permission` request to the UI card model. */
