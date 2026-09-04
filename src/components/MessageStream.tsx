@@ -13,7 +13,6 @@ import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { ArrowDown } from 'lucide-react';
 import type { Block, PermissionOptionKind } from '../protocol/types';
 import { AgentMessage } from './AgentMessage';
-import { PlanCard } from './PlanCard';
 import { ThoughtBlock } from './ThoughtBlock';
 import { ToolCallCard } from './ToolCallCard';
 import { UserMessage } from './UserMessage';
@@ -251,8 +250,6 @@ const BlockView = memo(function BlockView({ block, streaming, permission, onReso
       return <AgentMessage block={block} streaming={streaming} />;
     case 'thought':
       return <ThoughtBlock block={block} streaming={streaming} />;
-    case 'plan':
-      return <PlanCard entries={block.entries} />;
     case 'tool_call':
       return (
         <ToolCallCard

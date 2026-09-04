@@ -149,7 +149,16 @@ export type AcpSessionUpdate =
       rawOutput?: Record<string, unknown>;
       raw?: SessionNotification;
     }
-  | { sessionUpdate: 'plan'; entries: AcpPlanEntry[]; raw?: SessionNotification }
+  | {
+      sessionUpdate: 'plan';
+      entries: AcpPlanEntry[];
+      raw?: SessionNotification;
+    }
+  /**
+   * The agent withdrew the plan (wire `plan_removed`). Docked UI clears the
+   * plan panel; the raw notification is still recorded under its kind.
+   */
+  | { sessionUpdate: 'plan_removed'; raw?: SessionNotification }
   | {
       sessionUpdate: 'usage_update';
       used: number;
@@ -205,13 +214,12 @@ export type AcpSessionUpdate =
  * Session-level kinds mapped to `session_state` events (latest-wins recording,
  * no in-flow rendering). Single source of truth: adding a kind here updates
  * the wire mapping and the `latestNotifications` key type together.
- * `plan` / `usage_update` / `mode` are session-level too (reducer records
- * their latest alongside their dedicated in-flow events) but keep dedicated
- * wire cases.
+ * `plan` / `plan_removed` / `usage_update` / `mode` are session-level too
+ * (reducer records their latest alongside their dedicated events) but keep
+ * dedicated wire cases.
  */
 export const SESSION_STATE_KINDS = [
   'plan_update',
-  'plan_removed',
   'available_commands_update',
   'config_option_update',
   'session_info_update',
@@ -222,6 +230,7 @@ export const SESSION_STATE_KINDS = [
 /** All kinds that own a `latestNotifications` slot. */
 export type AcpSessionLevelKind =
   | 'plan'
+  | 'plan_removed'
   | 'usage_update'
   | 'mode'
   | (typeof SESSION_STATE_KINDS)[number];
@@ -276,7 +285,6 @@ export type Block =
       rawNotifications?: SessionNotification[];
     }
   | { kind: 'tool_call'; call: ToolCallState }
-  | { kind: 'plan'; entries: AcpPlanEntry[] }
   | { kind: 'unsupported'; notification: SessionNotification };
 
 export type Turn = { id: string; blocks: Block[] };
@@ -291,6 +299,12 @@ export type SessionDocument = {
   turns: Turn[];
   status: SessionStatus;
   usage: Usage;
+  /**
+   * Session-level plan: latest-wins (the wire plan update replaces it, an
+   * empty entries list or plan_removed clears it). Docked in the top-right
+   * corner — plans are working state, not conversation flow.
+   */
+  plan: AcpPlanEntry[] | null;
   /**
    * Session modes from the agent (session/new · session/load results, then
    * mode_changed updates). null until a result arrives — and permanently

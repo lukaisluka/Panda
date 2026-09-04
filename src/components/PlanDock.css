@@ -1,0 +1,102 @@
+/* Session plan dock (PlanDock): floats in the content area's top-right
+ * corner, above the message stream. Chrome tier — 13px, quiet. */
+
+.plan-dock {
+  position: absolute;
+  top: 68px; /* below the 56px header + 12px gap */
+  right: 16px;
+  z-index: 10;
+  width: min(320px, 72vw);
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-high);
+  padding: 6px;
+}
+
+.plan-dock-head {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--panda-radius-md);
+  color: var(--color-muted);
+  padding: 5px 8px;
+  font-size: 13px;
+  transition: var(--panda-colors-transition);
+}
+
+.plan-dock-head:hover {
+  background: color-mix(in oklab, var(--color-raised) 60%, transparent);
+  color: var(--color-fg);
+}
+
+.plan-dock-head-icon {
+  flex-shrink: 0;
+  color: var(--color-accent);
+}
+
+.plan-dock-title {
+  font-weight: 500;
+}
+
+.plan-dock-progress {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--color-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-dock-chevron {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.plan-dock-chevron--open {
+  transform: rotate(180deg);
+}
+
+.plan-dock-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0 2px;
+  padding: 0 4px 2px;
+  list-style: none;
+  /* Long plans scroll inside the dock instead of pushing it off-screen. */
+  max-height: min(320px, 40vh);
+  overflow-y: auto;
+}
+
+.plan-dock-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 4px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.plan-dock-item-icon {
+  margin-top: 3px; /* optically centers the 14px glyph on the first text line */
+  flex-shrink: 0;
+  color: var(--color-faint);
+}
+
+.plan-dock-item-icon--done,
+.plan-dock-item-icon--active {
+  color: var(--color-accent);
+}
+
+.plan-dock-item-text {
+  color: var(--color-muted);
+}
+
+.plan-dock-item-text--active {
+  color: var(--color-fg);
+}
+
+.plan-dock-item-text--done {
+  color: var(--color-faint);
+  text-decoration: line-through;
+}

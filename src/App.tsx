@@ -4,6 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import { MessageStream } from './components/MessageStream';
 import { StatusBar } from './components/StatusBar';
 import { Composer } from './components/Composer';
+import { PlanDock } from './components/PlanDock';
 import {
   useActiveConnection,
   useActiveDoc,
@@ -83,6 +84,7 @@ export default function App() {
           </div>
           <span className="app-header-meta">{headerMeta}</span>
         </header>
+        {doc.plan && doc.plan.length > 0 && <PlanDock entries={doc.plan} />}
         <MessageStream onResolvePermission={resolvePermission} />
         <StatusBar
           doc={doc}

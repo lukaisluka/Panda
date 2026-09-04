@@ -21,6 +21,8 @@
   min-width: 0;
   flex: 1;
   flex-direction: column;
+  /* Positioning context for the plan dock (absolute, top-right). */
+  position: relative;
 }
 
 .app-header {

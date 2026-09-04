@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { applyUpdate, emptySession } from './reducer';
 import type {
+  AcpPlanEntry,
   AcpSessionModeState,
   AcpSessionUpdate,
   SessionDocument,
@@ -260,6 +261,39 @@ describe('reducer session-level latest notifications', () => {
     expect(doc.latestNotifications.config_option_update).toBe(r2);
     expect(doc.latestNotifications.compaction_update).toBe(r1);
     expect(doc.turns).toHaveLength(0); // session_state never opens a turn
+  });
+});
+
+describe('reducer session plan (docked, not in-flow)', () => {
+  const entries = (statuses: AcpPlanEntry['status'][]): AcpPlanEntry[] =>
+    statuses.map((status, i) => ({ content: `step ${i + 1}`, priority: 'medium', status }));
+
+  it('starts with no plan; a plan update replaces the session-level state and never opens a turn', () => {
+    expect(emptySession().plan).toBeNull();
+    const raw = rawNote('plan-1');
+    const doc = fold([
+      carryingRaw({ sessionUpdate: 'plan', entries: entries(['completed', 'in_progress', 'pending']) }, raw),
+    ]);
+    expect(doc.plan).toHaveLength(3);
+    expect(doc.plan?.[1]?.status).toBe('in_progress');
+    expect(doc.latestNotifications.plan).toBe(raw);
+    expect(doc.turns).toHaveLength(0); // plans dock, they never enter the flow
+  });
+
+  it('a later plan update replaces the whole list (latest-wins)', () => {
+    const doc = fold([
+      { sessionUpdate: 'plan', entries: entries(['pending', 'pending']) },
+      { sessionUpdate: 'plan', entries: entries(['completed', 'completed', 'pending']) },
+    ]);
+    expect(doc.plan).toHaveLength(3);
+  });
+
+  it('an empty entries list withdraws the plan; plan_removed clears it too', () => {
+    const withPlan = fold([{ sessionUpdate: 'plan', entries: entries(['pending']) }]);
+    expect(withPlan.plan).toHaveLength(1);
+    expect(fold([{ sessionUpdate: 'plan', entries: [] }]).plan).toBeNull();
+    const removed = applyUpdate(withPlan, { sessionUpdate: 'plan_removed' });
+    expect(removed.plan).toBeNull();
   });
 });
 

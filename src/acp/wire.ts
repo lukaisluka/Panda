@@ -321,6 +321,8 @@ export function toAcpUpdates(notification: SessionNotification): AcpSessionUpdat
           raw,
         },
       ];
+    case 'plan_removed':
+      return [{ sessionUpdate: 'plan_removed', raw }];
     case 'usage_update':
       return [
         {
