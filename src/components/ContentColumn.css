@@ -1,0 +1,13 @@
+/* Shared horizontal rhythm for the transcript and composer surfaces. */
+
+.content-column {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 768px; /* max-w-3xl — the stream column the scroller math assumes */
+  padding-inline: 12px;
+}
+@media (min-width: 640px) {
+  .content-column {
+    padding-inline: 24px;
+  }
+}

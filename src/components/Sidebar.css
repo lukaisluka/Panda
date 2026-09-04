@@ -1,0 +1,275 @@
+/* Navigation sidebar: drawer on mobile (<768px), static column on desktop. */
+
+.sidebar {
+  position: fixed;
+  inset-block: 0;
+  left: 0;
+  z-index: 30;
+  display: flex;
+  width: 240px; /* w-60 */
+  flex-direction: column;
+  border-right: 1px solid var(--color-border);
+  background: color-mix(in oklab, var(--color-surface) 95%, transparent);
+  box-shadow: var(--shadow-high); /* drawer depth, mobile only */
+  transition: transform 200ms var(--panda-ease); /* duration-200 ease-out */
+  visibility: hidden;
+  transform: translateX(-100%);
+}
+.sidebar--open {
+  visibility: visible;
+  transform: translateX(0);
+}
+@media (min-width: 768px) {
+  .sidebar {
+    position: static;
+    z-index: auto;
+    flex-shrink: 0;
+    visibility: visible;
+    transform: none;
+    background: color-mix(in oklab, var(--color-surface) 40%, transparent);
+    box-shadow: none;
+  }
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px; /* gap-2.5 */
+  padding: 20px; /* px-5 py-5 */
+  font-size: 15px; /* text-[15px] */
+  font-weight: 600;
+  letter-spacing: -0.025em; /* tracking-tight */
+}
+
+.sidebar-logo {
+  display: flex;
+  height: 28px; /* h-7 */
+  width: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--panda-radius-lg);
+  background: var(--color-raised);
+  font-size: 16px; /* text-base */
+}
+
+.sidebar-close {
+  margin-left: auto;
+}
+@media (min-width: 768px) {
+  .sidebar-close { display: none; }
+}
+
+.sidebar-sessions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px 8px; /* px-5 pb-2 */
+}
+
+.sidebar-label {
+  font-size: 11px; /* text-[11px] */
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em; /* tracking-wider */
+  color: var(--color-faint);
+}
+
+.sidebar-sessions {
+  padding-inline: 12px; /* px-3 */
+}
+
+.sidebar-demo-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px; /* mb-1 */
+  border-radius: var(--panda-radius-lg);
+  background: var(--color-raised);
+  padding: 10px 12px; /* px-3 py-2.5 */
+  font-size: 13px;
+  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+}
+
+.sidebar-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px; /* space-y-1 */
+}
+
+/* Shared faint leading glyph on rows (demo chip, session rows, footer). */
+.sidebar-icon-faint {
+  flex-shrink: 0;
+  color: var(--color-faint);
+}
+
+/* --- Connection group + rows --- */
+
+.sidebar-group {
+  position: relative;
+  border-radius: var(--panda-radius-lg);
+}
+.sidebar-group--active {
+  background: color-mix(in oklab, var(--color-raised) 40%, transparent);
+}
+
+/* The hoverable row strip inside a group (connection/dormant header). */
+.sidebar-row {
+  position: relative;
+}
+
+.sidebar-connection-btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px; /* gap-1.5 */
+  border-radius: var(--panda-radius-lg);
+  padding: 8px 12px; /* px-3 py-2 */
+  text-align: left;
+  font-size: 13px;
+  transition: var(--panda-colors-transition);
+  color: color-mix(in oklab, var(--color-fg) 70%, transparent);
+}
+.sidebar-connection-btn:not(.sidebar-connection-btn--active):hover {
+  background: color-mix(in oklab, var(--color-raised) 60%, transparent);
+  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+}
+.sidebar-connection-btn--active {
+  color: var(--color-fg);
+}
+.sidebar-connection-btn--offline {
+  opacity: 0.75;
+}
+
+.sidebar-row-title {
+  font-weight: 500;
+}
+
+.sidebar-row-sub {
+  font-size: 11px;
+  color: var(--color-faint);
+}
+
+.sidebar-row-end {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px; /* gap-1 */
+  margin-left: auto;
+  padding-right: 2px; /* pr-0.5 */
+}
+
+.sidebar-hover-actions {
+  position: absolute;
+  top: 50%;
+  right: 4px; /* right-1 */
+  display: none;
+  align-items: center;
+  gap: 2px; /* gap-0.5 */
+  transform: translateY(-50%);
+}
+.sidebar-row:hover .sidebar-hover-actions {
+  display: flex;
+}
+
+/* --- Session rows --- */
+
+.sidebar-session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* space-y-0.5 */
+  padding: 0 0 4px 8px; /* pb-1 pl-2 */
+}
+
+.sidebar-session {
+  position: relative;
+}
+
+.sidebar-session-btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px; /* gap-2 */
+  border-radius: var(--panda-radius-lg);
+  padding: 6px 12px; /* px-3 py-1.5 */
+  text-align: left;
+  font-size: 12.5px; /* text-[12.5px] */
+  color: color-mix(in oklab, var(--color-fg) 60%, transparent);
+  transition: var(--panda-colors-transition);
+}
+.sidebar-session-btn:not(.sidebar-session-btn--foreground):not(.sidebar-session-btn--disabled):hover {
+  background: color-mix(in oklab, var(--color-raised) 60%, transparent);
+  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+}
+.sidebar-session-btn--foreground {
+  background: var(--color-raised);
+  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+}
+.sidebar-session-btn--disabled {
+  cursor: not-allowed;
+  color: color-mix(in oklab, var(--color-fg) 35%, transparent);
+}
+
+.sidebar-session-delete {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: none;
+  transform: translateY(-50%);
+}
+.sidebar-session:hover .sidebar-session-delete {
+  display: block;
+}
+
+/* --- Dormant profile rows --- */
+
+.sidebar-dormant-btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--panda-radius-lg);
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 13px;
+  color: color-mix(in oklab, var(--color-fg) 50%, transparent);
+  transition: var(--panda-colors-transition);
+}
+.sidebar-dormant-btn:hover {
+  background: color-mix(in oklab, var(--color-raised) 60%, transparent);
+  color: color-mix(in oklab, var(--color-fg) 80%, transparent);
+}
+
+.sidebar-dormant-dot {
+  height: 6px; /* h-1.5 */
+  width: 6px;
+  flex-shrink: 0;
+  border: 1px solid var(--color-faint);
+  border-radius: var(--panda-radius-full);
+}
+
+.sidebar-empty {
+  padding: 8px 12px; /* px-3 py-2 */
+  font-size: 12px;
+  color: var(--color-faint);
+}
+
+/* --- Footer block --- */
+
+.sidebar-footer-block {
+  margin-top: auto;
+}
+
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--color-border);
+  padding: 14px 20px; /* px-5 py-3.5 */
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.sidebar-footer-icon {
+  flex-shrink: 0;
+  color: var(--color-accent);
+}

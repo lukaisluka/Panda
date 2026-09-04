@@ -10,6 +10,7 @@ import { isDirectConnectionId, lastConnectionDefaults } from '../liveConnections
 import { newProfileId, saveProfiles, type AgentProfile } from '../profiles';
 import { cwdToWorkspace, type Workspace } from '../workspace';
 import type { LiveSessionFacade } from '../useLiveSession';
+import './ConnectPanel.css';
 
 /** A profile click in the sidebar asks the form to adopt these values. */
 export type FormPrefill = { url: string; workspace: Workspace; nonce: number };
@@ -102,36 +103,36 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
   const pathReady = workspace.kind === 'none' || workspace.path.trim().length > 0;
 
   return (
-    <div className="mx-3 mb-3 rounded-xl border border-border bg-raised/50 p-3">
-      <div className="mb-2 text-[11px] font-medium uppercase tracking-wider text-faint">
+    <div className="connect-panel">
+      <div className="connect-label">
         ACP 连接
       </div>
 
       {connection.status === 'connected' ? (
-        <div className="flex items-center justify-between">
-          <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
+        <div className="connect-row">
+          <span className="connect-agent">
             <StatusDot variant="success" label="已连接" />
             <span className="truncate">{connection.agentName}</span>
           </span>
-          <span className="shrink-0 font-mono text-[11px] text-faint">
+          <span className="connect-version">
             v{connection.protocolVersion}
           </span>
         </div>
       ) : connection.status === 'connecting' ? (
-        <div className="flex items-center gap-2 py-1 text-xs text-muted">
+        <div className="connect-connecting">
           <Spinner size="sm" />
           连接中…
         </div>
       ) : (
         <>
           {connection.status === 'error' && connection.error && (
-            <p className="mb-2 break-words text-[11px] leading-4 text-danger" title={connection.error}>
+            <p className="connect-error" title={connection.error}>
               {connection.error}
             </p>
           )}
           {reconnectableId !== null && canResume && (
             <Button
-              className="mb-2"
+              className="connect-button--resume"
               variant="primary"
               size="sm"
               width="100%"
@@ -142,18 +143,18 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
             />
           )}
           <TextInput
-            className="font-mono text-[13px]"
+            className="connect-input"
             label="端点地址"
             isLabelHidden
             value={url}
             onChange={setUrl}
             placeholder="ws://host:port/acp"
           />
-          <div className="mt-2 flex gap-2">
+          <div className="connect-fields">
             {/* Astryx Selector owns its own width/geometry — the Phase-1
                 "white capsule" squash (w-28 losing to w-full in generated
                 CSS order) dies here structurally, not by class ordering. */}
-            <div className="w-28 shrink-0">
+            <div className="connect-kind">
               <Selector
                 label="工作区"
                 isLabelHidden
@@ -169,9 +170,9 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
               />
             </div>
             {workspace.kind === 'local-directory' && (
-              <div className="min-w-0 flex-1">
+              <div className="connect-path">
                 <TextInput
-                  className="font-mono text-[13px]"
+                  className="connect-input"
                   label="工作区路径"
                   isLabelHidden
                   width="100%"
@@ -183,7 +184,7 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
             )}
           </div>
           <Button
-            className="mt-2.5"
+            className="connect-button--submit"
             variant="primary"
             size="sm"
             width="100%"
@@ -205,7 +206,7 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
           />
           {reconnectableId === null && !naming && (
             <Button
-              className="mt-2"
+              className="connect-button"
               variant="secondary"
               size="sm"
               width="100%"
@@ -220,8 +221,8 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
             />
           )}
           {reconnectableId === null && naming && (
-            <div className="mt-2 flex gap-2">
-              <div className="min-w-0 flex-1">
+            <div className="connect-naming">
+              <div className="connect-path">
                 <TextInput
                   label="配置名称"
                   isLabelHidden
@@ -251,7 +252,7 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
             </div>
           )}
           {reconnectableId === null && profiles.length > 0 && !naming && (
-            <p className="mt-2 text-[10px] leading-3 text-faint">
+            <p className="connect-note">
               配置的连接 / 删除在上方 Sessions 分组行
             </p>
           )}
@@ -259,7 +260,7 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
       )}
 
       <Button
-        className="mt-2"
+        className="connect-button"
         variant="ghost"
         size="sm"
         width="100%"

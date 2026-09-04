@@ -1,0 +1,26 @@
+/* Chat bubbles and inline message attachments. */
+
+.agent-message {
+  margin-block: 6px; /* my-1.5 */
+}
+
+.user-message {
+  display: flex;
+  justify-content: flex-end;
+  margin-block: 24px; /* my-6 */
+}
+
+.user-message-bubble {
+  max-width: 70%;
+  padding: 12px 16px; /* px-4 py-3 */
+  border-radius: 16px 16px var(--panda-radius-md) 16px; /* rounded-2xl rounded-tr-md */
+  background: color-mix(in oklab, var(--color-danger) 20%, transparent);
+  color: var(--color-fg);
+}
+
+.message-image {
+  max-height: 320px; /* max-h-80 */
+  margin-block: 8px; /* my-2 */
+  border: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
+  border-radius: var(--panda-radius-lg);
+}

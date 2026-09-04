@@ -6,9 +6,9 @@ import type {
   PermissionRequest,
 } from '../protocol/types';
 import type { AttachedPermission } from '../projector/messageStream';
+import './PermissionCard.css';
 
 /**
-
 /**
  * Inline approval card mounted below the tool call that triggered it —
  * the UI answer to "why did the agent stop?".
@@ -18,13 +18,13 @@ export function PermissionCard({ request, onResolve }: {
   onResolve: (kind: PermissionOptionKind) => void;
 }) {
   return (
-    <div className="mt-1.5 rounded-xl border border-warn/40 bg-warn/5 p-3.5">
-      <div className="flex items-center gap-2 text-xs font-medium text-warn">
+    <div className="permission-card">
+      <div className="permission-head">
         <ShieldAlert size={14} />
         Agent 请求批准
       </div>
-      <p className="mt-2 text-xs text-fg/90">{request.title}</p>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <p className="permission-title">{request.title}</p>
+      <div className="permission-options">
         {request.options.map((option) => (
           <Button
             key={option.id}
@@ -49,13 +49,13 @@ export function DeniedPermissionCard({ request, response }: {
   response: DeniedPermissionResponse;
 }) {
   return (
-    <div className="mt-1.5 rounded-xl border border-border bg-raised/40 p-3.5">
-      <div className="flex items-center gap-2 text-xs font-medium text-muted">
+    <div className="permission-card permission-card--denied">
+      <div className="permission-head permission-head--denied">
         <ShieldBan size={14} />
         已由策略拒绝
       </div>
-      <p className="mt-2 text-xs text-fg/70">{request.title}</p>
-      <p className="mt-1.5 text-[11px] text-faint">
+      <p className="permission-title permission-title--dim">{request.title}</p>
+      <p className="permission-reason">
         {response.kind
           ? `已代答 ${response.kind}（非用户决定）`
           : 'agent 未提供拒绝选项，已代答 cancelled（非用户决定）'}

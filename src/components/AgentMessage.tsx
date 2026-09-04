@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import type { Block } from '../protocol/types';
 import { markdownComponents } from './CodeBlock';
 import { MessageImage } from './MessageImage';
+import './messages.css';
 
 type AgentMessageBlock = Extract<Block, { kind: 'agent_message' }>;
 
@@ -63,7 +64,7 @@ export function AgentMessage({ block, streaming }: {
   streaming: boolean;
 }) {
   return (
-    <div className="md-body my-1.5">
+    <div className="md-body agent-message">
       {block.parts.map((part, i) =>
         part.type === 'image' ? (
           <MessageImage key={i} image={part} />

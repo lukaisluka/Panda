@@ -33,6 +33,7 @@ import { MessageImage } from './MessageImage';
 import { AttachedPermissionCard } from './PermissionCard';
 import type { AttachedPermission } from '../projector/messageStream';
 import { diffStats } from './diff-utils';
+import './ToolCallCard.css';
 
 const KIND_ICON: Record<AcpToolKind, LucideIcon> = {
   read: FileText,
@@ -54,18 +55,18 @@ function StatusBadge({ status }: { status: ToolCallStatus }) {
     case 'in_progress':
       return <Badge variant="neutral" icon={<Spinner size="sm" />} label="执行中" />;
     case 'completed':
-      return <Check size={14} className="shrink-0 text-accent" />;
+      return <Check size={14} className="tool-status-icon tool-status-icon--ok" />;
     case 'failed':
-      return <X size={14} className="shrink-0 text-danger" />;
+      return <X size={14} className="tool-status-icon tool-status-icon--err" />;
     case 'cancelled':
-      return <CircleSlash size={13} className="shrink-0 text-faint" />;
+      return <CircleSlash size={13} className="tool-status-icon tool-status-icon--faint" />;
   }
 }
 
 const CARD_EDGE: Partial<Record<ToolCallStatus, string>> = {
-  pending: 'border-l-2 border-l-warn/60',
-  in_progress: 'border-l-2 border-l-accent/50',
-  failed: 'border-l-2 border-l-danger/60',
+  pending: 'tool-card-frame--pending',
+  in_progress: 'tool-card-frame--running',
+  failed: 'tool-card-frame--failed',
 };
 
 /**
@@ -97,43 +98,40 @@ export function ToolCallCard({ call, permission, onResolvePermission }: {
   const hasDetails = (call.rawInput && Object.keys(call.rawInput).length > 0) || call.content.length > 0;
 
   return (
-    <div className="my-3">
-      <div className={`rounded-lg border border-border bg-surface transition-colors ${CARD_EDGE[call.status] ?? ''}`}>
-        <button
-          onClick={() => setOpen((o) => !o)}
-          className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-raised/40"
-        >
-          <Icon size={14} className="shrink-0 text-muted" />
-          <span className="min-w-0 truncate text-xs text-fg/90">{call.title}</span>
+    <div className="tool-card">
+      <div className={`tool-card-frame ${CARD_EDGE[call.status] ?? ''}`}>
+        <button onClick={() => setOpen((o) => !o)} className="tool-card-toggle">
+          <Icon size={14} className="tool-card-icon" />
+          <span className="truncate tool-card-title">{call.title}</span>
           {stats && (
-            <span className="shrink-0 font-mono text-[11px]">
-              <span className="text-add">+{stats.additions}</span>{' '}
-              <span className="text-danger">−{stats.deletions}</span>
+            <span className="tool-card-stats">
+              <span className="tool-stats-add">+{stats.additions}</span>{' '}
+              <span className="tool-stats-del">−{stats.deletions}</span>
             </span>
           )}
           {path && !call.title.includes(path) && (
-            <span className="min-w-0 truncate font-mono text-[11px] text-faint">{path}</span>
+            <span className="truncate tool-card-path">{path}</span>
           )}
-          <span className="ml-auto flex items-center">
+          <span className="tool-card-status">
             <StatusBadge status={call.status} />
           </span>
           {hasDetails && (
             <ChevronDown
               size={13}
-              className={`shrink-0 text-faint transition-transform ${open ? 'rotate-180' : ''}`}
+              className={`tool-card-chevron ${open ? 'tool-card-chevron--open' : ''}`}
             />
           )}
         </button>
       </div>
 
       {open && hasDetails && (
-        <div className="mt-1.5 ml-2 space-y-2 border-l border-border pl-3">
+        <div className="tool-card-details">
           {call.rawInput && Object.keys(call.rawInput).length > 0 && (
-            <details className="group rounded-md border border-border/70 bg-surface/60">
-              <summary className="cursor-pointer select-none px-3 py-1.5 text-[11px] font-medium text-faint transition-colors group-open:text-muted hover:text-fg">
+            <details className="tool-input-details">
+              <summary className="tool-input-summary">
                 Input
               </summary>
-              <pre className="overflow-x-auto px-3 pb-2.5 font-mono text-[11px] leading-relaxed text-muted">
+              <pre className="tool-input-pre">
                 {JSON.stringify(call.rawInput, null, 2)}
               </pre>
             </details>
@@ -145,7 +143,7 @@ export function ToolCallCard({ call, permission, onResolvePermission }: {
             }
             if (item.type === 'content' && item.content.type === 'text') {
               return (
-                <div key={i} className="md-body md-body--sm rounded-lg border border-border/70 bg-surface/60 px-3.5 py-2.5 text-muted">
+                <div key={i} className="md-body md-body--sm tool-text-box">
                   <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{item.content.text}</ReactMarkdown>
                 </div>
               );
@@ -153,7 +151,7 @@ export function ToolCallCard({ call, permission, onResolvePermission }: {
             return null;
           })}
           {call.status === 'in_progress' && call.content.length === 0 && (
-            <div className="flex items-center gap-2 px-1 py-0.5 text-xs text-faint">
+            <div className="tool-waiting">
               <Spinner size="sm" /> 等待输出…
             </div>
           )}

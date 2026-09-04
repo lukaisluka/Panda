@@ -1,0 +1,61 @@
+/* Turn-scoped plan checklist. */
+
+.plan-card {
+  margin-block: 12px; /* my-3 */
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-xl);
+  background: var(--color-surface);
+  padding: 12px 16px; /* px-4 py-3 */
+}
+
+.plan-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px; /* mb-2.5 */
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-muted);
+}
+
+.plan-card-head-icon {
+  color: var(--color-accent);
+}
+
+.plan-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px; /* space-y-1.5 */
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-card-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px; /* gap-2.5 */
+  font-size: 12px;
+  line-height: 1.625;
+}
+
+.plan-card-item-icon {
+  margin-top: 4px; /* mt-1 — optically centers the 15px glyph on first text line */
+  flex-shrink: 0;
+  color: var(--color-faint);
+}
+.plan-card-item-icon--done,
+.plan-card-item-icon--active {
+  color: var(--color-accent);
+}
+
+.plan-card-item-text {
+  color: var(--color-muted);
+}
+.plan-card-item-text--active {
+  color: var(--color-fg);
+}
+.plan-card-item-text--done {
+  color: var(--color-faint);
+  text-decoration: line-through;
+}

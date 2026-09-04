@@ -1,0 +1,72 @@
+/* Shared collapsible-card pattern: ThoughtBlock + UnsupportedBlock (#32 P3).
+ * Astryx has no disclosure primitive; this is the one bespoke pattern both
+ * blocks share so their chrome can never drift apart. */
+
+.disclosure {
+  margin-block: 12px; /* my-3 */
+  border: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
+  border-radius: var(--panda-radius-lg);
+  background: color-mix(in oklab, var(--color-surface) 60%, transparent);
+}
+
+.disclosure-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px; /* px-3 py-2 */
+  text-align: left;
+  font-size: 12px; /* text-xs */
+  color: var(--color-muted);
+  transition: var(--panda-colors-transition);
+}
+.disclosure-toggle:hover {
+  color: var(--color-fg);
+}
+
+.disclosure-icon {
+  flex-shrink: 0;
+  color: var(--color-faint);
+}
+
+.disclosure-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.disclosure-label--italic {
+  font-style: italic;
+}
+
+.disclosure-chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--color-faint);
+  transition: transform 150ms var(--panda-ease);
+}
+.disclosure-chevron--open {
+  transform: rotate(180deg);
+}
+
+.disclosure-body {
+  border-top: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
+  padding: 10px 14px; /* px-3.5 py-2.5 */
+}
+
+/* ThoughtBlock body: markdown, muted italic prose. */
+.disclosure-body--thought {
+  font-style: italic;
+  color: var(--color-muted);
+}
+
+/* UnsupportedBlock body: raw JSON dump. */
+.disclosure-body--raw {
+  max-height: 288px; /* max-h-72 */
+  overflow: auto;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.625; /* leading-relaxed */
+  color: var(--color-muted);
+  white-space: pre;
+}

@@ -27,6 +27,7 @@ import { loadProfiles, saveProfiles, subscribeProfiles } from '../profiles';
 import { workspaceDisplay, workspaceLabel } from '../workspace';
 import { ConnectPanel, type FormPrefill } from './ConnectPanel';
 import type { LiveSessionFacade } from '../useLiveSession';
+import './Sidebar.css';
 
 /**
  * Grouped sidebar (issue #21, ADR 0002): every connection slot is a group
@@ -80,15 +81,11 @@ export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }:
   };
 
   return (
-    <aside
-      className={`fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r border-border bg-surface/95 shadow-2xl transition-transform duration-200 ease-out md:static md:z-auto md:shrink-0 md:translate-x-0 md:bg-surface/40 md:shadow-none ${
-        mobileOpen ? 'visible translate-x-0' : 'invisible -translate-x-full md:visible'
-      }`}
-    >
-      <div className="flex items-center gap-2.5 px-5 py-5 text-[15px] font-semibold tracking-tight">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-raised text-base">🐼</span>
+    <aside className={`sidebar ${mobileOpen ? 'sidebar--open' : ''}`}>
+      <div className="sidebar-brand">
+        <span className="sidebar-logo">🐼</span>
         Panda
-        <span className="ml-auto md:hidden">
+        <span className="sidebar-close">
           <IconButton
             variant="ghost"
             size="sm"
@@ -99,8 +96,8 @@ export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }:
         </span>
       </div>
 
-      <div className="flex items-center justify-between px-5 pb-2">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-faint">
+      <div className="sidebar-sessions-head">
+        <span className="sidebar-label">
           Sessions
         </span>
         <IconButton
@@ -122,14 +119,14 @@ export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }:
           }}
         />
       </div>
-      <div className="px-3">
+      <div className="sidebar-sessions">
         {!liveMode && (
-          <div className="mb-1 flex items-center gap-2 rounded-lg bg-raised px-3 py-2.5 text-[13px] text-fg/90">
-            <MessagesSquare size={13} className="shrink-0 text-faint" />
+          <div className="sidebar-demo-chip">
+            <MessagesSquare size={13} className="sidebar-icon-faint" />
             <span className="truncate">重构 auth 校验</span>
           </div>
         )}
-        <div className="space-y-1">
+        <div className="sidebar-group-list">
           {orderedIds.map((connectionId) => (
             <ConnectionGroupRow
               key={connectionId}
@@ -156,12 +153,12 @@ export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }:
             />
           ))}
           {liveMode && orderedIds.length === 0 && dormantProfiles.length === 0 && (
-            <div className="px-3 py-2 text-xs text-faint">暂无连接或配置 — 在下方连接 ACP 服务</div>
+            <div className="sidebar-empty">暂无连接或配置 — 在下方连接 ACP 服务</div>
           )}
         </div>
       </div>
 
-      <div className="mt-auto">
+      <div className="sidebar-footer-block">
         <ConnectPanel
           mode={mode}
           profiles={profiles}
@@ -173,8 +170,8 @@ export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }:
             onMobileClose();
           }}
         />
-        <div className="flex items-center gap-2 border-t border-border px-5 py-3.5 text-xs text-muted">
-          <Bot size={14} className="shrink-0 text-accent" />
+        <div className="sidebar-footer">
+          <Bot size={14} className="sidebar-footer-icon" />
           <span className="truncate">
             {liveMode
               ? footerAgent
@@ -232,8 +229,8 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
   });
 
   return (
-    <div className={`rounded-lg ${isActiveConnection ? 'bg-raised/40' : ''}`}>
-      <div className="group relative">
+    <div className={`sidebar-group ${isActiveConnection ? 'sidebar-group--active' : ''}`}>
+      <div className="sidebar-row">
         <button
           type="button"
           onClick={() => {
@@ -241,16 +238,16 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
             onMobileClose();
           }}
           title={slot.connection.url ?? title}
-          className={`flex w-full items-center gap-1.5 rounded-lg px-3 py-2 text-left text-[13px] transition-colors ${
-            isActiveConnection ? 'text-fg' : 'text-fg/70 hover:bg-raised/60 hover:text-fg/90'
-          } ${connected ? '' : 'opacity-75'}`}
+          className={`sidebar-connection-btn ${
+            isActiveConnection ? 'sidebar-connection-btn--active' : ''
+          } ${connected ? '' : 'sidebar-connection-btn--offline'}`}
         >
           <SlotStatusDot status={status} running={running} />
-          <span className="truncate font-medium">{title}</span>
+          <span className="truncate sidebar-row-title">{title}</span>
           {slot.connection.agentName && (
-            <span className="truncate text-[11px] text-faint">{slot.connection.agentName}</span>
+            <span className="truncate sidebar-row-sub">{slot.connection.agentName}</span>
           )}
-          <span className="ml-auto flex shrink-0 items-center gap-1 pr-0.5">
+          <span className="sidebar-row-end">
             {/* 需要关注 is a *background* connection indicator (CONTEXT.md):
                 the foreground slot's issues are in plain sight (permission
                 card, error text in the connect panel). */}
@@ -259,7 +256,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
             )}
           </span>
         </button>
-        <div className="absolute right-1 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 group-hover:flex">
+        <div className="sidebar-hover-actions">
           {(connected || status === 'connecting') && (
             <IconButton
               variant="ghost"
@@ -286,7 +283,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
         </div>
       </div>
       {ordered.length > 0 && (
-        <div className="space-y-0.5 pb-1 pl-2">
+        <div className="sidebar-session-list">
           {ordered.map((entry) => {
             const foregroundSession = isForegroundSession(entry.sessionId);
             // Offline slots keep retained documents clickable (查看历史);
@@ -303,7 +300,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
             const canSwitch = connected ? loadSession.available && !busy : hasDoc;
             const label = entry.title ?? `${workspaceLabel(entry.cwd)} · ${entry.sessionId.slice(-6)}`;
             return (
-              <div key={entry.sessionId} className="group/s relative">
+              <div key={entry.sessionId} className="sidebar-session">
                 <button
                   disabled={foregroundSession || !canSwitch}
                   onClick={() => {
@@ -323,19 +320,19 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
                               : 'agent 不支持历史回放（session/load）'
                             : entry.cwd
                   }
-                  className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[12.5px] ${
+                  className={`sidebar-session-btn ${
                     foregroundSession
-                      ? 'bg-raised text-fg/90'
+                      ? 'sidebar-session-btn--foreground'
                       : canSwitch
-                        ? 'text-fg/60 transition-colors hover:bg-raised/60 hover:text-fg/90'
-                        : 'cursor-not-allowed text-fg/35'
+                        ? ''
+                        : 'sidebar-session-btn--disabled'
                   }`}
                 >
-                  <MessagesSquare size={12} className="shrink-0 text-faint" />
+                  <MessagesSquare size={12} className="sidebar-icon-faint" />
                   <span className="truncate">{label}</span>
                 </button>
                 {canDelete.available && connected && !foregroundSession && !busy && (
-                  <span className="absolute right-1 top-1/2 hidden -translate-y-1/2 group-hover/s:block">
+                  <span className="sidebar-session-delete">
                     <IconButton
                       variant="ghost"
                       size="sm"
@@ -364,7 +361,7 @@ function DormantProfileRow({ profile, live, onPreview, onDelete, onMobileClose }
   onMobileClose(): void;
 }) {
   return (
-    <div className="group relative">
+    <div className="sidebar-row">
       <button
         type="button"
         onClick={() => {
@@ -372,12 +369,12 @@ function DormantProfileRow({ profile, live, onPreview, onDelete, onMobileClose }
           onMobileClose();
         }}
         title={`${profile.url} · ${workspaceDisplay(profile.workspace)}`}
-        className="flex w-full items-center gap-1.5 rounded-lg px-3 py-2 text-left text-[13px] text-fg/50 transition-colors hover:bg-raised/60 hover:text-fg/80"
+        className="sidebar-dormant-btn"
       >
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-faint" />
+        <span className="sidebar-dormant-dot" />
         <span className="truncate">{profile.name}</span>
       </button>
-      <div className="absolute right-1 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 group-hover:flex">
+      <div className="sidebar-hover-actions">
         <IconButton
           variant="ghost"
           size="sm"

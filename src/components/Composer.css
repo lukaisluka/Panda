@@ -1,0 +1,116 @@
+/* Message composer: input card, image attachment tiles, hints. */
+
+.composer-column {
+  padding-bottom: 16px; /* pb-4 */
+}
+
+.composer-card {
+  border: 1px solid var(--color-border);
+  border-radius: 16px; /* rounded-2xl — deliberately NOT the Astryx radius scale */
+  background: var(--color-surface);
+  padding: 12px 16px; /* px-4 py-3 */
+  transition: var(--panda-colors-transition);
+}
+.composer-card:focus-within {
+  border-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
+}
+.composer-card--disabled {
+  opacity: 0.6;
+}
+
+.composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px; /* gap-2 */
+  margin-bottom: 12px; /* mb-3 */
+}
+
+.composer-tile {
+  flex-shrink: 0;
+  width: 56px; /* w-14 */
+}
+.composer-tile--error {
+  width: 112px; /* w-28 */
+}
+
+.composer-thumb {
+  position: relative;
+  display: flex;
+  height: 56px;
+  width: 56px;
+  align-items: center;
+  justify-content: center;
+  margin-inline: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-lg);
+  background: var(--color-raised);
+  padding: 4px; /* p-1 */
+}
+.composer-thumb--error {
+  border-color: color-mix(in oklab, var(--color-danger) 70%, transparent);
+}
+
+.composer-thumb-img {
+  height: 100%;
+  width: 100%;
+  border-radius: 4px; /* rounded */
+  object-fit: cover;
+}
+
+.composer-remove {
+  position: absolute;
+  top: -6px; /* -top-1.5 */
+  right: -6px;
+  display: flex;
+  height: 20px; /* h-5 */
+  width: 20px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-full);
+  background: var(--color-surface);
+  color: var(--color-muted);
+}
+.composer-remove:hover {
+  color: var(--color-fg);
+}
+
+.composer-tile-error {
+  margin-top: 4px; /* mt-1 */
+  text-align: center;
+  font-size: 11px;
+  line-height: 12px; /* leading-3 */
+  color: var(--color-danger);
+}
+
+.composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.composer-file-input {
+  display: none;
+}
+
+.composer-input {
+  max-height: 160px; /* max-h-40 */
+  flex: 1;
+  resize: none;
+  background: transparent;
+  padding-block: 6px; /* py-1.5 */
+  font-size: 13px;
+  line-height: 1.55;
+  outline: none;
+}
+.composer-input::placeholder {
+  color: var(--color-faint);
+}
+
+.composer-hint {
+  margin-top: 8px; /* mt-2 */
+  text-align: center;
+  font-size: 11px;
+}
+.composer-hint--danger { color: var(--color-danger); }
+.composer-hint--faint { color: var(--color-faint); }
