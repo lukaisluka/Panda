@@ -139,7 +139,7 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
         <button onClick={() => setOpen((o) => !o)} className="tool-card-toggle">
           {fileRow ? (
             <>
-              <Icon size={14} className="tool-card-icon" />
+              <Icon size={16} className="tool-card-icon" />
               <span className="tool-card-title">{fileRow.verb}</span>
               <FileTypeIcon path={fileRow.path} />
               <span className="truncate tool-card-file" title={call.title}>{fileRow.base}</span>
@@ -147,7 +147,7 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
             </>
           ) : (
             <>
-              <Icon size={14} className="tool-card-icon" />
+              <Icon size={16} className="tool-card-icon" />
               {thinkPreview !== null ? (
                 <>
                   <span className="tool-card-title">{displayTitle}</span>
