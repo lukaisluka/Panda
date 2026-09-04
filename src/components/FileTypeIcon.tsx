@@ -7,8 +7,12 @@ const ICONS_BASE = '/material-icons';
  * File-type icon for a path (VS Code Material Icons: official theme matching —
  * extension, special filenames like Dockerfile, compound suffixes like .d.ts).
  * Always resolves: unknown types fall back to the theme's generic file icon.
+ *
+ * 16px box: the theme's artwork only fills ~80% of its viewBox, so the
+ * painted glyph lands just above cap height (ZCode reference — the icon
+ * should read slightly taller than uppercase letters at 14px text).
  */
-export function FileTypeIcon({ path, size = 14 }: { path: string; size?: number }) {
+export function FileTypeIcon({ path, size = 16 }: { path: string; size?: number }) {
   return (
     <img
       src={getIconUrlForFilePath(path, ICONS_BASE)}
