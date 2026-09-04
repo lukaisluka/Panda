@@ -5,6 +5,12 @@
  * relied on). */
 @import "@astryxdesign/core/reset.css";
 @import "@astryxdesign/core/astryx.css";
+/* Latin body face (joint-debug): the reference client's Latin glyphs match
+ * Inter (tall x-height, straight-stem l, straight-tail y, no-serif 1), not
+ * SF Pro that -apple-system renders — that stack left mixed-script text a
+ * notch thinner and narrower than the reference. Self-hosted variable font,
+ * no CDN dependency. */
+@import "@fontsource-variable/inter";
 /* All seven official themes (#32 Phase 4): each theme.css is @scope'd under
  * its own data-astryx-theme attribute, so they coexist and only the one
  * <Theme> anchors is live. Selection is a runtime user choice (src/theme.ts). */
@@ -46,21 +52,24 @@
 /* ---------------------------------------------------------------------------
  * Fonts — Panda owns the typefaces, not the themes.
  *
- * One system stack for Latin and CJK alike (SF Pro + PingFang SC on macOS,
- * Segoe UI + YaHei on Windows): same family pairing the reference client
- * renders, so mixed-script text reads as one voice. Theme webfonts
- * (Figtree etc.) thinned the text and fought the CJK fallback. Declared on
- * :root AND [data-astryx-theme] (both Astryx anchors re-inject theme
- * tokens), and unlayered so every theme layer loses. Astryx components
- * keep consuming --font-family-*, now fed from --panda-font-body.
+ * Inter (self-hosted variable) for Latin + the system CJK stack (PingFang
+ * SC on macOS, YaHei on Windows): the reference client's Latin glyphs are
+ * Inter's — tall x-height, straight-stem l, straight-tail y — which
+ * -apple-system (SF Pro) does not reproduce, and theme webfonts (Figtree
+ * etc.) thinned the text further. Inter has no CJK coverage, so mixed
+ * scripts fall through to the system stack for Han. Declared on :root AND
+ * [data-astryx-theme] (both Astryx anchors re-inject theme tokens), and
+ * unlayered so every theme layer loses. Astryx components keep consuming
+ * --font-family-*, now fed from --panda-font-body.
  *
  * NOT owned yet: the code/mono face (--font-family-code) stays with the
  * themes — markdown code rendering keeps its per-theme mono for now.
  * ------------------------------------------------------------------------- */
 :root,
 [data-astryx-theme] {
-  --panda-font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --panda-font-body: 'Inter Variable', -apple-system, BlinkMacSystemFont,
+    'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    sans-serif;
   --font-family-body: var(--panda-font-body);
   --font-family-heading: var(--panda-font-body);
 }
