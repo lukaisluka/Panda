@@ -22,6 +22,8 @@ import type {
 import {
   isSessionStateKind,
   type AcpAvailableCommand,
+  type AcpConfigChoice,
+  type AcpConfigOption,
   type AcpContentBlock,
   type AcpElicitationField,
   type AcpElicitationOption,
@@ -366,6 +368,14 @@ export function toAcpUpdates(notification: SessionNotification): AcpSessionUpdat
       }
       return [{ sessionUpdate: 'commands_update', commands, raw }];
     }
+    case 'config_option_update': {
+      const options = toConfigOptions((update as { configOptions?: unknown }).configOptions);
+      if (options === null) {
+        warn('config_option_update with a malformed configOptions list — preserved as unsupported');
+        return [{ sessionUpdate: 'unsupported', raw }];
+      }
+      return [{ sessionUpdate: 'config_options_update', options, raw }];
+    }
     default: {
       // Recognized session-level kinds without in-flow rendering: keep the
       // latest raw notification of each kind (list owned by types.ts).
@@ -410,6 +420,84 @@ export function toAvailableCommands(
     commands.push({ name, description, inputHint });
   }
   return commands;
+}
+
+/**
+ * Whitelists a wire `configOptions` list (notification payload or
+ * session/new · session/load · set_config_option result) into the UI model.
+ * Structural violations (non-array list, non-object entry, missing or
+ * wrongly-typed required fields) reject the whole list (null → the caller
+ * keeps it as unsupported/absent + warn): full-replacement semantics means a
+ * half-parsed list would render settings that no longer match the agent.
+ * An entry whose `type` is unrecognized is skipped alone (spec: ignore that
+ * option), so one future/vendor entry cannot blank the rest of the panel.
+ * Select option groups flatten into per-choice `group` labels; a choice's
+ * non-string `description` degrades to null (display-only).
+ */
+export function toConfigOptions(list: unknown): AcpConfigOption[] | null {
+  if (!Array.isArray(list)) return null;
+  const options: AcpConfigOption[] = [];
+  for (const entry of list) {
+    if (typeof entry !== 'object' || entry === null) return null;
+    const { id, name, description, category, type, currentValue, options: selectOptions } = entry as {
+      id?: unknown;
+      name?: unknown;
+      description?: unknown;
+      category?: unknown;
+      type?: unknown;
+      currentValue?: unknown;
+      options?: unknown;
+    };
+    if (typeof id !== 'string' || typeof name !== 'string') return null;
+    const desc = description === undefined || description === null ? null : description;
+    if (desc !== null && typeof desc !== 'string') return null;
+    const cat = category === undefined || category === null ? null : category;
+    if (cat !== null && typeof cat !== 'string') return null;
+    if (type === 'select') {
+      if (typeof currentValue !== 'string') return null;
+      const choices = flattenSelectOptions(selectOptions);
+      if (choices === null) return null;
+      options.push({ type: 'select', id, name, description: desc, category: cat, currentValue, choices });
+    } else if (type === 'boolean') {
+      if (typeof currentValue !== 'boolean') return null;
+      options.push({ type: 'boolean', id, name, description: desc, category: cat, currentValue });
+    } else {
+      // Unknown/future/vendor option types have no control to render — the
+      // spec says to ignore just that option (the agent keeps its default
+      // for it), so one exotic entry must not blank the whole panel.
+      warn(`config option ${id} has unknown type ${String(type)} — option ignored`);
+      continue;
+    }
+  }
+  return options;
+}
+
+/** Flat `[{value,name,description}]` or grouped `[{group,name,options:[…]}]` → flat choices with group labels. */
+function flattenSelectOptions(wire: unknown): AcpConfigChoice[] | null {
+  if (!Array.isArray(wire)) return null;
+  const grouped = wire.length > 0 && wire.every((item) => typeof item === 'object' && item !== null && 'options' in item);
+  const choices: AcpConfigChoice[] = [];
+  if (grouped) {
+    for (const group of wire as { group?: unknown; name?: unknown; options?: unknown }[]) {
+      // Local binding keeps the string narrowing inside the map callback
+      // (property narrowing does not survive into closures).
+      const groupName = group.name;
+      if (typeof groupName !== 'string') return null;
+      const inner = flattenSelectOptions(group.options);
+      if (inner === null) return null;
+      choices.push(...inner.map((choice) => ({ ...choice, group: groupName })));
+    }
+    return choices;
+  }
+  for (const choice of wire) {
+    if (typeof choice !== 'object' || choice === null) return null;
+    const { value, name, description } = choice as { value?: unknown; name?: unknown; description?: unknown };
+    if (typeof value !== 'string' || typeof name !== 'string') return null;
+    const desc = description === undefined || description === null ? null : description;
+    if (desc !== null && typeof desc !== 'string') return null;
+    choices.push({ value, name, description: desc, group: null });
+  }
+  return choices;
 }
 
 /** Maps a wire `session/request_permission` request to the UI card model. */

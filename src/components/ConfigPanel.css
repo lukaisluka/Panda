@@ -1,0 +1,97 @@
+/* Session settings card (agent-advertised config options). Mounted at the
+   composer-card level so it floats above the card like the command panel. */
+.config-panel-card {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: min(360px, 100%);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  padding-bottom: 6px;
+  z-index: 20;
+}
+
+.config-panel-title {
+  padding: 10px 14px 6px;
+  font-size: 11px;
+  color: var(--color-faint);
+}
+
+.config-panel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 14px;
+}
+
+.config-panel-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.config-panel-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-fg);
+}
+
+.config-panel-desc {
+  font-size: 11px;
+  color: var(--color-faint);
+}
+
+.config-panel-select {
+  max-width: 150px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-fg);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.config-panel-toggle {
+  flex-shrink: 0;
+  position: relative;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  transition: var(--panda-colors-transition, background-color 0.15s ease, border-color 0.15s ease);
+}
+
+.config-panel-toggle--on {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.config-panel-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+  transition: transform 0.15s ease;
+}
+
+.config-panel-toggle--on .config-panel-toggle-knob {
+  transform: translateX(14px);
+}
+
+.config-panel-toggle:disabled,
+.config-panel-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

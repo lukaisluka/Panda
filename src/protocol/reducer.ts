@@ -28,6 +28,7 @@ export function emptySession(): SessionDocument {
     plan: null,
     modes: null,
     availableCommands: [],
+    configOptions: null,
     permissions: {},
     elicitations: {},
     latestNotifications: {},
@@ -138,6 +139,13 @@ export function applyUpdate(
       // Full replacement — the wire notification always carries the complete
       // list, so an empty update clears the commands.
       return { ...doc, availableCommands: update.commands };
+
+    case 'config_options_initialized':
+    case 'config_options_update':
+      // Both sources are full-replacement: the new/load result, the
+      // config_option_update notification, and the set_config_option
+      // response all carry the complete list.
+      return { ...doc, configOptions: update.options };
 
     case 'session_state':
       return withLatest(doc, update.kind, update.raw);

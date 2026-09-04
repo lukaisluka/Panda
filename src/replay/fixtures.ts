@@ -1,5 +1,6 @@
 import type {
   AcpAvailableCommand,
+  AcpConfigOption,
   AcpContentBlock,
   AcpSessionModeState,
   AcpSessionUpdate,
@@ -43,6 +44,51 @@ const DEMO_COMMANDS: AcpAvailableCommand[] = [
   { name: 'status', description: '查看当前分支与改动状态', inputHint: null },
   { name: 'tag', description: '给当前分支打发布 tag', inputHint: 'tag 版本号,如 v1.3.0' },
   { name: 'ci', description: '推送分支并触发 CI', inputHint: '留空使用默认 workflow' },
+];
+
+/**
+ * The demo agent's session config options — what the composer's settings
+ * panel offers in replay. Mirrors what the test-agent (deepagents-acp)
+ * actually models: a model selector and permission-mode selectors are its
+ * two real config options; the grouped "notifications" select exercises the
+ * optgroup rendering path.
+ */
+export const DEMO_CONFIG_OPTIONS: AcpConfigOption[] = [
+  {
+    type: 'select',
+    id: 'model',
+    name: 'Model',
+    description: '当前会话使用的模型',
+    category: 'model',
+    currentValue: 'glm-4.7',
+    choices: [
+      { value: 'glm-4.7', name: 'GLM-4.7', description: '默认,平衡速度与质量', group: null },
+      { value: 'glm-4.7-air', name: 'GLM-4.7-Air', description: '更快,轻量任务', group: null },
+      { value: 'glm-4.6', name: 'GLM-4.6', description: '上一代,行为稳定', group: null },
+    ],
+  },
+  {
+    type: 'select',
+    id: 'notifications',
+    name: '完成通知',
+    description: '回合结束后通过哪些渠道通知',
+    category: 'notifications',
+    currentValue: 'im',
+    choices: [
+      { value: 'im', name: 'Slack', description: null, group: '即时通讯' },
+      { value: 'im-teams', name: 'Teams', description: null, group: '即时通讯' },
+      { value: 'mail', name: '邮件', description: null, group: '邮件' },
+      { value: 'sms', name: '短信', description: null, group: '邮件' },
+    ],
+  },
+  {
+    type: 'boolean',
+    id: 'verbose-thinking',
+    name: '显示思考过程',
+    description: '在消息流中展示 agent 的思考摘要',
+    category: 'display',
+    currentValue: true,
+  },
 ];
 
 const text = (t: string): AcpContentBlock => ({ type: 'text', text: t });
