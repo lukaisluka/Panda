@@ -1,4 +1,7 @@
-import { createWebSocketStream } from '@agentclientprotocol/sdk/experimental/ws-client';
+import {
+  createWebSocketStream,
+  type WebSocketStreamOptions,
+} from '@agentclientprotocol/sdk/experimental/ws-client';
 
 /**
  * Creates the browser ACP transport without requesting a WebSocket subprotocol.
@@ -8,7 +11,10 @@ import { createWebSocketStream } from '@agentclientprotocol/sdk/experimental/ws-
  * ACP bridge does not negotiate a subprotocol, so Chromium rejects an otherwise
  * successful upgrade. An explicit empty list preserves the intended no-protocol
  * handshake across browser and Node WebSocket implementations.
+ *
+ * Extra options (e.g. an instrumented `WebSocket` constructor for lifecycle
+ * observation) merge over the no-protocol default.
  */
-export function createBrowserWebSocketStream(serverUrl: string) {
-  return createWebSocketStream(serverUrl, { protocols: [] });
+export function createBrowserWebSocketStream(serverUrl: string, options?: WebSocketStreamOptions) {
+  return createWebSocketStream(serverUrl, { protocols: [], ...options });
 }
