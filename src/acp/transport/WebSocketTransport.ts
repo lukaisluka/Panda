@@ -1,17 +1,23 @@
 import type { Stream } from '@agentclientprotocol/sdk';
+import type { WebSocketConstructor } from '@agentclientprotocol/sdk/experimental/ws-client';
 import { createBrowserWebSocketStream } from '../browserWebSocketStream';
 import type { AcpTransport } from './AcpTransport';
 
 /**
  * Browser WebSocket transport: wraps `createBrowserWebSocketStream` (the SDK
  * ws-client with Panda's no-subprotocol handshake) behind `AcpTransport`
- * (issue #20). The WebSocket's lifecycle belongs to the SDK stream — close
- * and error are observed through the stream's `closed` promises, without
- * stealing reads from the connection that consumes it.
+ * (issue #20).
+ *
+ * Closure observation (the #20 review's fail-fast check found this the hard
+ * way): the SDK stream's `readable` is a bare WHATWG ReadableStream, which has
+ * no `closed` property — only readers do, and stealing a reader would starve
+ * the SDK's own consumption. The genuinely observable signals are the
+ * underlying WebSocket's `close`/`error` events, so the transport injects an
+ * instrumented constructor and observes the socket directly.
  */
 export class WebSocketTransport implements AcpTransport {
   private readonly url: string;
-  private stream: Stream | null = null;
+  private stream: ReturnType<typeof createBrowserWebSocketStream> | null = null;
   /** One instance, one connection attempt — EVER, including failed ones. */
   private connected = false;
   /** First settlement wins: one close-or-error event per connection. */
@@ -33,9 +39,10 @@ export class WebSocketTransport implements AcpTransport {
     // Async is the seam, not the work: the SDK builds the stream synchronously
     // (an invalid URL throws here and rejects this promise — the client
     // reports it as a connect failure); future transports genuinely await.
-    const stream = createBrowserWebSocketStream(this.url);
+    const stream = createBrowserWebSocketStream(this.url, {
+      WebSocket: this.observedWebSocketConstructor(),
+    });
     this.stream = stream;
-    this.observe(stream);
     return stream;
   }
 
@@ -43,7 +50,7 @@ export class WebSocketTransport implements AcpTransport {
     // The SDK connection usually tore the streams down already (its close()
     // owns the socket); cancelling here is the safety net for owners that
     // skipped it. Rejections mean "already closed" — the closure itself is
-    // observed via onClose, never swallowed silently.
+    // observed via the socket's close event, never swallowed silently.
     const stream = this.stream;
     this.stream = null;
     void stream?.readable.cancel().catch(() => {});
@@ -60,39 +67,62 @@ export class WebSocketTransport implements AcpTransport {
     return () => this.errorHandlers.delete(handler);
   }
 
-  /** Wires the stream's settlement promises to the close/error handlers. */
-  private observe(stream: Stream): void {
-    // `closed` is a standard web-streams property the runtime exposes, but
-    // TS 7's DOM lib types Readable/WritableStream without it — read it
-    // structurally instead of pinning the project to a lib workaround.
-    const settled = (side: object, name: string): Promise<unknown> => {
-      const closed = (side as { closed?: Promise<unknown> }).closed;
-      // Fail fast, never invent a phantom close: without a `closed` promise
-      // this transport cannot honor its close/error contract at all.
-      if (!closed) {
-        throw new Error(`[panda/acp] transport stream ${name} has no closed promise — closure not observable`);
+  /**
+   * A constructor the SDK instantiates instead of the native WebSocket; every
+   * instance it builds is wired straight into this transport's settlement.
+   * A function-returning-object under `new` (instead of a subclass) so the
+   * native WebSocket is only touched when a connect actually runs.
+   */
+  private observedWebSocketConstructor(): WebSocketConstructor {
+    const settle = this.settle.bind(this);
+    return function ObservedWebSocket(
+      this: unknown,
+      url: string | URL,
+      protocols?: string | string[],
+      _options?: { headers?: Record<string, string> },
+    ) {
+      const NativeWebSocket = globalThis.WebSocket;
+      if (typeof NativeWebSocket !== 'function') {
+        // Same failure the SDK itself would raise a moment later; reported
+        // here so the transport's own contract fails under its own name.
+        throw new Error('[panda/acp] WebSocketTransport requires globalThis.WebSocket');
       }
-      return closed;
-    };
-    const settle = (err: unknown) => {
-      if (this.settled) return;
-      this.settled = true;
-      if (err === undefined) {
-        for (const handler of this.closeHandlers) handler();
-      } else {
-        const error = toError(err);
-        for (const handler of this.errorHandlers) handler(error);
-      }
-    };
-    settled(stream.readable, 'readable').then(
-      () => settle(undefined),
-      (err: unknown) => settle(err),
-    );
-    settled(stream.writable, 'writable').then(
-      () => settle(undefined),
-      (err: unknown) => settle(err),
-    );
+      // Browser WebSockets cannot carry custom headers (the SDK documents
+      // them as Node-only), so only url/protocols are forwarded natively.
+      const socket = new NativeWebSocket(url, protocols);
+      observeSocket(socket, settle);
+      return socket;
+    } as unknown as WebSocketConstructor;
   }
+
+  /** Routes the socket's first close/error event to the registered handlers. */
+  private settle(err: unknown): void {
+    if (this.settled) return;
+    this.settled = true;
+    if (err === undefined) {
+      for (const handler of this.closeHandlers) handler();
+    } else {
+      const error = toError(err);
+      for (const handler of this.errorHandlers) handler(error);
+    }
+  }
+}
+
+type ObservableSocket = {
+  addEventListener?: (type: string, listener: (event: unknown) => void) => void;
+};
+
+/** Attaches the transport's settlement to one socket's lifecycle events. */
+function observeSocket(socket: ObservableSocket, settle: (err?: unknown) => void): void {
+  if (typeof socket.addEventListener !== 'function') {
+    // Not silent, but not fatal: the SDK connection layer observes closure
+    // through its own stream consumption; the transport's handlers are the
+    // supplementary signal and only this transport loses them.
+    console.warn('[panda/acp] transport socket has no addEventListener — close/error handlers inert for this connection');
+    return;
+  }
+  socket.addEventListener('close', () => settle(undefined));
+  socket.addEventListener('error', (event) => settle(event));
 }
 
 /**

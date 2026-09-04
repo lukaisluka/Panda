@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import { applyUpdate, emptySession } from './protocol/reducer';
 import type {
   AcpSessionUpdate,
@@ -55,6 +56,13 @@ export type AgentCapabilityInfo = {
 
 export type SessionMode = 'demo' | 'live';
 
+/**
+ * The demo replay's pseudo-connection slot (issue #21): defined here so the
+ * sidebar's ordering selector can exclude it without importing the driver —
+ * the replay slot is not an agent connection and never renders as a group.
+ */
+export const DEMO_CONNECTION_ID = 'demo';
+
 /** Everything one agent connection owns. Documents are keyed by sessionId. */
 export type ConnectionState = {
   connection: ConnectionInfo;
@@ -72,6 +80,21 @@ export type ConnectionState = {
    * session (a retry) would be indistinguishable by sessionId alone.
    */
   switching: { sessionId: string; selectionToken: number } | null;
+  /**
+   * Unread signal (issue #21): a running turn settled while this connection
+   * was in the background. Cleared when the connection becomes the foreground
+   * one — "看过" means it was foregrounded, not that the transcript was read.
+   * One of the three sources of the aggregated 需要关注 indicator; the other
+   * two (pending permissions, connection error) are derived from the document
+   * and `connection.status` so the document stays their single source.
+   */
+  unreadCompletion: boolean;
+  /**
+   * Last turn activity (issue #21): bumped on status transitions and session
+   * adoption. Drives sidebar ordering — the foreground connection is pinned,
+   * the rest sort by recency, so the timestamp never needs to be exact.
+   */
+  lastActivityAt: number | null;
 };
 
 /**
@@ -132,6 +155,14 @@ interface PandaState {
   ensureConnection(connectionId: string): void;
   /** Drops a slot entirely; clears the pointers if it was active. */
   closeConnection(connectionId: string): void;
+  /**
+   * Foregrounds a connection (issue #21): points the UI at the connection
+   * and — unless a session is given explicitly — at its settled session, and
+   * clears the unread signal (foregrounding is "看过"). Unlike
+   * `ensureConnection` this is a UI action, not driver plumbing, so it moves
+   * both pointers at once and fails loudly on an unknown id.
+   */
+  setActiveConnection(connectionId: string, sessionId?: string): void;
 }
 
 const initialConnection: ConnectionInfo = {
@@ -159,6 +190,8 @@ export function emptyConnectionState(): ConnectionState {
     sessions: [],
     docs: {},
     switching: null,
+    unreadCompletion: false,
+    lastActivityAt: null,
   };
 }
 
@@ -205,6 +238,26 @@ export const usePanda = create<PandaState>((set) => ({
         ...(s.activeConnectionId === connectionId
           ? { activeConnectionId: null, activeSessionId: null }
           : {}),
+      };
+    }),
+  setActiveConnection: (connectionId, sessionId) =>
+    set((s) => {
+      const existing = s.connections[connectionId];
+      if (!existing) {
+        console.warn(`[store] setActiveConnection for unknown connection "${connectionId}" — ignored`);
+        return {};
+      }
+      // The foreground connection's settled session becomes the UI session;
+      // an explicit sessionId only makes sense for retained-document viewing
+      // (a disconnected slot's history) — live switches move the pointer via
+      // their own transactional commit, never through this action.
+      return {
+        activeConnectionId: connectionId,
+        activeSessionId: sessionId ?? existing.connection.sessionId ?? null,
+        connections: {
+          ...s.connections,
+          [connectionId]: { ...existing, unreadCompletion: false },
+        },
       };
     }),
 }));
@@ -314,6 +367,7 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
           return {
             docs: { ...state.docs, [sessionId]: state.docs[sessionId] ?? emptySession() },
             connection: { ...state.connection, sessionId },
+            lastActivityAt: Date.now(),
             sessions: upsertEntries(state.sessions, [
               {
                 sessionId,
@@ -338,8 +392,31 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
       patchDoc((doc) => applyUpdate(doc, update));
     },
     setStatus: (status) => {
-      if (!requireSession('status')) return;
-      patchDoc((doc) => ({ ...doc, status }));
+      // Same narrowing shape as patchDoc: the null check must live in this
+      // function body for TS to carry it into the setState closure below.
+      if (currentSessionId === null) {
+        console.warn(`[store] connection "${connectionId}" status before adopting a session — dropped`);
+        return;
+      }
+      const sessionId = currentSessionId;
+      usePanda.setState((s) => {
+        const patched = patchConnectionState(s, connectionId, (state) => {
+          const prevStatus = state.docs[sessionId]?.status ?? 'idle';
+          // Unread signal (issue #21): a running turn settled while this
+          // connection was backgrounded (which includes "no foreground at
+          // all"). A turn KILLED by a disconnect also lands idle here — the
+          // connection's error status signals attention anyway, and the extra
+          // unread flag clears on the same foregrounding.
+          const completedInBackground =
+            s.activeConnectionId !== connectionId && prevStatus === 'running' && status === 'idle';
+          return {
+            docs: { ...state.docs, [sessionId]: { ...(state.docs[sessionId] ?? EMPTY_DOC), status } },
+            lastActivityAt: Date.now(),
+            ...(completedInBackground ? { unreadCompletion: true } : {}),
+          };
+        });
+        return patched ?? {};
+      });
     },
     setConnection: (patch) =>
       patchSlot((state) => ({ connection: { ...state.connection, ...patch } })),
@@ -538,7 +615,8 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
 export const EMPTY_DOC: SessionDocument = emptySession();
 
 // ---------------------------------------------------------------------------
-// UI selectors (single-connection mode: the active connection is the only one)
+// UI selectors (the active connection is the foreground one; #21 keeps the
+// useActive* family bound to it while the sidebar reads every slot)
 // ---------------------------------------------------------------------------
 
 const EMPTY_CONNECTION_STATE = emptyConnectionState();
@@ -565,3 +643,63 @@ export const useActiveCapabilities = () => usePanda((s) => activeConnectionState
 
 /** The in-flight transactional switch on the active connection, or null. */
 export const useActiveSwitching = () => usePanda((s) => activeConnectionState(s).switching);
+
+// -- sidebar grouping + indicators (issue #21) -------------------------------
+
+/**
+ * Sidebar group order (issue #21): the foreground connection first, the rest
+ * by most recent turn activity, never-active slots last; the demo replay
+ * pseudo-slot is not a group. Stable by id so ties don't reshuffle.
+ */
+export function orderedConnectionIds(s: {
+  connections: Record<string, ConnectionState>;
+  activeConnectionId: string | null;
+}): string[] {
+  return Object.keys(s.connections)
+    .filter((id) => id !== DEMO_CONNECTION_ID)
+    .sort((a, b) => {
+      if (a === s.activeConnectionId) return -1;
+      if (b === s.activeConnectionId) return 1;
+      const at = s.connections[a]?.lastActivityAt ?? null;
+      const bt = s.connections[b]?.lastActivityAt ?? null;
+      if (at !== null && bt === null) return -1;
+      if (at === null && bt !== null) return 1;
+      if (at !== null && bt !== null && at !== bt) return bt - at;
+      return a.localeCompare(b);
+    });
+}
+
+/**
+ * The ordered group ids as a hook. useShallow keeps the string array's
+ * identity stable while the underlying slots churn (every streamed chunk
+ * replaces a ConnectionState) — the sidebar only re-renders when the group
+ * membership or order actually changes.
+ */
+export const useConnectionOrder = () => usePanda(useShallow(orderedConnectionIds));
+
+/** True while any of the connection's documents is mid-turn (每连接单 pending turn). */
+export function isConnectionRunning(slot: ConnectionState): boolean {
+  return Object.values(slot.docs).some((doc) => doc.status === 'running');
+}
+
+/** 连接级 busy: a transactional session switch or a running turn — the
+ * states in which session switching/creating is refused. */
+export function isConnectionBusy(slot: ConnectionState): boolean {
+  return slot.switching !== null || isConnectionRunning(slot);
+}
+
+/** True while any of the connection's documents has a pending permission. */
+export function hasPendingPermission(slot: ConnectionState): boolean {
+  return Object.values(slot.docs).some((doc) =>
+    Object.values(doc.permissions).some((permission) => permission.status === 'pending'),
+  );
+}
+
+/**
+ * Aggregated 需要关注 (issue #21): unread completion | pending permission |
+ * connection error — any source lights the dot. Derived, not stored: the
+ * document and `connection.status` stay the single sources of truth.
+ */
+export function needsAttention(slot: ConnectionState): boolean {
+  return slot.unreadCompletion || slot.connection.status === 'error' || hasPendingPermission(slot);
+}

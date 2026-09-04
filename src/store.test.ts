@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { connectionStorePort, usePanda, type SessionEntry } from './store';
+import {
+  DEMO_CONNECTION_ID,
+  connectionStorePort,
+  hasPendingPermission,
+  isConnectionRunning,
+  needsAttention,
+  orderedConnectionIds,
+  usePanda,
+  type SessionEntry,
+} from './store';
 
 /** Fresh store per test — connection slots are global singletons otherwise. */
 beforeEach(() => {
@@ -349,5 +358,137 @@ describe('selection generation (issue #19)', () => {
     expect(state.connections['live']!.switching).toBeNull();
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('superseded'));
     warnSpy.mockRestore();
+  });
+});
+
+describe('multi-connection foreground (issue #21)', () => {
+  it('setActiveConnection moves both pointers to the target connection', () => {
+    usePanda.getState().ensureConnection('a');
+    connectionStorePort('a').adoptSession('s-a', '/a');
+    usePanda.getState().ensureConnection('b');
+    connectionStorePort('b').adoptSession('s-b', '/b');
+
+    usePanda.getState().setActiveConnection('a');
+
+    const state = usePanda.getState();
+    expect(state.activeConnectionId).toBe('a');
+    expect(state.activeSessionId).toBe('s-a'); // the target's settled session
+  });
+
+  it('setActiveConnection can point the UI at a specific retained document', () => {
+    usePanda.getState().ensureConnection('b');
+    const port = connectionStorePort('b');
+    port.adoptSession('s-b1', '/b');
+    port.adoptSession('s-b2', '/b'); // both documents retained
+
+    usePanda.getState().setActiveConnection('b', 's-b1');
+
+    expect(usePanda.getState().activeSessionId).toBe('s-b1');
+    expect(usePanda.getState().connections['b']!.connection.sessionId).toBe('s-b2'); // settled pointer untouched
+  });
+
+  it('setActiveConnection warns loudly on an unknown id', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    usePanda.getState().setActiveConnection('ghost');
+    expect(usePanda.getState().activeConnectionId).toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('unknown connection "ghost"'));
+    warnSpy.mockRestore();
+  });
+
+  it('a turn settling in the background marks unread; foregrounding clears it', () => {
+    usePanda.getState().ensureConnection('a');
+    usePanda.getState().ensureConnection('b');
+    const b = connectionStorePort('b');
+    b.adoptSession('s-b', '/b');
+    expect(usePanda.getState().activeConnectionId).toBe('b');
+
+    // 'a' becomes the foreground; 'b' runs a turn in the background.
+    usePanda.getState().setActiveConnection('a');
+    b.setStatus('running');
+    b.setStatus('idle');
+
+    expect(usePanda.getState().connections['b']!.unreadCompletion).toBe(true);
+    expect(needsAttention(usePanda.getState().connections['b']!)).toBe(true);
+
+    usePanda.getState().setActiveConnection('b');
+    expect(usePanda.getState().connections['b']!.unreadCompletion).toBe(false);
+  });
+
+  it('a turn settling in the foreground never marks unread', () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+    port.setStatus('running');
+    port.setStatus('idle');
+    expect(usePanda.getState().connections['live']!.unreadCompletion).toBe(false);
+  });
+
+  it('unread also fires with no foreground connection at all', () => {
+    // The foreground slot was removed while a background one was running.
+    usePanda.getState().ensureConnection('fg');
+    usePanda.getState().ensureConnection('bg');
+    const bg = connectionStorePort('bg');
+    bg.adoptSession('s-bg', '/bg');
+    usePanda.getState().setActiveConnection('fg'); // bg is background
+    usePanda.getState().closeConnection('fg'); // foreground removed — none left
+    expect(usePanda.getState().activeConnectionId).toBeNull();
+
+    bg.setStatus('running');
+    bg.setStatus('idle');
+    expect(usePanda.getState().connections['bg']!.unreadCompletion).toBe(true);
+  });
+
+  it('orderedConnectionIds: foreground first, then recent activity, demo excluded', () => {
+    vi.useFakeTimers();
+    try {
+      usePanda.getState().ensureConnection('idle-old');
+      usePanda.getState().ensureConnection('recent');
+      usePanda.getState().ensureConnection('never');
+      usePanda.getState().ensureConnection(DEMO_CONNECTION_ID);
+      connectionStorePort('idle-old').adoptSession('s', '/x'); // older activity
+      vi.advanceTimersByTime(50);
+      connectionStorePort('recent').adoptSession('s', '/x'); // newer activity
+
+      usePanda.getState().setActiveConnection('never');
+
+      expect(orderedConnectionIds(usePanda.getState())).toEqual(['never', 'recent', 'idle-old']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('indicator derivations: running and pending permissions light attention', () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+    expect(isConnectionRunning(usePanda.getState().connections['live']!)).toBe(false);
+
+    port.setStatus('running');
+    expect(isConnectionRunning(usePanda.getState().connections['live']!)).toBe(true);
+
+    port.update({
+      sessionUpdate: 'permission_requested',
+      request: {
+        toolCallId: 't-1',
+        title: 'Edit file',
+        options: [{ id: 'o-1', name: 'Allow once', kind: 'allow_once' }],
+      },
+    });
+    port.setStatus('requires_action');
+    const slot = usePanda.getState().connections['live']!;
+    expect(hasPendingPermission(slot)).toBe(true);
+    expect(needsAttention(slot)).toBe(true);
+
+    port.setStatus('idle'); // foreground — no unread from this settle
+    expect(needsAttention(usePanda.getState().connections['live']!)).toBe(true); // permission still pending
+  });
+
+  it('a connection error lights attention until it clears', () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.setConnection({ status: 'error', error: '连接失败: boom' });
+    expect(needsAttention(usePanda.getState().connections['live']!)).toBe(true);
+    port.setConnection({ status: 'connected', error: null });
+    expect(needsAttention(usePanda.getState().connections['live']!)).toBe(false);
   });
 });

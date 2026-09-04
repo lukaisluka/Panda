@@ -1,43 +1,81 @@
-import { Bot, MessagesSquare, Plus, Trash2, X } from 'lucide-react';
-import type {
-  AgentCapabilityInfo,
-  ConnectionInfo,
-  SessionEntry,
-  SessionMode,
+import { useEffect, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import {
+  Bot,
+  Loader2,
+  MessagesSquare,
+  Plus,
+  PlugZap,
+  Trash2,
+  Unplug,
+  X,
+} from 'lucide-react';
+import {
+  isConnectionBusy,
+  isConnectionRunning,
+  needsAttention,
+  useConnectionOrder,
+  usePanda,
+  type ConnectionStatus,
+  type SessionMode,
 } from '../store';
 import type { AgentProfile } from '../profiles';
-import type { ConnectOptions } from '../useLiveSession';
-import { ConnectPanel } from './ConnectPanel';
+import { loadProfiles, saveProfiles, subscribeProfiles } from '../profiles';
+import { ConnectPanel, type FormPrefill } from './ConnectPanel';
+import type { LiveSessionFacade } from '../useLiveSession';
 
 const basename = (cwd: string) => cwd.split('/').filter(Boolean).at(-1) ?? cwd;
 
-export function Sidebar({ mode, connection, capabilities, sessions, busy, onConnect, onSelectProfile, onDisconnect, onNewSession, onLoadSession, onDeleteSession, onReplayDemo, mobileOpen, onMobileClose }: {
+/**
+ * Grouped sidebar (issue #21, ADR 0002): every connection slot is a group
+ * with its own sessions beneath — 前台连接置顶, 其余按最近活动. Unslotted
+ * Agent 配置 render as dormant rows (click = 预览, hover = 连接). Each group
+ * row subscribes narrowly to its own slot so a streaming connection only
+ * re-renders its own group, not the whole sidebar.
+ */
+export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }: {
   mode: SessionMode;
-  connection: ConnectionInfo;
-  capabilities: AgentCapabilityInfo;
-  sessions: SessionEntry[];
-  /** A turn or a session switch in flight — mid-switch mutations would interleave with the transaction. */
-  busy: boolean;
-  onConnect(url: string, cwd: string, opts?: ConnectOptions): void;
-  onSelectProfile(profile: AgentProfile): void;
-  onDisconnect(): void;
-  onNewSession(cwd: string): void;
-  onLoadSession(sessionId: string, cwd: string): void;
-  onDeleteSession(sessionId: string): void;
+  live: LiveSessionFacade;
   onReplayDemo(): void;
   mobileOpen: boolean;
   onMobileClose(): void;
 }) {
-  const live = mode === 'live';
-  const activeId = live ? connection.sessionId : null;
-  const connected = connection.status === 'connected';
-  const canSwitch = capabilities.loadSession && !busy;
+  const [prefill, setPrefill] = useState<FormPrefill | null>(null);
+  const orderedIds = useConnectionOrder();
+  // Slotted profile ids — the profiles without a slot render as dormant rows.
+  const slottedIds = usePanda(useShallow((s) => Object.keys(s.connections)));
+  const [profiles, setProfiles] = useState<AgentProfile[]>(() => loadProfiles());
+  // The connection manager also writes profiles (connect-time url/cwd
+  // write-back) — storage is the single source, the subscription keeps this
+  // copy from diverging.
+  useEffect(() => subscribeProfiles(setProfiles), []);
 
-  const ordered = [...sessions].sort((a, b) => {
-    if (a.sessionId === activeId) return -1;
-    if (b.sessionId === activeId) return 1;
-    return (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '');
+  const liveMode = mode === 'live';
+  const activeConnectionId = usePanda((s) => s.activeConnectionId);
+  const foregroundCwd = usePanda((s) =>
+    s.activeConnectionId ? s.connections[s.activeConnectionId]?.connection.cwd ?? null : null,
+  );
+  const foregroundConnected = usePanda(
+    (s) => (s.activeConnectionId ? s.connections[s.activeConnectionId]?.connection.status : undefined) === 'connected',
+  );
+  const foregroundBusy = usePanda((s) => {
+    const slot = s.activeConnectionId ? s.connections[s.activeConnectionId] : undefined;
+    return !!slot && isConnectionBusy(slot);
   });
+  const footerAgent = usePanda((s) =>
+    s.mode === 'live'
+      ? s.connections[s.activeConnectionId ?? '']?.connection.agentName ?? null
+      : null,
+  );
+
+  const dormantProfiles = profiles.filter((profile) => !slottedIds.includes(profile.id));
+
+  const previewProfile = (profile: AgentProfile) => {
+    // Live mode: the manager seeds a disconnected slot with the endpoint's
+    // remembered sessions and foregrounds it; demo mode only prefills.
+    live.previewProfile(profile);
+    setPrefill({ url: profile.url, cwd: profile.cwd, nonce: Date.now() });
+  };
 
   return (
     <aside
@@ -64,16 +102,16 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
         </span>
         <button
           onClick={() => {
-            onNewSession(connection.cwd!);
+            if (foregroundCwd) live.newSession(foregroundCwd);
             onMobileClose();
           }}
-          disabled={!live || !connected || !connection.cwd || busy}
+          disabled={!liveMode || !foregroundConnected || !foregroundCwd || foregroundBusy}
           className="flex h-5 w-5 items-center justify-center rounded text-faint transition-colors enabled:hover:bg-raised enabled:hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
           aria-label="新建会话"
           title={
-            live && connected && connection.cwd && !busy
-              ? '新建会话（session/new）'
-              : busy
+            liveMode && foregroundConnected && foregroundCwd && !foregroundBusy
+              ? '在前台连接新建会话（session/new）'
+              : foregroundBusy
                 ? '等待当前回合或切换完成'
                 : '连接 agent 后可新建会话'
           }
@@ -82,72 +120,51 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
         </button>
       </div>
       <div className="px-3">
-        {!live ? (
-          <div className="flex items-center gap-2 rounded-lg bg-raised px-3 py-2.5 text-[13px] text-fg/90">
+        {!liveMode && (
+          <div className="mb-1 flex items-center gap-2 rounded-lg bg-raised px-3 py-2.5 text-[13px] text-fg/90">
             <MessagesSquare size={13} className="shrink-0 text-faint" />
             <span className="truncate">重构 auth 校验</span>
           </div>
-        ) : (
-          <div className="space-y-0.5">
-            {ordered.length === 0 && (
-              <div className="px-3 py-2 text-xs text-faint">暂无已知会话</div>
-            )}
-            {ordered.map((entry) => {
-              const isActive = entry.sessionId === activeId;
-              const label =
-                entry.title ?? `${basename(entry.cwd)} · ${entry.sessionId.slice(-6)}`;
-              return (
-                <div key={entry.sessionId} className="group relative">
-                  <button
-                    disabled={isActive || !canSwitch}
-                    onClick={() => {
-                      onLoadSession(entry.sessionId, entry.cwd);
-                      onMobileClose();
-                    }}
-                    title={
-                      isActive
-                        ? undefined
-                        : !canSwitch && busy
-                          ? '等待当前回合或切换完成'
-                          : canSwitch
-                            ? entry.cwd
-                            : 'agent 不支持历史回放（session/load）'
-                    }
-                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] ${
-                      isActive
-                        ? 'bg-raised text-fg/90'
-                        : canSwitch
-                          ? 'text-fg/70 transition-colors hover:bg-raised/60 hover:text-fg/90'
-                          : 'cursor-not-allowed text-fg/40'
-                    }`}
-                  >
-                    <MessagesSquare size={13} className="shrink-0 text-faint" />
-                    <span className="truncate">{label}</span>
-                  </button>
-                  {capabilities.delete && connected && !isActive && !busy && (
-                    <button
-                      onClick={() => onDeleteSession(entry.sessionId)}
-                      className="absolute right-1.5 top-1/2 hidden h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-faint transition-colors hover:text-danger group-hover:flex"
-                      aria-label="删除会话"
-                      title="删除会话（session/delete）"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
         )}
+        <div className="space-y-1">
+          {orderedIds.map((connectionId) => (
+            <ConnectionGroupRow
+              key={connectionId}
+              connectionId={connectionId}
+              profile={profiles.find((entry) => entry.id === connectionId) ?? null}
+              isActiveConnection={connectionId === activeConnectionId}
+              live={live}
+              onMobileClose={onMobileClose}
+            />
+          ))}
+          {dormantProfiles.map((profile) => (
+            <DormantProfileRow
+              key={profile.id}
+              profile={profile}
+              live={live}
+              onPreview={previewProfile}
+              onDelete={() => {
+                // Sessions are keyed by endpoint, not by profile — they survive this.
+                const next = profiles.filter((entry) => entry.id !== profile.id);
+                saveProfiles(next);
+                setProfiles(next);
+              }}
+              onMobileClose={onMobileClose}
+            />
+          ))}
+          {liveMode && orderedIds.length === 0 && dormantProfiles.length === 0 && (
+            <div className="px-3 py-2 text-xs text-faint">暂无连接或配置 — 在下方连接 ACP 服务</div>
+          )}
+        </div>
       </div>
 
       <div className="mt-auto">
         <ConnectPanel
-          connection={connection}
           mode={mode}
-          onConnect={onConnect}
-          onSelectProfile={onSelectProfile}
-          onDisconnect={onDisconnect}
+          profiles={profiles}
+          onProfilesChange={setProfiles}
+          prefill={prefill}
+          live={live}
           onReplayDemo={() => {
             onReplayDemo();
             onMobileClose();
@@ -156,14 +173,223 @@ export function Sidebar({ mode, connection, capabilities, sessions, busy, onConn
         <div className="flex items-center gap-2 border-t border-border px-5 py-3.5 text-xs text-muted">
           <Bot size={14} className="shrink-0 text-accent" />
           <span className="truncate">
-            {live
-              ? connection.agentName
-                ? `${connection.agentName} · live`
+            {liveMode
+              ? footerAgent
+                ? `${footerAgent} · live`
                 : 'acp · live'
               : 'claude-code · replay'}
           </span>
         </div>
       </div>
     </aside>
+  );
+}
+
+/** Status dot + spinner per connection status; running overlays a pulse. */
+function StatusDot({ status, running }: { status: ConnectionStatus; running: boolean }) {
+  if (status === 'connecting') {
+    return <Loader2 size={12} className="shrink-0 animate-spin text-accent" />;
+  }
+  const color =
+    status === 'connected'
+      ? running
+        ? 'bg-accent animate-pulse'
+        : 'bg-accent/70'
+      : status === 'error'
+        ? 'bg-danger'
+        : 'bg-faint';
+  return <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${color}`} />;
+}
+
+/** One connection's group: header (status, indicators, hover actions) + sessions. */
+function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, onMobileClose }: {
+  connectionId: string;
+  profile: AgentProfile | null;
+  isActiveConnection: boolean;
+  live: LiveSessionFacade;
+  onMobileClose(): void;
+}) {
+  // Whole-slot subscription: only THIS group re-renders when it streams.
+  const slot = usePanda((s) => s.connections[connectionId]);
+  const activeSessionId = usePanda((s) => s.activeSessionId);
+  if (!slot) return null;
+
+  const status = slot.connection.status;
+  const connected = status === 'connected';
+  const running = isConnectionRunning(slot);
+  const busy = isConnectionBusy(slot);
+  const attention = needsAttention(slot);
+  const title = profile?.name ?? slot.connection.url ?? connectionId;
+  const isForegroundSession = (sessionId: string) => isActiveConnection && sessionId === activeSessionId;
+
+  const ordered = [...slot.sessions].sort((a, b) => {
+    if (isForegroundSession(a.sessionId)) return -1;
+    if (isForegroundSession(b.sessionId)) return 1;
+    return (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '');
+  });
+
+  return (
+    <div className={`rounded-lg ${isActiveConnection ? 'bg-raised/40' : ''}`}>
+      <div className="group relative">
+        <button
+          type="button"
+          onClick={() => {
+            live.foreground(connectionId);
+            onMobileClose();
+          }}
+          title={slot.connection.url ?? title}
+          className={`flex w-full items-center gap-1.5 rounded-lg px-3 py-2 text-left text-[13px] transition-colors ${
+            isActiveConnection ? 'text-fg' : 'text-fg/70 hover:bg-raised/60 hover:text-fg/90'
+          } ${connected ? '' : 'opacity-75'}`}
+        >
+          <StatusDot status={status} running={running} />
+          <span className="truncate font-medium">{title}</span>
+          {slot.connection.agentName && (
+            <span className="truncate text-[11px] text-faint">{slot.connection.agentName}</span>
+          )}
+          <span className="ml-auto flex shrink-0 items-center gap-1 pr-0.5">
+            {/* 需要关注 is a *background* connection indicator (CONTEXT.md):
+                the foreground slot's issues are in plain sight (permission
+                card, error text in the connect panel). */}
+            {attention && !isActiveConnection && (
+              <span
+                className="h-1.5 w-1.5 rounded-full bg-danger"
+                title="需要关注：未读完成 / 权限待处理 / 连接错误"
+              />
+            )}
+          </span>
+        </button>
+        <div className="absolute right-1 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 group-hover:flex">
+          {(connected || status === 'connecting') && (
+            <button
+              type="button"
+              onClick={() => live.disconnect(connectionId)}
+              className="flex h-6 w-6 items-center justify-center rounded text-faint transition-colors hover:text-fg"
+              aria-label="断开连接"
+              title="断开（保留会话槽，可重连）"
+            >
+              <Unplug size={12} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              const label = profile?.name ?? slot.connection.url ?? connectionId;
+              if (window.confirm(`移除连接「${label}」？其本地会话记录将被清除（按端点记忆的会话列表保留）。`)) {
+                live.remove(connectionId);
+              }
+            }}
+            className="flex h-6 w-6 items-center justify-center rounded text-faint transition-colors hover:text-danger"
+            aria-label="移除连接"
+            title="移除（断开并清除该连接的本地会话文档）"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+      </div>
+      {ordered.length > 0 && (
+        <div className="space-y-0.5 pb-1 pl-2">
+          {ordered.map((entry) => {
+            const foregroundSession = isForegroundSession(entry.sessionId);
+            // Offline slots keep retained documents clickable (查看历史);
+            // sessions never loaded locally stay inert until connected.
+            const hasDoc = slot.docs[entry.sessionId] !== undefined;
+            const canSwitch = connected ? slot.capabilities.loadSession && !busy : hasDoc;
+            const label = entry.title ?? `${basename(entry.cwd)} · ${entry.sessionId.slice(-6)}`;
+            return (
+              <div key={entry.sessionId} className="group/s relative">
+                <button
+                  disabled={foregroundSession || !canSwitch}
+                  onClick={() => {
+                    live.openSession(connectionId, entry.sessionId, entry.cwd);
+                    onMobileClose();
+                  }}
+                  title={
+                    foregroundSession
+                      ? undefined
+                      : !canSwitch && connected && busy
+                        ? '等待当前回合或切换完成'
+                        : !connected && !hasDoc
+                          ? '连接后可查看/切换该会话'
+                          : connected && !slot.capabilities.loadSession
+                            ? 'agent 不支持历史回放（session/load）'
+                            : entry.cwd
+                  }
+                  className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[12.5px] ${
+                    foregroundSession
+                      ? 'bg-raised text-fg/90'
+                      : canSwitch
+                        ? 'text-fg/60 transition-colors hover:bg-raised/60 hover:text-fg/90'
+                        : 'cursor-not-allowed text-fg/35'
+                  }`}
+                >
+                  <MessagesSquare size={12} className="shrink-0 text-faint" />
+                  <span className="truncate">{label}</span>
+                </button>
+                {slot.capabilities.delete && connected && !foregroundSession && !busy && (
+                  <button
+                    onClick={() => live.deleteSession(connectionId, entry.sessionId)}
+                    className="absolute right-1.5 top-1/2 hidden h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-faint transition-colors hover:text-danger group-hover/s:flex"
+                    aria-label="删除会话"
+                    title="删除会话（session/delete）"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** An Agent 配置 without a connection slot: click = 预览, hover = 连接/删除. */
+function DormantProfileRow({ profile, live, onPreview, onDelete, onMobileClose }: {
+  profile: AgentProfile;
+  live: LiveSessionFacade;
+  onPreview(profile: AgentProfile): void;
+  onDelete(): void;
+  onMobileClose(): void;
+}) {
+  return (
+    <div className="group relative">
+      <button
+        type="button"
+        onClick={() => {
+          onPreview(profile);
+          onMobileClose();
+        }}
+        title={`${profile.url} · ${profile.cwd}`}
+        className="flex w-full items-center gap-1.5 rounded-lg px-3 py-2 text-left text-[13px] text-fg/50 transition-colors hover:bg-raised/60 hover:text-fg/80"
+      >
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-faint" />
+        <span className="truncate">{profile.name}</span>
+      </button>
+      <div className="absolute right-1 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 group-hover:flex">
+        <button
+          type="button"
+          onClick={() => {
+            live.connectProfile(profile);
+            onMobileClose();
+          }}
+          className="flex h-6 w-6 items-center justify-center rounded text-faint transition-colors hover:text-accent"
+          aria-label="连接此配置"
+          title={`连接 ${profile.name}（${profile.url}）`}
+        >
+          <PlugZap size={12} />
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="flex h-6 w-6 items-center justify-center rounded text-faint transition-colors hover:text-danger"
+          aria-label="删除配置"
+          title="删除这条配置（不影响该端点已记忆的会话）"
+        >
+          <Trash2 size={12} />
+        </button>
+      </div>
+    </div>
   );
 }

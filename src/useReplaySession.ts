@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { connectionStorePort, usePanda, type ConnectionStorePort } from './store';
+import { DEMO_CONNECTION_ID, connectionStorePort, usePanda, type ConnectionStorePort } from './store';
 import { ReplayDriver } from './replay/ReplayDriver';
 import { followUpScenario, longScenario, mainScenario } from './replay/fixtures';
 import type { AcpContentBlock, PermissionOptionKind } from './protocol/types';
@@ -14,10 +14,11 @@ const demoScenario = () =>
  * Phase 0 session driver: wires the replay driver into the store exactly the
  * way the live ACP client is wired (handlers -> store actions). It owns the
  * session while `mode === 'demo'`; connecting to a real ACP service switches
- * the store to live mode and this driver stands down.
+ * the store to live mode and this driver stands down. Live connections keep
+ * running in the background while demo mode is active (issue #21: demo only
+ * switches what the UI renders, never touches a connection).
  */
 /** The demo pseudo-connection slot; its document dies with the slot, not with mode switches. */
-const DEMO_CONNECTION_ID = 'demo';
 const DEMO_SESSION_ID = 'demo';
 
 export function useReplaySession() {

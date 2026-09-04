@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionEntry } from './store';
-import { restoreEndpointSessions, type SessionStorage } from './useLiveSession';
+import { restoreEndpointSessions, type SessionStorage } from './liveConnections';
 
 class MemoryStorage implements SessionStorage {
   private readonly entries = new Map<string, string>();

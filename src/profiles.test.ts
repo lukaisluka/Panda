@@ -3,6 +3,7 @@ import {
   loadProfiles,
   newProfileId,
   saveProfiles,
+  subscribeProfiles,
   updateProfileFields,
   type AgentProfile,
   type ProfileStorage,
@@ -107,5 +108,24 @@ describe('updateProfileFields', () => {
     const a = profile();
     saveProfiles([a], storage);
     expect(updateProfileFields('missing', { url: 'ws://x/acp', cwd: '/x' }, storage)).toEqual([a]);
+  });
+});
+
+describe('subscribeProfiles', () => {
+  // Storage has two writers (sidebar CRUD + connect-time write-back); the
+  // subscription is what keeps UI copies from diverging (single source).
+  it('notifies with the stored list on every write and unsubscribes cleanly', () => {
+    const storage = new MemoryStorage();
+    const seen: AgentProfile[][] = [];
+    const unsubscribe = subscribeProfiles((profiles) => seen.push(profiles));
+
+    const a = profile();
+    saveProfiles([a], storage);
+    updateProfileFields(a.id, { url: 'ws://new:1/acp', cwd: '/new' }, storage);
+
+    unsubscribe();
+    saveProfiles([profile()], storage);
+
+    expect(seen).toEqual([[a], [{ ...a, url: 'ws://new:1/acp', cwd: '/new' }]]);
   });
 });
