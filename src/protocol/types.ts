@@ -63,7 +63,12 @@ export type AcpCost = { amount: number; currency: string };
 
 export type AcpToolCallContent =
   | { type: 'content'; content: AcpContentBlock }
-  | { type: 'diff'; path: string; oldText: string | null; newText: string };
+  | { type: 'diff'; path: string; oldText: string | null; newText: string }
+  /** Explicit fallback row for protocol content Panda cannot render
+   * (audio/resource/resource_link blocks, terminal tool content): the wire
+   * mapper emits these instead of dropping the block, so the stream shows
+   * "there is something here" rather than silently losing it. */
+  | { type: 'unsupported'; blockType: string };
 
 export type AcpSessionUpdate =
   | {
@@ -120,6 +125,9 @@ export type AcpSessionUpdate =
       status?: AcpToolCallStatus;
       content?: AcpToolCallContent[];
       locations?: AcpToolCallLocation[];
+      /** The tool's raw output object, when the agent reports it separately
+       * from content (protocol v1 ToolCallUpdate.rawOutput). */
+      rawOutput?: Record<string, unknown>;
       raw?: SessionNotification;
     }
   | { sessionUpdate: 'plan'; entries: AcpPlanEntry[]; raw?: SessionNotification }
@@ -199,6 +207,8 @@ export type ToolCallState = {
   kind: AcpToolKind;
   status: ToolCallStatus;
   rawInput?: Record<string, unknown>;
+  /** The tool's raw output object as last reported (protocol rawOutput). */
+  rawOutput?: Record<string, unknown>;
   content: AcpToolCallContent[];
   locations: AcpToolCallLocation[];
   /** Raw notifications folded into this tool call (create + updates), arrival order. */

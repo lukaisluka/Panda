@@ -206,11 +206,14 @@ describe('reducer raw notification ownership', () => {
         r2,
       ),
       { sessionUpdate: 'tool_call_update', toolCallId: 't-1', title: 'Read (renamed)' },
+      { sessionUpdate: 'tool_call_update', toolCallId: 't-1', rawOutput: { exitCode: 0 } },
     ]);
     const turn = doc.turns[0]!;
-    const call = (turn.blocks[1] as { call: { rawNotifications?: unknown[]; title: string } }).call;
+    const call = (turn.blocks[1] as { call: { rawNotifications?: unknown[]; title: string; rawOutput?: unknown } }).call;
     expect(call.rawNotifications).toEqual([r1, r2]);
     expect(call.title).toBe('Read (renamed)');
+    // rawOutput merges last-write-wins and survives later updates without it.
+    expect(call.rawOutput).toEqual({ exitCode: 0 });
   });
 
   it('leaves block shapes untouched when events carry no raw', () => {

@@ -152,3 +152,10 @@
   font-size: 14px;
   color: var(--color-faint);
 }
+
+/* Fallback row for protocol content Panda cannot render (audio, resource,
+ * terminal, …) — wire.ts maps those to explicit `unsupported` entries so the
+ * stream admits they exist instead of silently losing them. */
+.tool-unsupported {
+  color: var(--color-faint);
+}

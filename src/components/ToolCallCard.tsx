@@ -86,14 +86,21 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
     setOpen(call.status === 'in_progress');
   }, [call.status]);
 
-  const Icon = KIND_ICON[call.kind];
+  // Inbound notifications are not schema-validated, so `kind` may be a
+  // vendor/extension value outside the TS union (that's how switch_mode got
+  // here). Fall back to the Wrench instead of rendering undefined.
+  const Icon = KIND_ICON[call.kind] ?? Wrench;
   const path = call.locations[0]?.path;
   const diffPart = call.content.find((c): c is Extract<typeof c, { type: 'diff' }> => c.type === 'diff');
   const stats = useMemo(
     () => (diffPart ? diffStats(diffPart.oldText, diffPart.newText) : null),
     [diffPart],
   );
-  const hasDetails = (call.rawInput && Object.keys(call.rawInput).length > 0) || call.content.length > 0;
+  const hasRawOutput = !!call.rawOutput && Object.keys(call.rawOutput).length > 0;
+  const hasDetails =
+    (call.rawInput && Object.keys(call.rawInput).length > 0) ||
+    hasRawOutput ||
+    call.content.length > 0;
 
   return (
     <div
@@ -140,6 +147,16 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
               </pre>
             </details>
           )}
+          {hasRawOutput && (
+            <details className="tool-input-details" open>
+              <summary className="tool-input-summary">
+                Output
+              </summary>
+              <pre className="tool-input-pre">
+                {JSON.stringify(call.rawOutput, null, 2)}
+              </pre>
+            </details>
+          )}
           {call.content.map((item, i) => {
             if (item.type === 'diff') return <DiffView key={i} diff={item} />;
             if (item.type === 'content' && item.content.type === 'image') {
@@ -152,7 +169,14 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
                 </div>
               );
             }
-            return null;
+            if (item.type === 'unsupported') {
+              return (
+                <div key={i} className="tool-unsupported">
+                  未支持的内容块({item.blockType})
+                </div>
+              );
+            }
+            return <div key={i} className="tool-unsupported">未支持的内容块({String(item.type)})</div>;
           })}
           {call.status === 'in_progress' && call.content.length === 0 && (
             <div className="tool-waiting">

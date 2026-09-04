@@ -81,6 +81,7 @@ export function applyUpdate(
           status: update.status ?? existing.status,
           content: update.content ?? existing.content,
           locations: update.locations ?? existing.locations,
+          rawOutput: update.rawOutput ?? existing.rawOutput,
         },
         update.raw,
       );
