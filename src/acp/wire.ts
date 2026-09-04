@@ -1,9 +1,19 @@
 import type {
+  BooleanPropertySchema,
   ClientApp,
   ContentBlock,
+  CreateElicitationRequest,
+  ElicitationFormMode,
+  ElicitationUrlMode,
+  IntegerPropertySchema,
+  MultiSelectPropertySchema,
+  NumberPropertySchema,
   RequestPermissionRequest,
   SessionNotification,
   SessionUpdate,
+  StringMultiSelectItems,
+  StringPropertySchema,
+  TitledMultiSelectItems,
   ToolCall,
   ToolCallContent,
   ToolCallLocation,
@@ -12,10 +22,13 @@ import type {
 import {
   isSessionStateKind,
   type AcpContentBlock,
+  type AcpElicitationField,
+  type AcpElicitationOption,
   type AcpSessionModeState,
   type AcpSessionUpdate,
   type AcpToolCallContent,
   type AcpToolCallLocation,
+  type ElicitationRequest,
   type PermissionRequest,
 } from '../protocol/types';
 
@@ -368,6 +381,153 @@ export function toPermissionRequest(request: RequestPermissionRequest): Permissi
       kind: option.kind,
     })),
   };
+}
+
+/**
+ * The schema union's closed branches. `ElicitationPropertySchema` also has
+ * an open "future/vendor type" branch (`[key: string]: unknown`) that types
+ * every field access as unknown — here we consume the known branches only;
+ * anything else lands in the `unsupported` field below. Same for the
+ * multiselect item schema (`StringMultiSelectItems | TitledMultiSelectItems`
+ * carry the choices; other item types have none).
+ */
+type KnownElicitationProperty =
+  | (StringPropertySchema & { type: 'string' })
+  | (NumberPropertySchema & { type: 'number' })
+  | (IntegerPropertySchema & { type: 'integer' })
+  | (BooleanPropertySchema & { type: 'boolean' })
+  | (MultiSelectPropertySchema & { type: 'array' });
+
+/**
+ * Whitelists an `elicitation/create` request (form mode) into the UI card
+ * model. The wire schema restricts properties to primitives — each maps to
+ * exactly one field variant; anything else (future/vendor types) becomes an
+ * explicit `unsupported` field so the form shows it instead of losing it.
+ */
+export function toElicitationFormRequest(
+  id: string,
+  params: CreateElicitationRequest,
+): Extract<ElicitationRequest, { mode: 'form' }> {
+  // Caller-checked form mode; the cast strips the url/unknown-mode branches
+  // the wire union keeps (requestedSchema lives on the form branch only).
+  // `?? {}` guards a spec-violating form request without one.
+  const schema = (params as ElicitationFormMode).requestedSchema ?? {};
+  const required = new Set(schema.required ?? []);
+  const fields: AcpElicitationField[] = Object.entries(schema.properties ?? {}).map(
+    ([key, raw]) => {
+      const property = raw as KnownElicitationProperty;
+      const title = property.title ?? key;
+      const description = property.description ?? undefined;
+      if (property.type === 'string') {
+        const options = oneOfOptions(property) ?? enumOptions(property);
+        return {
+          key,
+          type: 'string' as const,
+          title,
+          ...(description ? { description } : {}),
+          required: required.has(key),
+          options,
+          default: property.default ?? undefined,
+        };
+      }
+      if (property.type === 'number' || property.type === 'integer') {
+        return {
+          key,
+          type: property.type,
+          title,
+          ...(description ? { description } : {}),
+          required: required.has(key),
+          default: property.default ?? undefined,
+        };
+      }
+      if (property.type === 'boolean') {
+        return {
+          key,
+          type: 'boolean' as const,
+          title,
+          ...(description ? { description } : {}),
+          required: required.has(key),
+          default: property.default ?? undefined,
+        };
+      }
+      if (property.type === 'array') {
+        return {
+          key,
+          type: 'multiselect' as const,
+          title,
+          ...(description ? { description } : {}),
+          required: required.has(key),
+          options: multiSelectOptions(property),
+          default: property.default ?? undefined,
+        };
+      }
+      // Unreachable per the cast's closed union — kept as the runtime guard
+      // for the vendor/future property types the cast stripped; read the
+      // type off the raw wire value (property is `never` here).
+      const propertyType = String((raw as { type?: unknown }).type ?? 'unknown');
+      warn(`elicitation property "${key}" has unsupported type "${propertyType}" — rendered inert`);
+      return { key, type: 'unsupported', title, required: false, propertyType };
+    },
+  );
+  // Only the session scope carries a toolCallId; request-scoped elicitations
+  // (pre-session) and session-scoped alike resolve to null when absent.
+  const toolCallId =
+    'toolCallId' in params && typeof params.toolCallId === 'string' ? params.toolCallId : null;
+  return {
+    mode: 'form',
+    id,
+    toolCallId,
+    title: schema.title ?? null,
+    description: schema.description ?? null,
+    fields,
+  };
+}
+
+/**
+ * Whitelists an `elicitation/create` request (url mode) into the UI card
+ * model. The wire `elicitationId` becomes the record id unchanged — the
+ * later `elicitation/complete` notification matches on it, and the spec
+ * says to treat it as opaque. No schema to whitelist here; the card shows
+ * the message and the full URL and lets consent do the rest.
+ */
+export function toElicitationUrlRequest(
+  params: CreateElicitationRequest,
+): Extract<ElicitationRequest, { mode: 'url' }> {
+  // Caller-checked url mode; the cast strips the form/unknown-mode branches
+  // the wire union keeps (elicitationId and url live on the url branch only).
+  const urlMode = params as ElicitationUrlMode;
+  const toolCallId =
+    'toolCallId' in params && typeof params.toolCallId === 'string' ? params.toolCallId : null;
+  return {
+    mode: 'url',
+    id: urlMode.elicitationId,
+    toolCallId,
+    message: params.message,
+    url: urlMode.url,
+  };
+}
+
+/** Titled single-select choices (`oneOf` wins over bare `enum`). */
+function oneOfOptions(property: StringPropertySchema): AcpElicitationOption[] | null {
+  if (!property.oneOf || property.oneOf.length === 0) return null;
+  return property.oneOf.map((option) => ({ value: option.const, label: option.title ?? option.const }));
+}
+
+function enumOptions(property: StringPropertySchema): AcpElicitationOption[] | null {
+  if (!property.enum || property.enum.length === 0) return null;
+  return property.enum.map((value) => ({ value, label: value }));
+}
+
+function multiSelectOptions(property: MultiSelectPropertySchema): AcpElicitationOption[] {
+  const items = property.items as StringMultiSelectItems | TitledMultiSelectItems;
+  if ('anyOf' in items && items.anyOf.length > 0) {
+    return items.anyOf.map((option) => ({ value: option.const, label: option.title ?? option.const }));
+  }
+  if ('enum' in items && items.enum.length > 0) {
+    return items.enum.map((value) => ({ value, label: value }));
+  }
+  warn('elicitation multiselect without choices — rendered as an empty group');
+  return [];
 }
 
 /**

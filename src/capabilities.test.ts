@@ -58,12 +58,12 @@ describe('effectiveCapability (issue #22)', () => {
     ).toEqual({ available: false, reason: 'blocked-by-policy' });
   });
 
-  it('PANDA_HOST_CAPABILITIES：permission/sessionUpdate 在场，mcp/elicitation 缺席', () => {
+  it('PANDA_HOST_CAPABILITIES：permission/sessionUpdate/elicitation 在场，mcp 缺席', () => {
     expect(PANDA_HOST_CAPABILITIES).toEqual({
       permission: true,
       sessionUpdate: true,
       mcp: false,
-      elicitation: false,
+      elicitation: true,
     });
   });
 

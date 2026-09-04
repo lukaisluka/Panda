@@ -4,7 +4,10 @@ import {
   methods,
   type AgentCapabilities,
   type ClientConnection,
+  type CompleteElicitationNotification,
   type ContentBlock,
+  type CreateElicitationRequest,
+  type CreateElicitationResponse,
   type InitializeResponse,
   type ListSessionsResponse,
   type RequestPermissionRequest,
@@ -16,6 +19,7 @@ import type {
   AcpContentBlock,
   AcpSessionModeState,
   AcpSessionUpdate,
+  ElicitationResponse,
   PermissionOptionKind,
   PermissionResponse,
   SessionStatus,
@@ -25,6 +29,8 @@ import {
   parseSessionNotification,
   removeSdkStrictSessionUpdateRouter,
   toAcpUpdates,
+  toElicitationFormRequest,
+  toElicitationUrlRequest,
   toPermissionRequest,
   toSessionModeState,
 } from './wire';
@@ -121,6 +127,10 @@ type PendingPermission = {
   resolve: (response: RequestPermissionResponse) => void;
 };
 
+type PendingElicitation = {
+  resolve: (response: CreateElicitationResponse) => void;
+};
+
 /**
  * Echo reconciliation state for the outbound message of the in-flight turn
  * (issue #15): the agent's `user_message_chunk` echo is compared against what
@@ -197,6 +207,10 @@ export class LiveAcpClient {
    * requests for different tools no longer cancel each other.
    */
   private permissionWaiters = new Map<string, PendingPermission>();
+  /** Pending elicitations keyed by the Panda-local request id. */
+  private elicitationWaiters = new Map<string, PendingElicitation>();
+  /** Local id mint for elicitation/create requests (form mode carries no wire id). */
+  private elicitationSeq = 0;
   /** A transactional session/load switch is in flight (issue #17). */
   private sessionSwitch = false;
   /**
@@ -272,6 +286,13 @@ export class LiveAcpClient {
             this.handleUpdate(ctx.params);
           },
         )
+        .onNotification(methods.client.elicitation.complete, (ctx) => {
+          if (generation !== this.connectionGeneration) {
+            console.warn('[panda/acp] elicitation/complete from a superseded connection — dropped');
+            return;
+          }
+          this.handleElicitationComplete(ctx.params);
+        })
         .onRequest(methods.client.session.requestPermission, (ctx) => {
           if (generation !== this.connectionGeneration) {
             console.warn(
@@ -280,6 +301,13 @@ export class LiveAcpClient {
             return Promise.resolve({ outcome: { outcome: 'cancelled' } });
           }
           return this.handlePermissionRequest(ctx.params, ctx.signal);
+        })
+        .onRequest(methods.client.elicitation.create, (ctx) => {
+          if (generation !== this.connectionGeneration) {
+            console.warn('[panda/acp] elicitation/create from a superseded connection — answered cancel');
+            return Promise.resolve({ action: 'cancel' });
+          }
+          return this.handleElicitationCreate(ctx.params, ctx.signal);
         })
         .connect(stream);
       this.connection = connection;
@@ -293,7 +321,9 @@ export class LiveAcpClient {
 
       const init: InitializeResponse = await connection.agent.request(methods.agent.initialize, {
         protocolVersion: PROTOCOL_VERSION,
-        clientCapabilities: {},
+        // Both elicitation modes are implemented — advertising per-mode keeps
+        // spec-compliant agents from sending what Panda cannot render.
+        clientCapabilities: { elicitation: { form: {}, url: {} } },
         clientInfo: CLIENT_INFO,
       });
       if (!isCurrent()) {
@@ -559,8 +589,10 @@ export class LiveAcpClient {
         console.info('[panda/acp] superseded session/prompt failed after replacement — failure discarded');
       } else {
         console.error('[panda/acp] session/prompt failed', err);
-        // The turn is dead — any permission still on screen must be answered.
+        // The turn is dead — any permission or elicitation still on screen
+        // must be answered.
         this.finishAllPermissions();
+        this.finishAllElicitations();
       }
     } finally {
       // Slot ownership, not era equality (issue #19): a replaced era's turn
@@ -605,6 +637,47 @@ export class LiveAcpClient {
     }
   }
 
+  /**
+   * Answers one pending `elicitation/create`: form submit (accepted) /
+   * refusal (declined) — url-mode decline routes here too. Cancellations
+   * without a user decision arrive via settleElicitation instead.
+   */
+  resolveElicititation(id: string, response: ElicitationResponse): void {
+    if (!this.elicitationWaiters.has(id)) {
+      console.warn(`[panda/acp] resolveElicitation ignored: no pending request ${id}`);
+      return;
+    }
+    this.settleElicitation(id, response);
+  }
+
+  /**
+   * Answers one pending url-mode `elicitation/create` with accept — the user
+   * consented to opening the link. Per protocol/v1 the RPC ends here (accept
+   * means consent, NOT completion); the card then waits for the agent's
+   * `elicitation/complete` notification. The window itself is opened by the
+   * UI in the click gesture, before this is called — async window.open would
+   * be popup-blocked.
+   */
+  openElicitationUrl(id: string): void {
+    const waiter = this.elicitationWaiters.get(id);
+    if (!waiter) {
+      console.warn(`[panda/acp] openElicitationUrl ignored: no pending request ${id}`);
+      return;
+    }
+    this.elicitationWaiters.delete(id);
+    // URL-mode accept carries no content — the interaction completes
+    // out-of-band.
+    waiter.resolve({ action: 'accept' });
+    this.handlers.onUpdate({ sessionUpdate: 'elicitation_url_opened', elicitationId: id });
+    this.handlers.onStatus(
+      this.elicitationWaiters.size > 0 || this.permissionWaiters.size > 0
+        ? 'requires_action'
+        : this.pendingPrompt
+          ? 'running'
+          : 'idle',
+    );
+  }
+
   /** Cancels the in-flight turn: `session/cancel` + cancelled permission outcomes. */
   cancel(): void {
     if (!this.connection || !this.sessionId) return;
@@ -617,6 +690,7 @@ export class LiveAcpClient {
       .catch((err) => console.error('[panda/acp] session/cancel failed', err));
     // Spec: the client MUST answer pending permission requests with cancelled.
     this.finishAllPermissions();
+    this.finishAllElicitations();
   }
 
   /** Cleanly closes the connection; safe to call repeatedly. */
@@ -990,6 +1064,117 @@ export class LiveAcpClient {
   }
 
   /**
+   * `elicitation/create` (form + url modes): folds the request into the
+   * document as a card and hangs the RPC until the user answers. Mode- and
+   * session-gated like permissions — an unsupported mode is declined (never
+   * hung), a foreign/request-scoped elicitation is cancelled loudly.
+   */
+  private handleElicitationCreate(
+    params: CreateElicitationRequest,
+    signal: AbortSignal,
+  ): Promise<CreateElicitationResponse> {
+    if (params.mode !== 'form' && params.mode !== 'url') {
+      // The capability negotiation advertises form+url; anything else is a
+      // spec violation — decline so the agent can degrade, never hang.
+      console.warn(`[panda/acp] elicitation/create with unsupported mode "${String(params.mode)}" — declined`);
+      return Promise.resolve({ action: 'decline' });
+    }
+    // The scope union: session-scoped carries sessionId, request-scoped
+    // (pre-session) does not — both foreign to this client's session.
+    const scopedSessionId =
+      'sessionId' in params && typeof params.sessionId === 'string' ? params.sessionId : null;
+    if (this.sessionId === null || scopedSessionId !== this.sessionId) {
+      const scope = scopedSessionId ?? 'request-scoped (pre-session)';
+      console.warn(
+        `[panda/acp] elicitation/create for ${scope} (expected session ${this.sessionId ?? 'none'}) — answered cancel`,
+      );
+      return Promise.resolve({ action: 'cancel' });
+    }
+    // Url ids come from the wire (opaque, unique per connection — the
+    // complete notification matches on them); form ids are minted locally.
+    const request =
+      params.mode === 'url'
+        ? toElicitationUrlRequest(params)
+        : toElicitationFormRequest(`elicit-${++this.elicitationSeq}`, params);
+    if (this.elicitationWaiters.has(request.id)) {
+      // Double-flight on one id would strand one RPC with no card — decline
+      // the repeat loudly; the reducer separately guards settled records.
+      console.warn(`[panda/acp] elicitation/create reuses pending id ${request.id} — declined`);
+      return Promise.resolve({ action: 'decline' });
+    }
+    this.handlers.onUpdate({
+      sessionUpdate: 'elicitation_requested',
+      request,
+    });
+    return new Promise((resolve) => {
+      const waiter: PendingElicitation = { resolve };
+      this.elicitationWaiters.set(request.id, waiter);
+      const settleAborted = () => {
+        if (this.elicitationWaiters.get(request.id) !== waiter) return;
+        console.warn(`[panda/acp] elicitation ${request.id} aborted by the agent — settling as cancelled`);
+        this.settleElicitation(request.id, { outcome: 'cancelled' });
+      };
+      signal.addEventListener('abort', settleAborted);
+      if (signal.aborted) settleAborted();
+      else this.handlers.onStatus('requires_action');
+    });
+  }
+
+  private settleElicitation(id: string, response: ElicitationResponse): void {
+    const waiter = this.elicitationWaiters.get(id);
+    if (!waiter) return;
+    this.elicitationWaiters.delete(id);
+    this.handlers.onUpdate({ sessionUpdate: 'elicitation_resolved', elicitationId: id, response });
+    waiter.resolve(
+      response.outcome === 'accepted'
+        ? { action: 'accept', content: response.content }
+        : response.outcome === 'declined'
+          ? { action: 'decline' }
+          : { action: 'cancel' },
+    );
+    this.handlers.onStatus(
+      this.elicitationWaiters.size > 0 || this.permissionWaiters.size > 0
+        ? 'requires_action'
+        : this.pendingPrompt
+          ? 'running'
+          : 'idle',
+    );
+  }
+
+  /** Cancels every pending elicitation (turn cancel, dead turn, disconnect). */
+  private finishAllElicitations(): void {
+    for (const id of [...this.elicitationWaiters.keys()]) {
+      this.settleElicitation(id, { outcome: 'cancelled' });
+    }
+  }
+
+  /**
+   * `elicitation/complete` (url mode): the agent reports the out-of-band
+   * interaction finished. The reducer ignores unknown/finished ids (spec
+   * requirement); a still-pending waiter means the user never clicked open
+   * yet the flow finished anyway — answer accept, the interaction did happen.
+   * Opened cards need no waiter work: their RPC already answered accept, and
+   * they live on past turn cancels (the out-of-band flow outruns the turn).
+   */
+  private handleElicitationComplete(params: CompleteElicitationNotification): void {
+    const id = params.elicitationId;
+    const waiter = this.elicitationWaiters.get(id);
+    if (waiter) {
+      console.warn(`[panda/acp] elicitation/complete for ${id} that was never opened — answering accept`);
+      this.elicitationWaiters.delete(id);
+      waiter.resolve({ action: 'accept' });
+      this.handlers.onStatus(
+        this.elicitationWaiters.size > 0 || this.permissionWaiters.size > 0
+          ? 'requires_action'
+          : this.pendingPrompt
+            ? 'running'
+            : 'idle',
+      );
+    }
+    this.handlers.onUpdate({ sessionUpdate: 'elicitation_url_completed', elicitationId: id });
+  }
+
+  /**
    * Settles every pending permission as cancelled (disconnect / turn
    * cancel). Reuses settlePermission so every card folds a
    * permission_resolved event and the status converges exactly like a user
@@ -1022,6 +1207,7 @@ export class LiveAcpClient {
     // buffered chunks belong to a superseded transcript (issue #19).
     this.pendingOutbound = null;
     this.finishAllPermissions();
+    this.finishAllElicitations();
     this.connection?.close();
     this.connection = null;
     // Explicit transport teardown (issue #20): the SDK's close usually

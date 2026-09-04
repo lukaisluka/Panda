@@ -1,0 +1,126 @@
+/* Inline form-mode elicitation: pending form + settled terminal record.
+   Shared by the url-mode card (consent → opened → completed). */
+
+.elicit-card {
+  margin-top: 6px; /* mt-1.5 */
+  border: 1px solid color-mix(in oklab, var(--color-accent) 40%, transparent);
+  border-radius: var(--panda-radius-xl);
+  background: color-mix(in oklab, var(--color-accent) 5%, transparent);
+  padding: 14px; /* p-3.5 */
+}
+.elicit-card--settled {
+  border-color: var(--color-border);
+  background: color-mix(in oklab, var(--color-raised) 40%, transparent);
+}
+
+.elicit-head {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* gap-2 */
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-accent);
+}
+.elicit-head--settled {
+  color: var(--color-muted);
+}
+
+.elicit-title {
+  margin-top: 8px; /* mt-2 */
+  font-size: 14px;
+  font-weight: 500;
+  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+}
+
+.elicit-desc {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--color-faint);
+}
+
+.elicit-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* gap-3 */
+  margin-top: 12px; /* mt-3 */
+}
+
+.elicit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.elicit-label {
+  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+}
+
+.elicit-required {
+  margin-left: 3px;
+  color: var(--color-danger);
+}
+
+.elicit-field--check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px; /* gap-2 */
+  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+  cursor: pointer;
+}
+.elicit-field--check input {
+  accent-color: var(--color-accent);
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+.elicit-multiselect {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.elicit-unsupported {
+  font-size: 13px;
+  color: var(--color-faint);
+}
+
+.elicit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px; /* gap-2 */
+  margin-top: 14px; /* mt-3.5 */
+}
+
+/* Url-mode consent card: destination readout + warnings. */
+
+.elicit-url-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px; /* mt-3 */
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-lg);
+  background: color-mix(in oklab, var(--color-raised) 40%, transparent);
+}
+
+.elicit-url-host {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.elicit-url {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--color-faint);
+  overflow-wrap: anywhere; /* long oauth URLs must not blow the card wide */
+}
+
+.elicit-warn {
+  margin-top: 8px; /* mt-2 */
+  font-size: 13px;
+  color: var(--color-warning, #b45309);
+}

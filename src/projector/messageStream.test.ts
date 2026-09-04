@@ -42,6 +42,7 @@ function documentWith(...calls: ToolCallState[]): SessionDocument {
     plan: null,
     modes: null,
     permissions: {},
+    elicitations: {},
     latestNotifications: {},
     unhandledNotifications: [],
   };
@@ -210,6 +211,7 @@ describe('projection unsupported fallback blocks', () => {
       plan: null,
       modes: null,
       permissions: {},
+      elicitations: {},
       latestNotifications: {},
       unhandledNotifications: [notification],
     };

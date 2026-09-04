@@ -4,6 +4,8 @@ import type {
   AcpSessionUpdate,
   AcpToolCallStatus,
   AcpToolKind,
+  ElicitationRequest,
+  ElicitationResponse,
   PermissionOptionKind,
   PermissionRequest,
   SessionStatus,
@@ -263,6 +265,42 @@ function allowBranch(): ReplayStep[] {
       },
       700,
     ),
+    // Tests green — pushing the branch needs GitHub, which only the user can
+    // authorize. The url-mode elicitation demos consent → open → complete.
+    {
+      kind: 'elicitation_url',
+      afterMs: 500,
+      request: elicitUrlRequest,
+      onResolve: () => [
+        statusStep('running', 200),
+        ...streamText(
+          'agent_message_chunk',
+          'msg-ci-skip',
+          '好，不连 GitHub 了——改动都已在本地验证过，分支留在本地，需要推送时你自己来。',
+          { firstMs: 450 },
+        ),
+        ...finalTail(),
+      ],
+      onOpen: () => [
+        statusStep('running', 200),
+        // The out-of-band OAuth flow runs while the card waits on it; the
+        // agent's elicitation/complete notification then lands.
+        { kind: 'elicitation_url_complete', afterMs: 1800, elicitationId: elicitUrlRequest.id },
+        ...streamText(
+          'agent_message_chunk',
+          'msg-ci-ok',
+          'GitHub 已连接，分支 `auth-refactor` 已推送，CI 已排队（run #128）。结果出来我会汇报。',
+          { firstMs: 450 },
+        ),
+        ...finalTail(),
+      ],
+    },
+  ];
+}
+
+/** The closing beat every allow path shares (summary message + plan + usage). */
+function finalTail(): ReplayStep[] {
+  return [
     ...streamText('agent_message_chunk', 'msg-3', messageFinal, { firstMs: 550 }),
     updateStep({ sessionUpdate: 'agent_message_chunk', messageId: 'msg-3', content: TEST_OUTPUT_IMAGE }, 300),
     updateStep({ sessionUpdate: 'plan', entries: planDone }, 250),
@@ -297,6 +335,126 @@ function rejectBranch(): ReplayStep[] {
   ];
 }
 
+/** The edit request + its permission gate — shared by both elicitation branches. */
+function editSteps(): ReplayStep[] {
+  return [
+    toolCallStep(
+      'edit-1',
+      'Edit src/auth/session.ts — extract verifySession()',
+      'edit',
+      'src/auth/session.ts',
+      { path: 'src/auth/session.ts', description: 'Extract verifySession() from handleLogin/refreshToken' },
+      600,
+    ),
+    {
+      kind: 'permission',
+      afterMs: 150,
+      request: permissionRequest,
+      onResolve: (decision: PermissionOptionKind) =>
+        decision === 'reject_once' ? rejectBranch() : allowBranch(),
+    },
+  ];
+}
+
+/**
+ * The form-mode elicitation fixture: one field per schema type (free string,
+ * enum string, boolean, multiselect, integer) so the demo calibrates every
+ * form control the live wire schema can produce.
+ */
+const elicitRequest: ElicitationRequest = {
+  mode: 'form',
+  id: 'elicit-1',
+  toolCallId: null,
+  title: '重构选项确认',
+  description: '动手改 session.ts 之前，确认几个执行选项。',
+  fields: [
+    {
+      key: 'tag',
+      type: 'string',
+      title: '发布 tag',
+      description: '重构合入后打的 git tag',
+      required: true,
+      options: null,
+    },
+    {
+      key: 'strategy',
+      type: 'string',
+      title: '迁移策略',
+      required: true,
+      default: 'alias',
+      options: [
+        { value: 'alias', label: '保留旧名别名（渐进）' },
+        { value: 'replace', label: '直接替换（彻底）' },
+      ],
+    },
+    {
+      key: 'notify',
+      type: 'boolean',
+      title: '完成后通知 #auth-review 频道',
+      required: false,
+      default: true,
+    },
+    {
+      key: 'scope',
+      type: 'multiselect',
+      title: '同步更新的范围',
+      required: false,
+      default: ['tests'],
+      options: [
+        { value: 'tests', label: '测试' },
+        { value: 'docs', label: '文档' },
+        { value: 'examples', label: '示例' },
+      ],
+    },
+    {
+      key: 'priority',
+      type: 'integer',
+      title: '评审优先级（1-5，选填）',
+      required: false,
+    },
+  ],
+};
+
+/**
+ * The url-mode elicitation fixture: consent to an external OAuth flow. The
+ * card shows the message + full URL + highlighted host; accepting opens the
+ * link and the timeline waits for the (scripted) elicitation/complete.
+ */
+const elicitUrlRequest: ElicitationRequest = {
+  mode: 'url',
+  id: 'elicit-url-1',
+  toolCallId: null,
+  message: '改动已就绪。要推送分支并触发 CI 吗？需要你授权连接 GitHub。',
+  url: 'https://github.com/login/oauth/authorize?client_id=panda-demo&scope=repo',
+};
+
+/** What happens after the user answers the elicitation form. */
+function elicitBranch(response: ElicitationResponse): ReplayStep[] {
+  if (response.outcome !== 'accepted') {
+    return [
+      statusStep('running', 150),
+      ...streamText(
+        'agent_message_chunk',
+        'msg-elicit-declined',
+        '好，不问细节了——按默认方式推进：保留旧名别名过渡，改完直接跑测试。',
+        { firstMs: 400 },
+      ),
+      ...editSteps(),
+    ];
+  }
+  const strategy = response.content.strategy === 'replace' ? '直接替换旧函数' : '保留旧名别名过渡';
+  return [
+    statusStep('running', 150),
+    ...streamText(
+      'agent_message_chunk',
+      'msg-elicit-ok',
+      `收到：${strategy}，完成后打 tag \`${String(response.content.tag)}\`。开始动手。`,
+      { firstMs: 400 },
+    ),
+    ...editSteps(),
+  ];
+}
+
 export function mainScenario(): ReplayStep[] {
   return [
     updateStep(
@@ -324,20 +482,11 @@ export function mainScenario(): ReplayStep[] {
     toolStatusStep('search-1', 'in_progress', 300),
     toolResultStep('search-1', '2 处引用：handleLogin、refreshToken，均在 src/auth/session.ts 内。', 450),
     ...streamText('agent_message_chunk', 'msg-1', messageAfterRead, { firstMs: 500 }),
-    toolCallStep(
-      'edit-1',
-      'Edit src/auth/session.ts — extract verifySession()',
-      'edit',
-      'src/auth/session.ts',
-      { path: 'src/auth/session.ts', description: 'Extract verifySession() from handleLogin/refreshToken' },
-      600,
-    ),
     {
-      kind: 'permission',
-      afterMs: 150,
-      request: permissionRequest,
-      onResolve: (decision: PermissionOptionKind) =>
-        decision === 'reject_once' ? rejectBranch() : allowBranch(),
+      kind: 'elicitation',
+      afterMs: 500,
+      request: elicitRequest,
+      onResolve: elicitBranch,
     },
   ];
 }

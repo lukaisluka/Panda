@@ -28,6 +28,7 @@ export function emptySession(): SessionDocument {
     plan: null,
     modes: null,
     permissions: {},
+    elicitations: {},
     latestNotifications: {},
     unhandledNotifications: [],
   };
@@ -143,6 +144,84 @@ export function applyUpdate(
 
     case 'permission_resolved':
       return resolvePermission(doc, update.toolCallId, update.response);
+
+    case 'elicitation_requested': {
+      // The agent must keep wire elicitationIds unique among unfinished url
+      // elicitations; a repeat (or a collision with a local form mint) would
+      // overwrite a live record — keep the first, log the violation.
+      if (doc.elicitations[update.request.id]) {
+        console.warn(`[reducer] elicitation_requested reuses live id ${update.request.id} — ignored`);
+        return doc;
+      }
+      return {
+        ...doc,
+        elicitations: {
+          ...doc.elicitations,
+          [update.request.id]: { status: 'pending', request: update.request, response: null },
+        },
+      };
+    }
+
+    case 'elicitation_resolved': {
+      const existing = doc.elicitations[update.elicitationId];
+      if (!existing) {
+        console.warn(`[reducer] elicitation_resolved for unknown id ${update.elicitationId} — ignored`);
+        return doc;
+      }
+      if (existing.status !== 'pending') {
+        console.warn(
+          `[reducer] elicitation_resolved for ${update.elicitationId} in status ${existing.status} — ignored`,
+        );
+        return doc;
+      }
+      return {
+        ...doc,
+        elicitations: {
+          ...doc.elicitations,
+          [update.elicitationId]: {
+            ...existing,
+            status: update.response.outcome === 'cancelled' ? 'cancelled' : 'resolved',
+            response: update.response,
+          },
+        },
+      };
+    }
+
+    case 'elicitation_url_opened': {
+      const existing = doc.elicitations[update.elicitationId];
+      if (!existing || existing.status !== 'pending') {
+        console.warn(
+          `[reducer] elicitation_url_opened for ${update.elicitationId} in status ${existing?.status ?? 'unknown'} — ignored`,
+        );
+        return doc;
+      }
+      return {
+        ...doc,
+        elicitations: {
+          ...doc.elicitations,
+          [update.elicitationId]: { ...existing, status: 'opened' },
+        },
+      };
+    }
+
+    case 'elicitation_url_completed': {
+      // Spec: the client must ignore complete notifications for unknown or
+      // already-finished elicitations — the reducer is that gatekeeper.
+      const existing = doc.elicitations[update.elicitationId];
+      if (!existing || (existing.status !== 'pending' && existing.status !== 'opened')) {
+        console.warn(
+          `[reducer] elicitation_url_completed for ${update.elicitationId} in status ${existing?.status ?? 'unknown'} — ignored`,
+        );
+        return doc;
+      }
+      return {
+        ...doc,
+        elicitations: {
+          ...doc.elicitations,
+          [update.elicitationId]: { ...existing, status: 'completed' },
+        },
+      };
+    }
   }
 }
 
