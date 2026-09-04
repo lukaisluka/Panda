@@ -9,18 +9,27 @@ import './disclosure.css';
 
 type ThoughtBlockModel = Extract<Block, { kind: 'thought' }>;
 
-/** Collapsed by default; the header peeks at the first text line while streaming. */
-export function ThoughtBlock({ block }: { block: ThoughtBlockModel }) {
+/**
+ * ZCode-style thought row, same shape as a live think tool call: collapsed it
+ * reads `🧠 Thinking <tail of the stream>` while streaming and settles to a
+ * bare `🧠 Thought` once a later block exists (the projector's streaming flag
+ * flips exactly then). The full reasoning text needs expanding.
+ */
+export function ThoughtBlock({ block, streaming }: { block: ThoughtBlockModel; streaming: boolean }) {
   const [open, setOpen] = useState(false);
-  const firstText = block.parts.find((part) => part.type === 'text');
-  const preview =
-    firstText?.type === 'text' ? (firstText.text.split('\n')[0]?.slice(0, 60) ?? '') : '';
+  // Parts merge consecutive text chunks (reducer appendPart), so the last
+  // text part IS the full stream text — the preview shows its tail.
+  const lastText = [...block.parts].reverse().find((part) => part.type === 'text');
+  const tail = streaming && lastText?.type === 'text' ? lastText.text : null;
 
   return (
     <div className="disclosure">
       <button onClick={() => setOpen((o) => !o)} className="disclosure-toggle">
         <Brain size={13} className="disclosure-icon" />
-        <span className="disclosure-label">{open ? '思考过程' : preview || 'Thinking…'}</span>
+        <span className="disclosure-label">{streaming ? 'Thinking' : 'Thought'}</span>
+        {tail !== null && (
+          <span className="tool-think-preview" dir="rtl">{tail}</span>
+        )}
         <ChevronDown
           size={13}
           className={`disclosure-chevron ${open ? 'disclosure-chevron--open' : ''}`}

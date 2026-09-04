@@ -211,6 +211,22 @@ body {
 .mono {
   font-family: var(--font-mono);
 }
+/* Live think/thought rows: a fixed-width single-line window onto the tail of
+ * the reasoning stream. dir="rtl" anchors the text to the right and cuts on
+ * the LEFT (ellipsis lands there), so as the text grows the newest part
+ * stays visible — it reads as content flushing leftwards. unicode-bidi:
+ * plaintext keeps Latin/CJK glyph order intact inside the rtl line box.
+ * Shared by ToolCallCard (think tool calls) and ThoughtBlock (thought
+ * chunks). */
+.tool-think-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  unicode-bidi: plaintext;
+  color: var(--color-faint);
+}
 @keyframes panda-pulse {
   50% { opacity: 0.5; }
 }

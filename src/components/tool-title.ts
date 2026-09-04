@@ -51,10 +51,11 @@ export function settledToolTitle(
 ): string {
   if (kind === 'think') {
     // Think titles are placeholders (deepagents sends "思考", sometimes
-    // nothing) — the row reads as a fixed kind label, like the reference
-    // client: "Thinking…" while live, "Thought" once settled. The actual
-    // reasoning text lives in the expanded content, not the title.
-    return status === 'completed' || status === 'failed' ? 'Thought' : 'Thinking…';
+    // nothing) — the row reads as the fixed kind label, like the reference
+    // client: "Thinking" while live (the streaming tail renders beside it
+    // in ToolCallCard), "Thought" once settled. The actual reasoning text
+    // lives in the expanded content, not the title.
+    return status === 'completed' || status === 'failed' ? 'Thought' : 'Thinking';
   }
   if (!title) return title;
   if (status !== 'completed' && status !== 'failed') return title;

@@ -191,16 +191,25 @@ function standaloneItem(permission: AttachedPermission): StandalonePermissionIte
 }
 
 /**
- * While running, the trailing agent message of the last turn is the one still
- * streaming — the only block whose cursor/typing affordances should be live.
+ * While running, one trailing block of the last turn is "streaming" and its
+ * live affordances (message cursor, thought tail preview) are on:
+ *
+ *  - a thought is streaming only while it is the VERY LAST block — the
+ *    moment any plan/tool_call/message follows, its Thinking label settles
+ *    to Thought;
+ *  - an agent message keeps its cursor even with tool calls running below
+ *    it (the original behavior), so the scan skips non-streaming blocks.
  */
 function findStreamingBlock(doc: SessionDocument): Block | null {
   if (doc.status !== 'running') return null;
   const lastTurn = doc.turns.at(-1);
   if (!lastTurn) return null;
+  const last = lastTurn.blocks.at(-1);
+  if (last?.kind === 'thought') return last;
   for (let i = lastTurn.blocks.length - 1; i >= 0; i--) {
     const block = lastTurn.blocks[i]!;
     if (block.kind === 'agent_message') return block;
+    if (block.kind === 'thought') return null;
   }
   return null;
 }

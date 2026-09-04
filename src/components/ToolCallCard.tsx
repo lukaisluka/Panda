@@ -82,10 +82,13 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
 }) {
   const [open, setOpen] = useState(false);
 
-  // Lifecycle choreography: auto-expand while running, collapse when done.
+  // Lifecycle choreography: auto-expand while running, collapse when done —
+  // EXCEPT think calls: their live row already streams the tail, and the
+  // full reasoning stays behind a manual expand (joint-debug decision).
   useEffect(() => {
+    if (call.kind === 'think') return;
     setOpen(call.status === 'in_progress');
-  }, [call.status]);
+  }, [call.status, call.kind]);
 
   // Inbound notifications are not schema-validated, so `kind` may be a
   // vendor/extension value outside the TS union (that's how switch_mode got
@@ -93,9 +96,17 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
   const Icon = KIND_ICON[call.kind] ?? Wrench;
   const path = call.locations[0]?.path;
   // Progressive → settled verb once the call ends ("Editing x" → "Edit x");
-  // empty think titles get their kind default ("Thinking…"/"Thought").
-  // Protocol title is untouched — this is display-only.
+  // think calls show the fixed kind label instead (Thinking/Thought) —
+  // protocol title is untouched in both cases, this is display-only.
   const displayTitle = settledToolTitle(call.title, call.status, call.kind);
+  const live = call.status === 'pending' || call.status === 'in_progress';
+  // Live think rows stream their tail beside the label: the latest text of
+  // the call's (replace-style) content, one line, cut from the left so the
+  // newest reasoning always stays visible — the full text needs expanding.
+  const thinkPreview =
+    call.kind === 'think' && live
+      ? [...call.content].reverse().find((c): c is { type: 'content'; content: { type: 'text'; text: string } } => c.type === 'content' && c.content.type === 'text')?.content.text ?? ''
+      : null;
   const diffPart = call.content.find((c): c is Extract<typeof c, { type: 'diff' }> => c.type === 'diff');
   const stats = useMemo(
     () => (diffPart ? diffStats(diffPart.oldText, diffPart.newText) : null),
@@ -118,7 +129,14 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
       <div className="tool-card-frame">
         <button onClick={() => setOpen((o) => !o)} className="tool-card-toggle">
           <Icon size={14} className="tool-card-icon" />
-          <span className="truncate tool-card-title">{displayTitle}</span>
+          {thinkPreview !== null ? (
+            <>
+              <span className="tool-card-title">{displayTitle}</span>
+              <span className="tool-think-preview" dir="rtl">{thinkPreview}</span>
+            </>
+          ) : (
+            <span className="truncate tool-card-title">{displayTitle}</span>
+          )}
           {stats && (
             <span className="tool-card-stats">
               <span className="tool-stats-add">+{stats.additions}</span>{' '}

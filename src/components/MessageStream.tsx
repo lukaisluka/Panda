@@ -250,7 +250,7 @@ const BlockView = memo(function BlockView({ block, streaming, permission, onReso
     case 'agent_message':
       return <AgentMessage block={block} streaming={streaming} />;
     case 'thought':
-      return <ThoughtBlock block={block} />;
+      return <ThoughtBlock block={block} streaming={streaming} />;
     case 'plan':
       return <PlanCard entries={block.entries} />;
     case 'tool_call':
