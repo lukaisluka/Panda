@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { DEMO_CONNECTION_ID, connectionStorePort, usePanda, type ConnectionStorePort } from './store';
 import { ReplayDriver } from './replay/ReplayDriver';
-import { followUpScenario, longScenario, mainScenario } from './replay/fixtures';
+import { DEMO_MODES, followUpScenario, longScenario, mainScenario } from './replay/fixtures';
 import type { AcpContentBlock, PermissionOptionKind } from './protocol/types';
 
 /** `?demo=long` streams an 80-turn session instead — the virtualization calibration sample. */
@@ -53,6 +53,9 @@ export function useReplaySession() {
       sessionId: null,
       error: null,
     });
+    // The pseudo session/new result: modes arrive exactly where the live
+    // driver puts them (after the session is adopted, before any update).
+    port.update({ sessionUpdate: 'modes_initialized', modes: DEMO_MODES });
     driver.play(demoScenario());
     return () => driver.cancel();
   }, [driver, mode, port]);
@@ -72,6 +75,18 @@ export function useReplaySession() {
     [driver],
   );
 
+  /**
+   * The demo's instant `session/set_mode`: there is no RPC to confirm, so the
+   * mode_changed event IS the confirmation — same shape the live path emits
+   * on the resolved RPC.
+   */
+  const setMode = useCallback(
+    (modeId: string) => {
+      port.update({ sessionUpdate: 'mode_changed', modeId });
+    },
+    [port],
+  );
+
   /** Restarts the scripted scenario; from live mode it first switches back to demo. */
   const replayDemo = useCallback(() => {
     if (usePanda.getState().mode !== 'demo') {
@@ -79,8 +94,9 @@ export function useReplaySession() {
       return;
     }
     port.resetDocument();
+    port.update({ sessionUpdate: 'modes_initialized', modes: DEMO_MODES });
     driver.play(demoScenario());
   }, [driver, port]);
 
-  return { send, resolvePermission, replayDemo };
+  return { send, resolvePermission, setMode, replayDemo };
 }

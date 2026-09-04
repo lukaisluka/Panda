@@ -1,5 +1,6 @@
 import type {
   AcpContentBlock,
+  AcpSessionModeState,
   AcpSessionUpdate,
   AcpToolCallStatus,
   AcpToolKind,
@@ -14,6 +15,20 @@ import type { ReplayStep } from './types';
  * The pacing, chunk sizes and diff shapes here are what the message stream
  * gets visually calibrated against — treat them as design fixtures.
  */
+
+/**
+ * The demo agent's session modes — mirrors the test-agent's three permission
+ * modes (ask_before_edits / accept_edits / accept_everything) so what the
+ * picker shows in demo replay is what live testing against test-agent shows.
+ */
+export const DEMO_MODES: AcpSessionModeState = {
+  currentModeId: 'ask_before_edits',
+  availableModes: [
+    { id: 'ask_before_edits', name: 'Ask before edits', description: '每一步写入/编辑/执行都要经过权限确认' },
+    { id: 'accept_edits', name: 'Accept edits', description: '自动接受文件改动,仅命令执行与计划需要确认' },
+    { id: 'accept_everything', name: 'Accept everything', description: '全自动,不请求任何权限' },
+  ],
+};
 
 const text = (t: string): AcpContentBlock => ({ type: 'text', text: t });
 

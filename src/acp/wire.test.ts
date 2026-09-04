@@ -121,7 +121,6 @@ describe('toAcpUpdates raw preservation', () => {
 
   it('records recognized session-level kinds as session_state with the raw notification', () => {
     for (const update of [
-      { sessionUpdate: 'current_mode_update', currentModeId: 'code' },
       { sessionUpdate: 'config_option_update', configOptions: [] },
       { sessionUpdate: 'session_info_update', title: 't' },
       { sessionUpdate: 'compaction_update' },
@@ -131,6 +130,19 @@ describe('toAcpUpdates raw preservation', () => {
         { sessionUpdate: 'session_state', kind: (update as SessionUpdate).sessionUpdate, raw: n },
       ]);
     }
+  });
+
+  it('maps current_mode_update to a mode_changed event (wire field is currentModeId)', () => {
+    const n = note({ sessionUpdate: 'current_mode_update', currentModeId: 'code' });
+    expect(toAcpUpdates(n)).toEqual([{ sessionUpdate: 'mode_changed', modeId: 'code', raw: n }]);
+  });
+
+  it('keeps a malformed current_mode_update as unsupported, loudly', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const n = note({ sessionUpdate: 'current_mode_update' });
+    expect(toAcpUpdates(n)).toEqual([{ sessionUpdate: 'unsupported', raw: n }]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('current_mode_update'));
+    warnSpy.mockRestore();
   });
 
   it('preserves unknown sessionUpdate kinds as unsupported events instead of dropping them', () => {

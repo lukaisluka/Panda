@@ -7,11 +7,12 @@ import {
   fileToAttachment,
   type ImageAttachment,
 } from '../attachments';
-import type { AcpContentBlock } from '../protocol/types';
+import type { AcpContentBlock, AcpSessionModeState } from '../protocol/types';
 import { ContentColumn } from './ContentColumn';
+import { ModePicker } from './ModePicker';
 import './Composer.css';
 
-export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onStop }: {
+export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onStop, modes, onSetMode }: {
   onSend: (content: AcpContentBlock[]) => void;
   disabled: boolean;
   hint?: string;
@@ -19,6 +20,9 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
   /** True while a live turn runs — the send button becomes a stop button. */
   canStop?: boolean;
   onStop?: () => void;
+  /** Session modes from the document; null hides the picker entirely. */
+  modes: AcpSessionModeState | null;
+  onSetMode: (modeId: string) => void;
 }) {
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
@@ -121,21 +125,6 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
                 e.target.value = '';
               }}
             />
-            <IconButton
-              variant="ghost"
-              size="sm"
-              icon={<Paperclip size={16} />}
-              label="添加图片"
-              isDisabled={attachmentDisabled}
-              tooltip={
-                !canAttachImages
-                  ? '当前 agent 未声明图片输入能力'
-                  : disabled
-                    ? '当前不可添加图片'
-                    : '添加图片'
-              }
-              clickAction={() => fileInputRef.current?.click()}
-            />
             <textarea
               rows={1}
               value={value}
@@ -146,6 +135,26 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
               onPaste={handlePaste}
               className="focus-outline-none composer-input"
             />
+          </div>
+          <div className="composer-footer">
+            <div className="composer-footer-lead">
+              <IconButton
+                variant="ghost"
+                size="sm"
+                icon={<Paperclip size={16} />}
+                label="添加图片"
+                isDisabled={attachmentDisabled}
+                tooltip={
+                  !canAttachImages
+                    ? '当前 agent 未声明图片输入能力'
+                    : disabled
+                      ? '当前不可添加图片'
+                      : '添加图片'
+                }
+                clickAction={() => fileInputRef.current?.click()}
+              />
+              {modes && <ModePicker modes={modes} onSetMode={onSetMode} />}
+            </div>
             {stopping ? (
               <IconButton
                 variant="destructive"

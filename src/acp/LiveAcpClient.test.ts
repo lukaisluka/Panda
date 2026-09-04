@@ -144,6 +144,7 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
   };
   const handlers: LiveClientHandlers = {
     onUpdate: (update) => records.updates.push(update),
+    onSessionModes: () => {},
     onStatus: (status) => records.statuses.push(status),
     onConnected: (info) => records.connected.push(info),
     onSessionId: (id) => records.sessionIds.push(id),
@@ -865,11 +866,12 @@ describe('LiveAcpClient', () => {
         },
       }),
     );
-    // Known session-level kinds are recorded as session_state, not dropped.
+    // Mode switches map to their dedicated mode_changed event (session_state
+    // no longer owns the kind) — still recorded, never dropped.
     expect(h.updates).toContainEqual(
       expect.objectContaining({
-        sessionUpdate: 'session_state',
-        kind: 'current_mode_update',
+        sessionUpdate: 'mode_changed',
+        modeId: 'code',
       }),
     );
     expect(h.updates).toContainEqual(
@@ -1422,6 +1424,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       .connect(serverStream);
     const acpClient = new LiveAcpClient({
       onUpdate: (update) => port.update(update),
+      onSessionModes: () => {},
       onStatus: () => {},
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
@@ -1474,6 +1477,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       .connect(serverStream);
     const acpClient = new LiveAcpClient({
       onUpdate: (update) => port.update(update),
+      onSessionModes: () => {},
       onStatus: () => {},
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
@@ -1528,6 +1532,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       .connect(serverStream);
     const acpClient = new LiveAcpClient({
       onUpdate: (update) => port.update(update),
+      onSessionModes: () => {},
       onStatus: () => {},
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
@@ -1568,6 +1573,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
       .connect(serverStream);
     const acpClient = new LiveAcpClient({
       onUpdate: (update) => port.update(update),
+      onSessionModes: () => {},
       onStatus: () => {},
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
@@ -1623,6 +1629,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
     const disconnected: (string | null)[] = [];
     const acpClient = new LiveAcpClient({
       onUpdate: () => {},
+      onSessionModes: () => {},
       onStatus: () => {},
       onConnected: (info) => connected.push(info.agentName),
       onSessionId: (id) => sessionIds.push(id),
@@ -1666,6 +1673,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
     const disconnected: (string | null)[] = [];
     const acpClient = new LiveAcpClient({
       onUpdate: () => {},
+      onSessionModes: () => {},
       onStatus: () => {},
       onConnected: () => {},
       onSessionId: () => {},
@@ -1694,6 +1702,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
     const disconnected: (string | null)[] = [];
     const acpClient = new LiveAcpClient({
       onUpdate: () => {},
+      onSessionModes: () => {},
       onStatus: () => {},
       onConnected: (info) => connected.push(info.agentName),
       onSessionId: () => {},
@@ -1865,6 +1874,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
     const switchWiring = wireSwitchHandlers(port);
     const acpClient = new LiveAcpClient({
       onUpdate: (update) => port.update(update),
+      onSessionModes: () => {},
       onStatus: () => {},
       onConnected: (info) =>
         port.setConnection({ status: 'connected', agentName: info.agentName, protocolVersion: info.protocolVersion, error: null }),

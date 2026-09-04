@@ -3,6 +3,7 @@ import { LiveAcpClient } from './acp/LiveAcpClient';
 import { WebSocketTransport } from './acp/transport/WebSocketTransport';
 import type {
   AcpContentBlock,
+  AcpSessionModeState,
   AcpSessionUpdate,
   PermissionOptionKind,
   SessionStatus,
@@ -253,6 +254,8 @@ function wireHandlers(entry: LiveConnection) {
       entry.pendingProfile = null;
     },
     onSessionId: (sessionId: string, cwd: string) => port.adoptSession(sessionId, cwd),
+    onSessionModes: (modes: AcpSessionModeState | null) =>
+      port.update({ sessionUpdate: 'modes_initialized', modes }),
     // An unexpected disconnect keeps the session id so the group can offer
     // "reconnect and resume"; a clean user disconnect clears it. Either way
     // a failed connect must not write its edits back into the profile.
@@ -546,6 +549,16 @@ export function resolveLivePermission(toolCallId: string, kind: PermissionOption
 export function cancelLiveTurn(): void {
   const entry = foregroundEntry('cancel');
   if (entry) entry.client.cancel();
+}
+
+/**
+ * Switches the foreground connection's session mode (`session/set_mode`).
+ * The document updates only on the confirmed RPC / notification (see
+ * LiveAcpClient.setMode) — no optimistic flip.
+ */
+export function setLiveMode(modeId: string): void {
+  const entry = foregroundEntry('setMode');
+  if (entry) void entry.client.setMode(modeId);
 }
 
 export async function newLiveSession(cwd: string): Promise<void> {
