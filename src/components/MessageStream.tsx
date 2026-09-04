@@ -11,27 +11,25 @@ import {
 } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { ArrowDown } from 'lucide-react';
-import type {
-  Block,
-  PermissionOptionKind,
-  SessionDocument,
-} from '../protocol/types';
+import type { Block, PermissionOptionKind } from '../protocol/types';
 import { AgentMessage } from './AgentMessage';
 import { PlanCard } from './PlanCard';
 import { ThoughtBlock } from './ThoughtBlock';
 import { ToolCallCard } from './ToolCallCard';
 import { UserMessage } from './UserMessage';
 import { ContentColumn } from './ContentColumn';
-import { AttachedPermissionCard, type AttachedPermission } from './PermissionCard';
+import { AttachedPermissionCard } from './PermissionCard';
 import { UnsupportedBlock } from './UnsupportedBlock';
+import { useMessageStreamItems } from '../projector/hooks';
+import type { AttachedPermission } from '../projector/messageStream';
 
 /**
  * Scroll-following policy: stick to the bottom while the user is already
  * there; scrolling away detaches and floats the "jump to latest" button.
  *
- * Long sessions are virtualized (react-virtuoso); the reducer preserves
- * untouched block identities so memoized rows skip re-renders on every
- * streamed chunk.
+ * Long sessions are virtualized (react-virtuoso); the projection preserves
+ * untouched item identities (ADR 0006) so memoized rows skip re-renders on
+ * every streamed chunk.
  *
  * `pinned` semantics: unpinning requires USER intent (wheel/touch/key/
  * pointer input opens a short window in which scroll events may detach);
@@ -52,36 +50,12 @@ const STICK_INTERVAL_MS = 40;
 
 const DETACH_DISTANCE_PX = 48;
 
-type BlockFlatItem = {
-  key: string;
-  kind: 'block';
-  block: Block;
-  streaming: boolean;
-  permission: AttachedPermission | null;
-};
-
-type StandalonePermissionItem = {
-  key: string;
-  kind: 'permission';
-  permission: AttachedPermission;
-};
-
-export type FlatItem = BlockFlatItem | StandalonePermissionItem;
-
 // Stable identities — changing component types in `components` remounts the
 // scroller and resets the scroll position.
 const StreamHeader = () => <div className="h-7" />;
 const StreamFooter = () => <div className="h-[6.75rem]" />;
 
-export function MessageStream({ doc, permissions, onResolvePermission }: {
-  doc: SessionDocument;
-  /**
-   * Permission cards to render — pending requests (answered concurrently,
-   * issue #18) plus policy-denied terminal records (issue #22). Minted by
-   * App's memo: wrapper identities must survive unrelated document churn
-   * or the memoized block views re-render on every chunk.
-   */
-  permissions: AttachedPermission[];
+export function MessageStream({ onResolvePermission }: {
   onResolvePermission: (toolCallId: string, kind: PermissionOptionKind) => void;
 }) {
   const [pinned, setPinned] = useState(true);
@@ -90,10 +64,7 @@ export function MessageStream({ doc, permissions, onResolvePermission }: {
   const pinnedRef = useRef(pinned);
   pinnedRef.current = pinned;
 
-  const items = useMemo(
-    () => flatten(doc, permissions, findStreamingBlock(doc)),
-    [doc, permissions],
-  );
+  const items = useMessageStreamItems();
 
   // Unpin is USER-intent only. Wheel/touch/key/pointer-down open a short
   // "user is scrolling" window; scroll events inside that window may unpin,
@@ -249,89 +220,9 @@ export function MessageStream({ doc, permissions, onResolvePermission }: {
   );
 }
 
-export function flatten(
-  doc: SessionDocument,
-  permissions: AttachedPermission[],
-  streamingBlock: Block | null,
-): FlatItem[] {
-  const items: FlatItem[] = [];
-  for (const turn of doc.turns) {
-    turn.blocks.forEach((block, i) => {
-      items.push({
-        key: `${turn.id}-${i}`,
-        kind: 'block',
-        block,
-        streaming: block === streamingBlock,
-        permission: null,
-      });
-    });
-  }
-
-  for (const permission of permissions) {
-    attachPermission(items, doc, permission);
-  }
-  return items;
-}
-
 /**
- * Places one permission — pending or policy-denied alike — onto its exact
- * tool-call block, else onto the current turn's single pending call (some
- * ACP bridges emit an interrupt ID for request_permission instead of the
- * preceding tool_call ID — attach only when that leaves no doubt), else as
- * an independent card at the end. A block is only ever claimed by one
- * permission — a second one degrades to an independent card instead of
- * silently evicting the first.
- */
-function attachPermission(items: FlatItem[], doc: SessionDocument, permission: AttachedPermission): void {
-  const toolCallId = permission.request.toolCallId;
-  const exactMatch = items.find(
-    (item): item is BlockFlatItem =>
-      item.kind === 'block' &&
-      item.block.kind === 'tool_call' &&
-      item.block.call.id === toolCallId,
-  );
-  if (exactMatch && exactMatch.permission === null) {
-    exactMatch.permission = permission;
-    return;
-  }
-
-  const currentTurn = doc.turns.at(-1);
-  const pendingCalls = currentTurn?.blocks.filter(
-    (block): block is Extract<Block, { kind: 'tool_call' }> =>
-      block.kind === 'tool_call' && block.call.status === 'pending',
-  ) ?? [];
-  const fallbackMatch =
-    pendingCalls.length === 1
-      ? items.find(
-          (item): item is BlockFlatItem => item.kind === 'block' && item.block === pendingCalls[0],
-        )
-      : undefined;
-  if (fallbackMatch && fallbackMatch.permission === null) {
-    fallbackMatch.permission = permission;
-    return;
-  }
-
-  items.push({
-    key: `${permission.state}-${toolCallId}`,
-    kind: 'permission',
-    permission,
-  });
-}
-
-function findStreamingBlock(doc: SessionDocument): Block | null {
-  if (doc.status !== 'running') return null;
-  const lastTurn = doc.turns.at(-1);
-  if (!lastTurn) return null;
-  for (let i = lastTurn.blocks.length - 1; i >= 0; i--) {
-    const block = lastTurn.blocks[i]!;
-    if (block.kind === 'agent_message') return block;
-  }
-  return null;
-}
-
-/**
- * Shallow-compare memo: the reducer keeps untouched block identities, so only
- * the block a chunk landed in re-renders.
+ * Shallow-compare memo: the projection keeps untouched item identities
+ * (ADR 0006), so only the block a chunk landed in re-renders.
  */
 const BlockView = memo(function BlockView({ block, streaming, permission, onResolvePermission }: {
   block: Block;

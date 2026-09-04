@@ -7,8 +7,10 @@
  *  - `Acp*` types mirror the ACP wire format (session/update notifications,
  *    v1 shape, Phase 0 subset). They are event-shaped and only the reducer
  *    and the replay driver ever see them.
- *  - `SessionDocument` is the stable rendering model the UI consumes. It is
- *    document-shaped: turns, blocks, resolved tool-call state.
+ *  - `SessionDocument` is the session's domain state: the accumulated
+ *    protocol facts, document-shaped (turns, blocks, resolved tool-call
+ *    state). Render models are never stored here — they are derived from
+ *    the document by the projector layer (issue #24, ADR 0006).
  *
  * v1/v2 protocol differences (v2's messageId upsert semantics,
  * running/idle/requires_action state machine) get absorbed by the reducer,
@@ -184,7 +186,7 @@ export function isSessionStateKind(kind: string): kind is (typeof SESSION_STATE_
 }
 
 // ---------------------------------------------------------------------------
-// Rendering model
+// Session document (domain facts — render models live in the projector)
 // ---------------------------------------------------------------------------
 
 export type SessionStatus = 'idle' | 'running' | 'requires_action';
