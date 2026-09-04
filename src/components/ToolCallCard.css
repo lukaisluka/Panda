@@ -5,7 +5,7 @@
    * (14px) covers text↔first-card and last-card↔text; MessageStream adds
    * the run modifiers below from the flat block sequence. 14px < body
    * line height (22.4px) is intentional: ZCode keeps block gaps under a
-   * line of body text — grouping is signalled by the mono row style,
+   * line of body text — grouping is signalled by the quiet row style,
    * not air. */
   margin-block: 14px;
 }
@@ -18,7 +18,7 @@
 .tool-card--after-tool { margin-block-start: 8px; }
 .tool-card--before-tool { margin-block-end: 8px; }
 
-/* ZCode-style: no card box. The tool call is a lightweight mono row that
+/* ZCode-style: no card box. The tool call is a lightweight quiet row that
  * sits directly on the page surface; state lives in the trailing badge,
  * expansion in the indented details rail. Radius only shapes the row
  * hover wash. */
@@ -48,9 +48,11 @@
 
 .tool-card-title {
   min-width: 0;
-  /* ZCode-style tool row: mono face, one step under body size, quiet
-   * color — the name reads as chrome, not content. */
-  font-family: var(--font-mono);
+  /* ZCode-style tool row: body (sans) face, one step under body size, quiet
+   * color — the name reads as chrome, not content. Sans, not mono: the
+   * reference client renders tool names like permission prompts (Inter),
+   * mono is for the payload inside the expanded rail. */
+  font-family: var(--font-sans);
   font-size: 13px;
   color: var(--panda-chrome-text);
 }

@@ -1,8 +1,8 @@
 /* Shared collapsible pattern: ThoughtBlock + UnsupportedBlock (#32 P3).
  * Astryx has no disclosure primitive; this is the one bespoke pattern both
  * blocks share so their chrome can never drift apart. Frameless like
- * .tool-card rows (ZCode-style): a mono header row sitting directly on the
- * page, expansion via the indented details rail. */
+ * .tool-card rows (ZCode-style): a quiet sans header row sitting directly
+ * on the page, expansion via the indented details rail. */
 
 .disclosure {
   /* Same ladder rung as .tool-card's text boundaries. */
@@ -17,7 +17,7 @@
   /* Flush with body text's left edge, like .tool-card-toggle. */
   padding: 6px 0;
   text-align: left;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 13px;
   color: var(--panda-chrome-text);
   transition: var(--panda-colors-transition);
