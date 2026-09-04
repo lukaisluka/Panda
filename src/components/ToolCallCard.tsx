@@ -33,6 +33,7 @@ import { MessageImage } from './MessageImage';
 import { AttachedPermissionCard } from './PermissionCard';
 import type { AttachedPermission } from '../projector/messageStream';
 import { diffStats } from './diff-utils';
+import { settledToolTitle } from './tool-title';
 import './ToolCallCard.css';
 
 const KIND_ICON: Record<AcpToolKind, LucideIcon> = {
@@ -91,6 +92,9 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
   // here). Fall back to the Wrench instead of rendering undefined.
   const Icon = KIND_ICON[call.kind] ?? Wrench;
   const path = call.locations[0]?.path;
+  // Progressive → settled verb once the call ends ("Editing x" → "Edit x");
+  // protocol title is untouched — this is display-only.
+  const displayTitle = settledToolTitle(call.title, call.status);
   const diffPart = call.content.find((c): c is Extract<typeof c, { type: 'diff' }> => c.type === 'diff');
   const stats = useMemo(
     () => (diffPart ? diffStats(diffPart.oldText, diffPart.newText) : null),
@@ -113,7 +117,7 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
       <div className="tool-card-frame">
         <button onClick={() => setOpen((o) => !o)} className="tool-card-toggle">
           <Icon size={14} className="tool-card-icon" />
-          <span className="truncate tool-card-title">{call.title}</span>
+          <span className="truncate tool-card-title">{displayTitle}</span>
           {stats && (
             <span className="tool-card-stats">
               <span className="tool-stats-add">+{stats.additions}</span>{' '}
