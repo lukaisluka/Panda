@@ -1,339 +1,98 @@
-import { useCallback, useEffect, useRef } from 'react';
-import { LiveAcpClient } from './acp/LiveAcpClient';
-import { WebSocketTransport } from './acp/transport/WebSocketTransport';
-import type { AcpContentBlock, PermissionOptionKind } from './protocol/types';
+import { useEffect, useMemo } from 'react';
+import { usePanda } from './store';
+import type { SessionEntry } from './store';
 import {
-  connectionStorePort,
-  useActiveConnection,
-  useActiveSessions,
-  usePanda,
-  type ConnectionStorePort,
-  type SessionEntry,
-  type SessionSwitchSnapshot,
-} from './store';
-import { updateProfileFields, type AgentProfile } from './profiles';
+  cancelLiveTurn,
+  connectLiveConnection,
+  deleteLiveSession,
+  disconnectLiveConnection,
+  foregroundConnection,
+  isDirectConnectionId,
+  newDirectConnectionId,
+  newLiveSession,
+  openLiveSession,
+  persistSessionsSnapshot,
+  previewProfileConnection,
+  removeLiveConnection,
+  resolveLivePermission,
+  sendLive,
+} from './liveConnections';
+import type { AgentProfile } from './profiles';
+import type { AcpContentBlock, PermissionOptionKind } from './protocol/types';
+
+/** Options for reconnecting the foreground slot. */
+export type ReconnectOptions = {
+  /** Resume the slot's retained session (transcript kept) instead of a fresh one. */
+  resume?: boolean;
+  /** Form-edited endpoint values; omitted/empty ones fall back to the slot's. */
+  url?: string;
+  cwd?: string;
+};
 
 /**
- * Phase 1+2 session driver: wires the live ACP client into the store exactly
- * the way the replay driver is wired (handlers -> store actions). Panda only
- * connects to an already-running ACP service over WebSocket — it never spawns
- * or manages the agent process.
- *
- * Session bookkeeping: the sidebar list merges server `session/list` entries
- * with locally-created ones and persists per-service to localStorage.
- * Agent 配置 (issue #2): a connect carried under a profile id writes the
- * trimmed url/cwd back into that profile once the connection succeeds.
+ * React facade over the live connection manager (issue #21): stable
+ * callbacks that resolve the foreground connection at call time, plus the
+ * one genuinely reactive concern — persisting every connection's session
+ * list per endpoint. All driver logic lives in `liveConnections.ts`.
  */
-
-const URL_KEY = 'panda.acp.url';
-const CWD_KEY = 'panda.acp.cwd';
-const SESSIONS_KEY_PREFIX = 'panda.sessions:';
-const PERSIST_LIMIT = 50;
-
-/** Remembers the endpoint between reloads; persistence is best-effort. */
-function remember(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch (err) {
-    console.warn(`[panda] could not persist ${key}`, err);
-  }
-}
-
-/** Last-used endpoint values for prefilling the connect form. */
-export function lastConnectionDefaults(): { url: string; cwd: string } {
-  return {
-    url: localStorage.getItem(URL_KEY) ?? '',
-    cwd: localStorage.getItem(CWD_KEY) ?? '',
-  };
-}
-
-/** Live-connect options; `profileId` routes the on-success write-back. */
-export type ConnectOptions = { resume?: boolean; profileId?: string | null };
-
-export interface SessionStorage {
-  getItem(key: string): string | null;
-}
-
-function loadPersistedSessions(url: string, storage: SessionStorage = localStorage): SessionEntry[] {
-  try {
-    const raw = storage.getItem(SESSIONS_KEY_PREFIX + url);
-    return raw ? (JSON.parse(raw) as SessionEntry[]) : [];
-  } catch (err) {
-    console.warn('[panda] could not read persisted sessions', err);
-    return [];
-  }
-}
-
-/**
- * Restores the remembered sidebar entries for one endpoint. This is a
- * replacement, never a merge: the visible list belongs to one connection
- * target at a time, so entries from the previously selected endpoint must not
- * bleed into it.
- */
-export function restoreEndpointSessions(
-  url: string,
-  replaceSessions: (entries: SessionEntry[]) => void,
-  storage: SessionStorage = localStorage,
-): void {
-  replaceSessions(loadPersistedSessions(url, storage));
-}
-
-function persistSessions(url: string, sessions: SessionEntry[]): void {
-  try {
-    localStorage.setItem(SESSIONS_KEY_PREFIX + url, JSON.stringify(sessions.slice(-PERSIST_LIMIT)));
-  } catch (err) {
-    console.warn('[panda] could not persist sessions', err);
-  }
-}
-
-/** The one live connection slot; stable across reconnects so its documents (and thus a resumable transcript) survive. */
-const LIVE_CONNECTION_ID = 'live';
-
 export function useLiveSession() {
-  // Connection-scoped store port: handlers never touch global fields (#16).
-  const portRef = useRef<ConnectionStorePort | null>(null);
-  if (portRef.current === null) portRef.current = connectionStorePort(LIVE_CONNECTION_ID);
-  const port = portRef.current;
-  /**
-   * Snapshot of the in-flight session switch (issue #17) — captured at stage,
-   * consumed by exactly one commit or rollback. Carries the client's
-   * connection era (issue #19): a settle whose era no longer matches was
-   * abandoned (reconnect/disconnect) and must be ignored — its snapshot was
-   * already rolled back stale at abandonment time.
-   */
-  const stagedSwitchRef = useRef<{ snapshot: SessionSwitchSnapshot; era: number } | null>(null);
-  /**
-   * Abandons the staged switch (issue #19): the connection era it belongs to
-   * is gone (a new connect is replacing it, or the connection died). The
-   * invalidation mints a fresh selection generation FIRST, so the rollback
-   * below lands stale — documents restored, settled pointers untouched.
-   */
-  const abandonStagedSwitch = (where: string) => {
-    const staged = stagedSwitchRef.current;
-    if (!staged) return;
-    stagedSwitchRef.current = null;
-    console.info(`[panda/acp] abandoning a staged session switch to ${staged.snapshot.targetSessionId} (${where})`);
-    port.invalidateSelections();
-    port.rollbackStagedSession(staged.snapshot);
-  };
-  // Lazily created once, mirroring useReplaySession's driver wiring.
-  const clientRef = useRef<LiveAcpClient | null>(null);
-  // Profile targeted by the in-flight connect — consumed on success
-  // (write-back) or dropped on any disconnect (no write-back on failure).
-  const pendingProfileRef = useRef<{ id: string; url: string; cwd: string } | null>(null);
-  if (clientRef.current === null) {
-    clientRef.current = new LiveAcpClient({
-      onUpdate: (update) => port.update(update),
-      onStatus: (status) => port.setStatus(status),
-      onConnected: (info) => {
-        port.setConnection({
-          status: 'connected',
-          agentName: info.agentName,
-          protocolVersion: info.protocolVersion,
-          error: null,
-        });
-        // "默认工作目录" = what the last successful connect used (issue #2).
-        const pending = pendingProfileRef.current;
-        if (pending) updateProfileFields(pending.id, { url: pending.url, cwd: pending.cwd });
-        pendingProfileRef.current = null;
-      },
-      onSessionId: (sessionId, cwd) => port.adoptSession(sessionId, cwd),
-      // An unexpected disconnect keeps the session id so the panel can offer
-      // "reconnect and resume"; a clean user disconnect clears it. Either way
-      // a failed connect must not write its edits back into the profile.
-      onDisconnected: (reason) => {
-        pendingProfileRef.current = null;
-        // A closed connection can no longer settle a selection (issue #19):
-        // any in-flight switch's late commit stops moving the UI pointer, and
-        // its staged snapshot is rolled back stale (documents only).
-        abandonStagedSwitch('disconnect');
-        port.setConnection(
-          reason
-            ? { status: 'error', error: reason }
-            : { status: 'disconnected', error: null, sessionId: null },
-        );
-      },
-      onCapabilities: (caps) =>
-        port.setCapabilities({
-          image: caps.image,
-          loadSession: caps.loadSession,
-          list: caps.list,
-          resume: caps.resume,
-          delete: caps.delete,
-        }),
-      onSessions: (entries) => port.mergeSessions(entries),
-      onSessionInfo: (sessionId, info) => port.patchSession(sessionId, info),
-      onReplayStart: () => port.resetDocument(),
-      onSessionDeleted: (sessionId) => port.removeSession(sessionId),
-      onSessionSwitchStage: (sessionId, cwd, era) => {
-        stagedSwitchRef.current = { snapshot: port.stageSession(sessionId, cwd), era };
-      },
-      onSessionSwitchCommit: (era) => {
-        const staged = stagedSwitchRef.current;
-        if (!staged || staged.era !== era) {
-          // The switch was abandoned (reconnect/disconnect rolled it back
-          // stale) or belongs to another era — a late commit must not consume
-          // a snapshot the current era never staged (issue #19).
-          console.info(`[panda/acp] session switch commit from era ${era} ignored (staged: ${staged ? `era ${staged.era}` : 'none'})`);
-          return;
-        }
-        stagedSwitchRef.current = null;
-        // The snapshot carries the selection token (issue #19): a commit for
-        // a superseded switch moves no settled pointer.
-        port.commitStagedSession(staged.snapshot);
-      },
-      onSessionSwitchRollback: (reason, era) => {
-        const staged = stagedSwitchRef.current;
-        if (!staged || staged.era !== era) {
-          // Expected after abandonment (the snapshot was already rolled back
-          // stale) — info, not error: the store's token check is the second
-          // line of defense and warns loudly there if it ever matters.
-          console.info(`[panda/acp] session switch rollback from era ${era} ignored (staged: ${staged ? `era ${staged.era}` : 'none'})`);
-          return;
-        }
-        stagedSwitchRef.current = null;
-        port.rollbackStagedSession(staged.snapshot);
-        // Surface the failure on a live connection only: after a disconnect
-        // (reason=null already reported) a stale error banner must not linger.
-        if (usePanda.getState().connections[LIVE_CONNECTION_ID]?.connection.status === 'connected') {
-          port.setConnection({ error: `切换会话失败: ${reason}` });
-        }
-      },
-    });
-  }
-  const acpClient = clientRef.current;
-
-  const connect = useCallback(
-    async (url: string, cwd: string, opts?: ConnectOptions) => {
-      const trimmedUrl = url.trim();
-      const trimmedCwd = cwd.trim();
-      if (!trimmedUrl || !trimmedCwd) {
-        console.warn('[panda/acp] connect ignored: url and cwd are required');
-        return;
-      }
-      remember(URL_KEY, trimmedUrl);
-      remember(CWD_KEY, trimmedCwd);
-      pendingProfileRef.current = opts?.profileId
-        ? { id: opts.profileId, url: trimmedUrl, cwd: trimmedCwd }
-        : null;
-      usePanda.getState().ensureConnection(LIVE_CONNECTION_ID);
-      const resumeSessionId = opts?.resume
-        ? usePanda.getState().connections[LIVE_CONNECTION_ID]?.connection.sessionId ?? null
-        : null;
-      usePanda.getState().setMode('live');
-      port.setConnection({
-        status: 'connecting',
-        url: trimmedUrl,
-        cwd: trimmedCwd,
-        error: null,
-        agentName: null,
-        protocolVersion: null,
-        sessionId: resumeSessionId,
-      });
-      // Seed the sidebar with sessions remembered for this service; the
-      // server list (if any) merges on top. A new endpoint replaces the old
-      // endpoint's visible list rather than combining unrelated histories.
-      restoreEndpointSessions(trimmedUrl, port.replaceSessions);
-      // A replacing connect ends the previous connection era (issue #19):
-      // its in-flight switch can never settle — roll it back stale BEFORE
-      // the new era begins staging/adopting anything.
-      abandonStagedSwitch('connect replacing the connection');
-      // The named transport seam (issue #20): the driver injects a transport
-      // instance, never a raw stream — the wire choice lives one place.
-      await acpClient.connect(
-        new WebSocketTransport(trimmedUrl),
-        trimmedCwd,
-        resumeSessionId ? { sessionId: resumeSessionId } : undefined,
-      );
-    },
-    [acpClient],
+  // The persisted projection is serialized into a string: a selector
+  // returning fresh objects would loop useSyncExternalStore (getSnapshot
+  // must be identity-stable), and a string only changes when a slot's
+  // endpoint or session list actually changed — streaming document updates
+  // never rewrite localStorage.
+  const sessionListsSnapshot = usePanda((s) =>
+    JSON.stringify(
+      Object.values(s.connections).map((slot) => [slot.connection.url, slot.sessions] as const),
+    ),
   );
-
-  const disconnect = useCallback(() => {
-    acpClient.disconnect();
-  }, [acpClient]);
-
-  /**
-   * Previews a saved Agent 配置 while disconnected. In live mode this abandons
-   * a resumable session from the previous endpoint and shows only the new
-   * endpoint's remembered sessions before the user connects.
-   */
-  const selectProfile = useCallback((profile: AgentProfile) => {
-    const url = profile.url.trim();
-    const cwd = profile.cwd.trim();
-    if (!url || !cwd) {
-      console.error(`[panda/profiles] selected profile ${profile.id} has an empty url or cwd`);
-      return;
-    }
-    restoreEndpointSessions(url, port.replaceSessions);
-    if (usePanda.getState().mode !== 'live') return;
-
-    port.resetDocument();
-    port.setCapabilities({ image: false, loadSession: false, list: false, resume: false, delete: false });
-    port.setConnection({
-      status: 'disconnected',
-      url,
-      cwd,
-      agentName: null,
-      protocolVersion: null,
-      sessionId: null,
-      error: null,
-    });
-  }, []);
-
-  const newSession = useCallback(
-    async (cwd: string) => {
-      const trimmedCwd = cwd.trim();
-      if (!trimmedCwd) {
-        console.warn('[panda/acp] newSession ignored: cwd is required');
-        return;
-      }
-      remember(CWD_KEY, trimmedCwd);
-      // The new session adopts a fresh document; the old one is retained.
-      await acpClient.newSession(trimmedCwd);
-    },
-    [acpClient],
-  );
-
-  /** Switches to another known session (requires loadSession capability). */
-  const loadSession = useCallback(
-    (sessionId: string, cwd: string) => acpClient.loadSession(sessionId, cwd),
-    [acpClient],
-  );
-
-  const deleteSession = useCallback(
-    (sessionId: string) => acpClient.deleteSession(sessionId),
-    [acpClient],
-  );
-
-  const send = useCallback(
-    (content: AcpContentBlock[]) => acpClient.send(content),
-    [acpClient],
-  );
-
-  const resolvePermission = useCallback(
-    (toolCallId: string, kind: PermissionOptionKind) => acpClient.resolvePermission(toolCallId, kind),
-    [acpClient],
-  );
-
-  const cancel = useCallback(() => acpClient.cancel(), [acpClient]);
-
-  // Persist the session list per service endpoint.
-  const connectionUrl = useActiveConnection().url;
-  const sessions = useActiveSessions();
   useEffect(() => {
-    if (connectionUrl) persistSessions(connectionUrl, sessions);
-  }, [connectionUrl, sessions]);
+    const lists = JSON.parse(sessionListsSnapshot) as Array<[string | null, SessionEntry[]]>;
+    persistSessionsSnapshot(lists.map(([url, sessions]) => ({ url, sessions })));
+  }, [sessionListsSnapshot]);
 
-  return {
-    connect,
-    disconnect,
-    selectProfile,
-    newSession,
-    loadSession,
-    deleteSession,
-    send,
-    resolvePermission,
-    cancel,
-  };
+  return useMemo(
+    () => ({
+      /** 临时直连: a fresh anonymous slot that dies with its disconnect. */
+      connectDirect: (url: string, cwd: string) => connectLiveConnection(newDirectConnectionId(), url, cwd),
+      /** Connects an Agent 配置's slot with its stored url/cwd. */
+      connectProfile: (profile: AgentProfile) =>
+        connectLiveConnection(profile.id, profile.url, profile.cwd, { profileId: profile.id }),
+      /**
+       * Reconnects the foreground slot. Form-edited url/cwd override the
+       * slot's remembered values and — for a profile slot — are written back
+       * to the 配置 on a successful connect (配置编辑静默生效于下次连接).
+       */
+      reconnectForeground: (opts?: ReconnectOptions) => {
+        const state = usePanda.getState();
+        const connectionId = state.activeConnectionId;
+        if (connectionId === null) {
+          console.warn('[panda/acp] reconnect ignored: no foreground connection');
+          return;
+        }
+        const slot = state.connections[connectionId];
+        const url = opts?.url?.trim() || slot?.connection.url;
+        const cwd = opts?.cwd?.trim() || slot?.connection.cwd;
+        if (!url || !cwd) {
+          console.warn(`[panda/acp] reconnect ignored: slot "${connectionId}" has no remembered url/cwd`);
+          return;
+        }
+        const profileId = isDirectConnectionId(connectionId) ? null : connectionId;
+        void connectLiveConnection(connectionId, url, cwd, { resume: opts?.resume, profileId });
+      },
+      disconnect: disconnectLiveConnection,
+      remove: removeLiveConnection,
+      previewProfile: previewProfileConnection,
+      foreground: foregroundConnection,
+      openSession: openLiveSession,
+      send: (content: AcpContentBlock[]) => sendLive(content),
+      resolvePermission: (toolCallId: string, kind: PermissionOptionKind) => resolveLivePermission(toolCallId, kind),
+      cancel: cancelLiveTurn,
+      newSession: (cwd: string) => newLiveSession(cwd),
+      deleteSession: (connectionId: string, sessionId: string) => deleteLiveSession(connectionId, sessionId),
+    }),
+    [],
+  );
 }
+
+export type LiveSessionFacade = ReturnType<typeof useLiveSession>;

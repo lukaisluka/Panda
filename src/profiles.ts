@@ -31,6 +31,26 @@ export interface ProfileStorage {
 
 const PROFILES_KEY = 'panda.profiles';
 
+type ProfilesListener = (profiles: AgentProfile[]) => void;
+
+/**
+ * Live subscribers to the stored list. localStorage is the single source of
+ * truth but it has two writers (the sidebar's profile CRUD and the
+ * connection manager's connect-time write-back), so every write notifies —
+ * a UI copy that never re-reads would silently diverge.
+ */
+const listeners = new Set<ProfilesListener>();
+
+export function subscribeProfiles(listener: ProfilesListener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function notifyProfiles(storage: ProfileStorage): void {
+  const current = loadProfiles(storage);
+  for (const listener of listeners) listener(current);
+}
+
 function defaultStorage(): ProfileStorage {
   // Browser-only by construction: the UI is the only caller without injection.
   return globalThis.localStorage;
@@ -84,6 +104,7 @@ export function saveProfiles(profiles: AgentProfile[], storage: ProfileStorage =
   } catch (err) {
     console.warn('[panda/profiles] could not persist profiles', err);
   }
+  notifyProfiles(storage);
 }
 
 /** Updates one profile's url/cwd (connect-time edit write-back) and persists.

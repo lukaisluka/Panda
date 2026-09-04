@@ -86,16 +86,7 @@ export default function App() {
       )}
       <Sidebar
         mode={mode}
-        connection={connection}
-        capabilities={capabilities}
-        sessions={sessions}
-        busy={busy}
-        onConnect={live.connect}
-        onSelectProfile={live.selectProfile}
-        onDisconnect={live.disconnect}
-        onNewSession={live.newSession}
-        onLoadSession={live.loadSession}
-        onDeleteSession={live.deleteSession}
+        live={live}
         onReplayDemo={demo.replayDemo}
         mobileOpen={mobileNavigationOpen}
         onMobileClose={() => setMobileNavigationOpen(false)}
