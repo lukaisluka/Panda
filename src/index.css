@@ -97,7 +97,12 @@
  * themes on two elements (html for color-scheme, App's <Theme> div for
  * the component tree) and each anchor re-injects the theme ladder — a
  * :root-only pin never reaches past the inner div's own declaration.
- * Weights still follow the theme; sizes and families are Panda's. */
+ * Weights still follow the theme; sizes and families are Panda's.
+ *
+ * Type roles (joint-debug, SSOT in DESIGN.md「字体」): 14px = content
+ * (whole message stream + composer input), 13px = chrome (sidebar rows,
+ * connect panel, header title), 11px = micro (statusbar, labels, meta,
+ * hints). Hierarchy is tier × grayscale — no second content size. */
 
 :root,
 [data-astryx-theme] {

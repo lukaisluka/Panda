@@ -2,6 +2,9 @@
 
 .composer-column {
   padding-bottom: 16px; /* pb-4 */
+  /* Chrome tier (13px) inheritance base for the row's Astryx widgets; the
+   * textarea opts back up to 14px explicitly (typed text is content). */
+  font-size: 13px;
 }
 
 .composer-card {
@@ -99,7 +102,8 @@
   resize: none;
   background: transparent;
   padding-block: 6px; /* py-1.5 */
-  font-size: 13px;
+  /* Typed text IS content: same 14px as the stream it lands in. */
+  font-size: 14px;
   line-height: 1.55;
   outline: none;
 }

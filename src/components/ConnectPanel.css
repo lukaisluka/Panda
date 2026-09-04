@@ -29,7 +29,7 @@
   min-width: 0;
   align-items: center;
   gap: 6px; /* gap-1.5 */
-  font-size: 12px; /* text-xs */
+  font-size: 13px;
   color: var(--color-muted);
 }
 
@@ -45,7 +45,7 @@
   align-items: center;
   gap: 8px;
   padding-block: 4px; /* py-1 */
-  font-size: 12px;
+  font-size: 13px;
   color: var(--color-muted);
 }
 
@@ -97,7 +97,7 @@
 
 .connect-note {
   margin-top: 8px;
-  font-size: 10px;
-  line-height: 12px; /* leading-3 */
+  font-size: 11px;
+  line-height: 16px;
   color: var(--color-faint);
 }
