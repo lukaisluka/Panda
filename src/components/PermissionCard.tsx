@@ -4,17 +4,9 @@ import type {
   PermissionOptionKind,
   PermissionRequest,
 } from '../protocol/types';
+import type { AttachedPermission } from '../projector/messageStream';
 
 /**
- * A permission as the message flow attaches it to a tool call (or renders it
- * as an independent card): pending waits for the user; denied settled by
- * host policy (issue #22). The wrapper objects are minted by App's memo so
- * their identities survive unrelated document churn — the memoized block
- * views depend on that.
- */
-export type AttachedPermission =
-  | { state: 'pending'; request: PermissionRequest }
-  | { state: 'denied'; request: PermissionRequest; response: DeniedPermissionResponse };
 
 /**
  * Inline approval card mounted below the tool call that triggered it —

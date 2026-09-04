@@ -29,7 +29,8 @@ import type {
 import { markdownComponents } from './CodeBlock';
 import { DiffView } from './DiffView';
 import { MessageImage } from './MessageImage';
-import { AttachedPermissionCard, type AttachedPermission } from './PermissionCard';
+import { AttachedPermissionCard } from './PermissionCard';
+import type { AttachedPermission } from '../projector/messageStream';
 import { diffStats } from './diff-utils';
 
 const KIND_ICON: Record<AcpToolKind, LucideIcon> = {

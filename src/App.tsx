@@ -1,10 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Menu } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { MessageStream } from './components/MessageStream';
 import { StatusBar } from './components/StatusBar';
 import { Composer } from './components/Composer';
-import type { AttachedPermission } from './components/PermissionCard';
 import {
   useActiveConnection,
   useActiveDoc,
@@ -13,6 +12,7 @@ import {
   useActiveSwitching,
   usePanda,
 } from './store';
+import { useStatusHint } from './projector/hooks';
 import { useReplaySession } from './useReplaySession';
 import { useLiveSession } from './useLiveSession';
 
@@ -34,48 +34,12 @@ export default function App() {
 
   const send = liveActive ? live.send : demo.send;
   const resolvePermission = liveActive ? live.resolvePermission : demo.resolvePermission;
-  // Permission cards, insertion-ordered (issue #18): pending ones, several at
-  // once, each answered independently — plus policy-denied terminal records
-  // (issue #22) that stay rendered. Memoized so the wrapper identities (a
-  // MessageStream dep the memoized block views lean on) only change when a
-  // permission does.
-  const attachedPermissions = useMemo(
-    () =>
-      Object.values(doc.permissions).flatMap((permission): AttachedPermission[] => {
-        if (permission.status === 'pending')
-          return [{ state: 'pending', request: permission.request }];
-        if (permission.response?.outcome === 'denied-by-policy')
-          return [
-            { state: 'denied', request: permission.request, response: permission.response },
-          ];
-        return [];
-      }),
-    [doc.permissions],
-  );
 
   // A session switch in flight is busy too: the composer must not send into a
   // session that has not settled yet, and the sidebar locks other switches.
   const busy = doc.status !== 'idle' || switching !== null;
   const composerDisabled = liveActive ? !connected || busy : busy;
-  const hint = !liveActive
-    ? doc.status === 'requires_action'
-      ? '等待批准中…'
-      : doc.status === 'running'
-        ? 'Panda 正在工作…'
-        : undefined
-    : connection.status === 'connecting'
-      ? '连接中…'
-      : connection.status === 'error'
-        ? '连接失败 — 在侧栏重连并恢复，或重新连接'
-        : !connected
-          ? '未连接 ACP 服务 — 在侧栏连接'
-          : switching
-            ? '切换会话中…'
-            : connection.error
-              ? connection.error
-              : busy
-                ? 'Panda 正在工作…'
-                : undefined;
+  const hint = useStatusHint();
 
   const activeSession = liveActive
     ? sessions.find((entry) => entry.sessionId === connection.sessionId)
@@ -117,11 +81,7 @@ export default function App() {
           </div>
           <span className="hidden shrink-0 font-mono text-[11px] text-faint md:block">{headerMeta}</span>
         </header>
-        <MessageStream
-          doc={doc}
-          permissions={attachedPermissions}
-          onResolvePermission={resolvePermission}
-        />
+        <MessageStream onResolvePermission={resolvePermission} />
         <StatusBar
           doc={doc}
           connection={connection}
