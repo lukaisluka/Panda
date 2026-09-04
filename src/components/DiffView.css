@@ -39,7 +39,7 @@
   border-collapse: collapse;
   font-family: var(--font-mono);
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 /* Line-number gutters. */

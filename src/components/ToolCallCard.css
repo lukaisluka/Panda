@@ -1,7 +1,11 @@
 /* Tool-call card: summary row + expandable raw input and results. */
 
 .tool-card {
-  margin-block: 12px; /* my-3 */
+  /* 24px: block gaps between cards (and cards ↔ text) must exceed the
+   * primary line height (13 × 1.65 ≈ 21.5px) so block boundaries read
+   * stronger than line breaks. Adjacent-block margin collapsing takes
+   * the max, so card ↔ 6px text gaps land here too. */
+  margin-block: 24px;
 }
 
 .tool-card-frame {
@@ -115,7 +119,7 @@
   padding: 0 12px 10px; /* px-3 pb-2.5 */
   font-family: var(--font-mono);
   font-size: 11px;
-  line-height: 1.625; /* leading-relaxed */
+  line-height: 1.5;
   color: var(--color-muted);
 }
 

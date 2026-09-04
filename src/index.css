@@ -166,10 +166,12 @@ body {
  * wrapping every element in components.
  * ------------------------------------------------------------------------- */
 .md-body {
-  /* 13px / 1.55 — terminal-client density (ZCode-style). Secondary surfaces
-   * (tool calls, thoughts) step down to 12px via --sm. */
-  font-size: 13px;
-  line-height: 1.55;
+  /* 14px / 1.6 — terminal-client density (ZCode-style). Secondary surfaces
+   * (tool calls, thoughts) step down to 12px via --sm and tighten leading
+   * to 1.45; block gaps (cards at 24px) must stay larger than this line
+   * height so block boundaries read stronger than line breaks. */
+  font-size: 14px;
+  line-height: 1.6;
 }
 /* Secondary markdown surfaces (thought bodies, tool results) sit one step
  * below primary messages in the type scale. This must be its own class:
@@ -177,6 +179,8 @@ body {
  * utility like text-[13px] on the same element would never apply. */
 .md-body--sm {
   font-size: 12px;
+  /* Cards are compact surfaces: tighter leading than the primary body. */
+  line-height: 1.45;
 }
 /* Nesting rule (joint-debug): an expanded detail level never renders
  * larger than its host surface. Secondary bodies always sit inside a
@@ -248,7 +252,9 @@ body {
 
 .md-body code {
   font-family: var(--font-mono);
-  font-size: 0.85em;
+  /* Same size as body text — ZCode-style: inline code is differentiated by
+   * the mono face + raised chip, never by shrinking the font. */
+  font-size: 1em;
   background: var(--color-raised);
   border: 1px solid var(--color-border);
   padding: 0.1em 0.35em;

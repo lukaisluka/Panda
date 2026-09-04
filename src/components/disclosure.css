@@ -3,7 +3,8 @@
  * blocks share so their chrome can never drift apart. */
 
 .disclosure {
-  margin-block: 12px; /* my-3 */
+  /* 24px: matches .tool-card — block gaps exceed the primary line height. */
+  margin-block: 24px;
   border: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
   border-radius: var(--panda-radius-lg);
   background: color-mix(in oklab, var(--color-surface) 60%, transparent);
@@ -66,7 +67,7 @@
   text-align: left;
   font-family: var(--font-mono);
   font-size: 12px;
-  line-height: 1.625; /* leading-relaxed */
+  line-height: 1.5;
   color: var(--color-muted);
   white-space: pre;
 }
