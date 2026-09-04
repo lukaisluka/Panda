@@ -15,6 +15,7 @@ import {
 import { useStatusHint } from './projector/hooks';
 import { useReplaySession } from './useReplaySession';
 import { useLiveSession } from './useLiveSession';
+import './App.css';
 
 export default function App() {
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
@@ -50,11 +51,11 @@ export default function App() {
   const headerMeta = liveActive ? (connection.url ?? 'acp') : 'acp://claude-code · demo replay';
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="app-shell">
       {mobileNavigationOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-20 bg-bg/70 md:hidden"
+          className="app-nav-overlay"
           aria-label="关闭导航"
           onClick={() => setMobileNavigationOpen(false)}
         />
@@ -66,20 +67,20 @@ export default function App() {
         mobileOpen={mobileNavigationOpen}
         onMobileClose={() => setMobileNavigationOpen(false)}
       />
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-3 sm:px-6">
-          <div className="flex min-w-0 items-center gap-2">
+      <main className="app-main">
+        <header className="app-header">
+          <div className="app-header-lead">
             <button
               type="button"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-raised hover:text-fg md:hidden"
+              className="app-nav-toggle"
               aria-label="打开导航"
               onClick={() => setMobileNavigationOpen(true)}
             >
               <Menu size={18} />
             </button>
-            <span className="truncate text-[13px] font-medium">{headerTitle}</span>
+            <span className="truncate app-header-title">{headerTitle}</span>
           </div>
-          <span className="hidden shrink-0 font-mono text-[11px] text-faint md:block">{headerMeta}</span>
+          <span className="app-header-meta">{headerMeta}</span>
         </header>
         <MessageStream onResolvePermission={resolvePermission} />
         <StatusBar

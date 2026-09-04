@@ -1,0 +1,41 @@
+/* Virtualized transcript stream: spacers, root, and the "jump to latest" pill. */
+
+.stream-root {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+}
+
+.stream-scroller {
+  height: 100%;
+}
+
+.stream-header-space {
+  height: 28px; /* h-7 — matches the pre-Astryx breathing room above the first row */
+}
+
+.stream-footer-space {
+  /* 108px (h-[6.75rem]): bottom clearance so the last row clears the composer
+   * card; Composer.css relies on this when computing its own offsets. */
+  height: 108px;
+}
+
+.stream-jump {
+  position: absolute;
+  right: 24px;
+  bottom: 16px;
+  display: flex;
+  height: 36px;
+  width: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-full);
+  background: var(--color-raised);
+  color: var(--color-muted);
+  box-shadow: var(--shadow-high);
+  transition: var(--panda-colors-transition);
+}
+.stream-jump:hover {
+  color: var(--color-fg);
+}

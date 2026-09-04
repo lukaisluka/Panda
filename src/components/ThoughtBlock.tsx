@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import type { Block } from '../protocol/types';
 import { markdownComponents } from './CodeBlock';
 import { MessageImage } from './MessageImage';
+import './disclosure.css';
 
 type ThoughtBlockModel = Extract<Block, { kind: 'thought' }>;
 
@@ -16,20 +17,17 @@ export function ThoughtBlock({ block }: { block: ThoughtBlockModel }) {
     firstText?.type === 'text' ? (firstText.text.split('\n')[0]?.slice(0, 60) ?? '') : '';
 
   return (
-    <div className="my-3 rounded-lg border border-border/70 bg-surface/60">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-muted transition-colors hover:text-fg"
-      >
-        <Brain size={13} className="shrink-0 text-faint" />
-        <span className="truncate italic">{open ? '思考过程' : preview || 'Thinking…'}</span>
+    <div className="disclosure">
+      <button onClick={() => setOpen((o) => !o)} className="disclosure-toggle">
+        <Brain size={13} className="disclosure-icon" />
+        <span className="disclosure-label disclosure-label--italic">{open ? '思考过程' : preview || 'Thinking…'}</span>
         <ChevronDown
           size={13}
-          className={`ml-auto shrink-0 text-faint transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`disclosure-chevron ${open ? 'disclosure-chevron--open' : ''}`}
         />
       </button>
       {open && (
-        <div className="md-body md-body--sm border-t border-border/70 px-3.5 py-2.5 italic text-muted">
+        <div className="md-body md-body--sm disclosure-body disclosure-body--thought">
           {block.parts.map((part, i) =>
             part.type === 'image' ? (
               <MessageImage key={i} image={part} />

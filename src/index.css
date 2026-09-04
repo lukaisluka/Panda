@@ -1,40 +1,23 @@
-/* Astryx + Tailwind v4 coexistence (#32 Phase 1). Layer order is load-bearing:
- * unlayered styles beat every named layer and later layers beat earlier ones,
- * so this declaration must come before any @import and every stylesheet must
- * land in a layer — explicitly via layer() below (Tailwind), or internally
- * (Astryx files declare their own @layer reset / astryx-base / astryx-theme).
- * Order per the Astryx migration guide: system first, utilities last, so a
- * utility on className can intentionally override component defaults. */
-@layer reset, theme, base, astryx-base, astryx-theme, components, utilities;
-
-@import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/preflight.css" layer(base);
+/* Astryx design system, no Tailwind (#32 Phase 3). Astryx's CSS files declare
+ * their own layers internally (reset / astryx-base / astryx-theme); Panda's
+ * own styles are unlayered, which beats every named layer — the intentional
+ * override point for bespoke surfaces (same rule the .md-body block always
+ * relied on). */
 @import "@astryxdesign/core/reset.css";
 @import "@astryxdesign/core/astryx.css";
 @import "@astryxdesign/theme-matcha/theme.css";
-@import "@astryxdesign/core/tailwind-theme.css";
-@import "tailwindcss/utilities.css" layer(utilities);
 
 /* Panda token aliases onto Astryx system tokens (#32 Phase 1). Values resolve
  * at runtime, so the matcha theme and light/dark switching flow through every
- * utility and plain-CSS reference untouched.
+ * plain-CSS reference untouched. Phase 3 moved these out of Tailwind's @theme
+ * into plain :root declarations — same names, same resolution.
  *
- * NOT redefined here, on purpose:
- *  - --color-border, --color-accent: same name as the system token. A @theme
- *    entry would be a self-referencing var() loop; the bridge's @theme inline
- *    registration already powers the border-border / *-accent utilities, and
- *    plain CSS var(--color-border|accent) resolves to the system :root values.
- *  - --color-muted below intentionally shadows the bridge (which maps it to a
- *    background token): our text-muted means secondary TEXT.
- *
- * --spacing: the bridge remaps it to the theme's --spacing-1 (matcha = 6px),
- * which would rescale EVERY Tailwind spacing utility (w-*, p-*, gap-*) by
- * 1.5x — a silent layout change, not a re-skin. Phase 1 keeps Panda's
- * geometry on Tailwind's 4px base; Astryx components keep using their own
- * --spacing-* vars internally and are unaffected. Revisit in Phase 2+ only
- * if we adopt Astryx layout primitives. */
-@theme {
-  --spacing: 0.25rem;
+ * --color-muted intentionally means secondary TEXT here (Astryx's own
+ * --color-muted is a background token; our name predates the system's).
+ * --color-border / --color-accent are not redeclared: same name as the
+ * system token, and var(--color-border|accent) resolves to the :root values
+ * the matcha theme already provides. */
+:root {
   --color-bg: var(--color-background-body);
   --color-surface: var(--color-background-surface);
   --color-raised: var(--color-background-muted);
@@ -49,6 +32,31 @@
 
   --font-sans: var(--font-family-body);
   --font-mono: var(--font-family-code);
+
+  /* Panda geometry stayed on a 4px step when Tailwind left (#32 Phase 1
+   * pinned --spacing for the same reason: matcha's --spacing-1 is 6px and
+   * a straight swap rescales the whole layout 1.5x). Component CSS uses
+   * --space-N; Astryx components keep their internal --spacing-* scale. */
+  --space-0_5: 2px;
+  --space-1: 4px;
+  --space-1_5: 6px;
+  --space-2: 8px;
+  --space-2_5: 10px;
+  --space-3: 12px;
+  --space-3_5: 14px;
+  --space-4: 16px;
+  --space-5: 20px;
+
+  /* Radius: the bridge mapped Tailwind names onto the matcha scale in
+   * Phase 1; these keep those exact resolutions. */
+  --panda-radius-md: var(--radius-element);
+  --panda-radius-lg: var(--radius-container);
+  --panda-radius-xl: var(--radius-page);
+  --panda-radius-2xl: 16px;
+  --panda-radius-full: var(--radius-full);
+
+  --panda-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --panda-colors-transition: color 150ms var(--panda-ease), background-color 150ms var(--panda-ease), border-color 150ms var(--panda-ease);
 }
 
 html, body, #root {
@@ -74,6 +82,28 @@ body {
  * the rule above — a layered utility could not override it. */
 .focus-outline-none:focus-visible {
   outline: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Shared primitives (#32 Phase 3). Tiny fixed vocabulary used across
+ * components; everything else lives in the co-located per-component CSS.
+ * ------------------------------------------------------------------------- */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mono {
+  font-family: var(--font-mono);
+}
+@keyframes panda-pulse {
+  50% { opacity: 0.5; }
+}
+.pulse {
+  animation: panda-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse { animation: none; }
 }
 
 /* The virtualized stream owns the scrollbar. With classic (space-taking)

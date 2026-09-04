@@ -1,4 +1,5 @@
 import type { AcpContentBlock } from '../protocol/types';
+import './messages.css';
 
 type ImageBlock = Extract<AcpContentBlock, { type: 'image' }>;
 
@@ -9,7 +10,7 @@ export function MessageImage({ image }: { image: ImageBlock }) {
       src={`data:${image.mimeType};base64,${image.data}`}
       alt=""
       loading="lazy"
-      className="my-2 max-h-80 rounded-lg border border-border/70"
+      className="message-image"
     />
   );
 }

@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import type { Block } from '../protocol/types';
 import { markdownComponents } from './CodeBlock';
 import { MessageImage } from './MessageImage';
+import './messages.css';
 
 type UserMessageBlock = Extract<Block, { kind: 'user_message' }>;
 
@@ -31,8 +32,8 @@ export function UserMessage({ block }: { block: UserMessageBlock }) {
   flush();
 
   return (
-    <div className="my-6 flex justify-end">
-      <div className="md-body max-w-[70%] rounded-2xl rounded-tr-md bg-danger/20 px-4 py-3 text-fg">
+    <div className="user-message">
+      <div className="md-body user-message-bubble">
         {children}
       </div>
     </div>

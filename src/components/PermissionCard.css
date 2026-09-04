@@ -1,0 +1,47 @@
+/* Inline permission approval / policy-denied records (issue #22). */
+
+.permission-card {
+  margin-top: 6px; /* mt-1.5 */
+  border: 1px solid color-mix(in oklab, var(--color-warn) 40%, transparent);
+  border-radius: var(--panda-radius-xl);
+  background: color-mix(in oklab, var(--color-warn) 5%, transparent);
+  padding: 14px; /* p-3.5 */
+}
+.permission-card--denied {
+  border-color: var(--color-border);
+  background: color-mix(in oklab, var(--color-raised) 40%, transparent);
+}
+
+.permission-head {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* gap-2 */
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-warn);
+}
+.permission-head--denied {
+  color: var(--color-muted);
+}
+
+.permission-title {
+  margin-top: 8px; /* mt-2 */
+  font-size: 12px;
+  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+}
+.permission-title--dim {
+  color: color-mix(in oklab, var(--color-fg) 70%, transparent);
+}
+
+.permission-reason {
+  margin-top: 6px; /* mt-1.5 */
+  font-size: 11px;
+  color: var(--color-faint);
+}
+
+.permission-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px; /* mt-3 */
+}

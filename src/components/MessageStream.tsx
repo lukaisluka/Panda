@@ -22,6 +22,7 @@ import { AttachedPermissionCard } from './PermissionCard';
 import { UnsupportedBlock } from './UnsupportedBlock';
 import { useMessageStreamItems } from '../projector/hooks';
 import type { AttachedPermission } from '../projector/messageStream';
+import './MessageStream.css';
 
 /**
  * Scroll-following policy: stick to the bottom while the user is already
@@ -52,8 +53,8 @@ const DETACH_DISTANCE_PX = 48;
 
 // Stable identities — changing component types in `components` remounts the
 // scroller and resets the scroll position.
-const StreamHeader = () => <div className="h-7" />;
-const StreamFooter = () => <div className="h-[6.75rem]" />;
+const StreamHeader = () => <div className="stream-header-space" />;
+const StreamFooter = () => <div className="stream-footer-space" />;
 
 export function MessageStream({ onResolvePermission }: {
   onResolvePermission: (toolCallId: string, kind: PermissionOptionKind) => void;
@@ -175,11 +176,11 @@ export function MessageStream({ onResolvePermission }: {
   };
 
   return (
-    <div className="relative min-h-0 flex-1">
+    <div className="stream-root">
       <Virtuoso
         ref={virtuosoRef}
         data={items}
-        className="h-full"
+        className="stream-scroller"
         increaseViewportBy={{ top: 600, bottom: 600 }}
         computeItemKey={(_, item) => item.key}
         itemContent={(_, item) => {
@@ -210,7 +211,7 @@ export function MessageStream({ onResolvePermission }: {
       {!pinned && (
         <button
           onClick={jumpToBottom}
-          className="absolute bottom-4 right-6 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-raised text-muted shadow-lg transition-colors hover:text-fg"
+          className="stream-jump"
           aria-label="回到最新"
         >
           <ArrowDown size={16} />

@@ -1,0 +1,137 @@
+/* Tool-call card: summary row + expandable raw input and results. */
+
+.tool-card {
+  margin-block: 12px; /* my-3 */
+}
+
+.tool-card-frame {
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-lg);
+  background: var(--color-surface);
+  transition: var(--panda-colors-transition);
+}
+.tool-card-frame--pending {
+  border-left: 2px solid color-mix(in oklab, var(--color-warn) 60%, transparent);
+}
+.tool-card-frame--running {
+  border-left: 2px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
+}
+.tool-card-frame--failed {
+  border-left: 2px solid color-mix(in oklab, var(--color-danger) 60%, transparent);
+}
+
+.tool-card-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px; /* gap-2.5 */
+  padding: 8px 12px; /* px-3 py-2 */
+  text-align: left;
+  transition: var(--panda-colors-transition);
+}
+.tool-card-toggle:hover {
+  background: color-mix(in oklab, var(--color-raised) 40%, transparent);
+}
+
+.tool-card-icon {
+  flex-shrink: 0;
+  color: var(--color-muted);
+}
+
+.tool-card-title {
+  min-width: 0;
+  font-size: 12px; /* text-xs */
+  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+}
+
+.tool-card-stats {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.tool-stats-add { color: var(--color-add); }
+.tool-stats-del { color: var(--color-danger); }
+
+.tool-card-path {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-faint);
+}
+
+.tool-card-status {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.tool-status-icon { flex-shrink: 0; }
+.tool-status-icon--ok { color: var(--color-accent); }
+.tool-status-icon--err { color: var(--color-danger); }
+.tool-status-icon--faint { color: var(--color-faint); }
+
+.tool-card-chevron {
+  flex-shrink: 0;
+  color: var(--color-faint);
+  transition: transform 150ms var(--panda-ease);
+}
+.tool-card-chevron--open {
+  transform: rotate(180deg);
+}
+
+.tool-card-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* space-y-2 */
+  margin: 6px 0 0 8px; /* mt-1.5 ml-2 */
+  border-left: 1px solid var(--color-border);
+  padding-left: 12px; /* pl-3 */
+}
+
+.tool-input-details {
+  border: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
+  border-radius: var(--panda-radius-md);
+  background: color-mix(in oklab, var(--color-surface) 60%, transparent);
+}
+
+.tool-input-summary {
+  padding: 6px 12px; /* px-3 py-1.5 */
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-faint);
+  cursor: pointer;
+  user-select: none;
+  transition: var(--panda-colors-transition);
+}
+.tool-input-summary:hover {
+  color: var(--color-fg);
+}
+.tool-input-details[open] > .tool-input-summary {
+  color: var(--color-muted);
+}
+
+.tool-input-pre {
+  overflow-x: auto;
+  padding: 0 12px 10px; /* px-3 pb-2.5 */
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.625; /* leading-relaxed */
+  color: var(--color-muted);
+}
+
+.tool-text-box {
+  border: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
+  border-radius: var(--panda-radius-lg);
+  background: color-mix(in oklab, var(--color-surface) 60%, transparent);
+  padding: 10px 14px; /* px-3.5 py-2.5 */
+  color: var(--color-muted);
+}
+
+.tool-waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px; /* px-1 py-0.5 */
+  font-size: 12px;
+  color: var(--color-faint);
+}

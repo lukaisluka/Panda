@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import type { AcpToolCallContent } from '../protocol/types';
 import { highlightLines, type TokenSpan } from '../highlight/highlighter';
 import { computeRows, diffStats, intersectSpans, withWordSpans, type DiffRow } from './diff-utils';
+import './DiffView.css';
 
 type DiffPart = Extract<AcpToolCallContent, { type: 'diff' }>;
 
 const ROW_BG: Record<DiffRow['type'], string> = {
-  add: 'bg-diff-add',
-  del: 'bg-diff-del',
+  add: 'diff-row--add',
+  del: 'diff-row--del',
   ctx: '',
 };
 
@@ -43,29 +44,29 @@ export function DiffView({ diff }: { diff: DiffPart }) {
   }, [diff.path, oldText, diff.newText]);
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-surface">
-      <div className="flex items-center justify-between border-b border-border bg-raised/40 px-3.5 py-2">
-        <span className="font-mono text-xs text-muted">{diff.path}</span>
-        <span className="font-mono text-xs">
-          <span className="text-add">+{stats.additions}</span>{' '}
-          <span className="text-danger">−{stats.deletions}</span>
+    <div className="diff-container">
+      <div className="diff-header">
+        <span className="diff-header-path">{diff.path}</span>
+        <span className="diff-header-lines">
+          <span className="diff-lines-add">+{stats.additions}</span>{' '}
+          <span className="diff-lines-del">−{stats.deletions}</span>
         </span>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse font-mono text-xs leading-[1.6]">
+      <div className="diff-scroll">
+        <table className="diff-table">
           <tbody>
             {rows.map((row, i) => (
               <tr key={i} className={ROW_BG[row.type]}>
-                <td className="w-10 select-none px-2 text-right align-top text-faint/70">{row.oldNo ?? ''}</td>
-                <td className="w-10 select-none px-2 text-right align-top text-faint/70">{row.newNo ?? ''}</td>
+                <td className="diff-gutter">{row.oldNo ?? ''}</td>
+                <td className="diff-gutter">{row.newNo ?? ''}</td>
                 <td
-                  className={`w-4 select-none text-center align-top ${
-                    row.type === 'add' ? 'text-add' : row.type === 'del' ? 'text-danger' : 'text-transparent'
+                  className={`diff-marker ${
+                    row.type === 'add' ? 'diff-marker--add' : row.type === 'del' ? 'diff-marker--del' : ''
                   }`}
                 >
                   {row.type === 'add' ? '+' : row.type === 'del' ? '−' : '·'}
                 </td>
-                <td className="whitespace-pre px-2 pr-4 align-top text-fg/85">
+                <td className="diff-cell">
                   <LineContent row={row} tokens={tokenLineFor(row, lines)} />
                 </td>
               </tr>
@@ -101,8 +102,8 @@ function LineContent({ row, tokens }: { row: DiffRow; tokens: TokenSpan[] | null
           className={
               seg.changed
                 ? row.type === 'add'
-                  ? 'rounded-[2px] bg-add/25'
-                  : 'rounded-[2px] bg-danger/30'
+                  ? 'diff-word--add'
+                  : 'diff-word--del'
                 : undefined
           }
         >

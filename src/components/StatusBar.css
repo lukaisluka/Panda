@@ -1,0 +1,94 @@
+/* Bottom status strip: session state + connection on the left, context meter
+ * and cost on the right. Stacks above the row on narrow viewports. */
+
+.statusbar {
+  border-top: 1px solid var(--color-border);
+  padding-block: 8px; /* py-2 */
+  font-size: 12px; /* text-xs */
+}
+
+.statusbar-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px; /* gap-1.5 */
+}
+@media (min-width: 640px) {
+  .statusbar-inner {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.statusbar-cluster {
+  display: flex;
+  align-items: center;
+  gap: 12px; /* gap-3 */
+}
+
+.statusbar-conn {
+  display: flex;
+  align-items: center;
+  gap: 6px; /* gap-1.5 */
+}
+
+.statusbar-session {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* gap-2 */
+}
+
+.statusbar-faint { color: var(--color-faint); }
+.statusbar-muted { color: var(--color-muted); }
+
+.statusbar-error {
+  max-width: 288px; /* max-w-72 */
+  color: var(--color-danger);
+}
+
+.statusbar-agent {
+  max-width: 160px; /* max-w-40 */
+  color: var(--color-faint);
+}
+
+.statusbar-warn-icon { color: var(--color-warn); }
+.statusbar-warn-text {
+  font-weight: 500;
+  color: var(--color-warn);
+}
+.statusbar-accent-icon { color: var(--color-accent); }
+
+.statusbar-usage {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* gap-2 */
+  align-self: flex-end;
+  white-space: nowrap;
+  color: var(--color-faint);
+}
+@media (min-width: 640px) {
+  .statusbar-usage { gap: 12px; /* sm:gap-3 */ }
+}
+
+.statusbar-meter {
+  display: none;
+  height: 4px; /* h-1 */
+  width: 144px; /* w-36 */
+  overflow: hidden;
+  border-radius: var(--panda-radius-full);
+  background: var(--color-raised);
+}
+@media (min-width: 640px) {
+  .statusbar-meter { display: block; }
+}
+
+.statusbar-meter-fill {
+  height: 100%;
+  border-radius: var(--panda-radius-full);
+  background: color-mix(in oklab, var(--color-accent) 70%, transparent);
+  transition: width 500ms var(--panda-ease);
+}
+
+.statusbar-mono {
+  font-family: var(--font-mono);
+}

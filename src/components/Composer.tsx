@@ -9,6 +9,7 @@ import {
 } from '../attachments';
 import type { AcpContentBlock } from '../protocol/types';
 import { ContentColumn } from './ContentColumn';
+import './Composer.css';
 
 export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onStop }: {
   onSend: (content: AcpContentBlock[]) => void;
@@ -69,44 +70,38 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
   const classified = classifyAttachments(attachments);
 
   return (
-    <ContentColumn className="pb-4">
+    <ContentColumn className="composer-column">
         <div
-          className={`rounded-2xl border bg-surface px-4 py-3 transition-colors ${
-            disabled
-              ? 'border-border opacity-60'
-              : 'border-border focus-within:border-accent/40'
-          }`}
+          className={`composer-card ${disabled ? 'composer-card--disabled' : ''}`}
         >
           {classified.length > 0 && (
-            <div className="mb-3 flex flex-wrap gap-2">
+            <div className="composer-attachments">
               {classified.map((item) => (
                 <div
                   key={item.id}
-                  className={`shrink-0 ${item.error ? 'w-28' : 'w-14'}`}
+                  className={`composer-tile ${item.error ? 'composer-tile--error' : ''}`}
                 >
                   <div
-                    className={`relative mx-auto flex h-14 w-14 items-center justify-center rounded-lg border bg-raised p-1 ${
-                      item.error ? 'border-danger/70' : 'border-border'
-                    }`}
+                    className={`composer-thumb ${item.error ? 'composer-thumb--error' : ''}`}
                   >
                     <img
                       src={`data:${item.mimeType};base64,${item.data}`}
                       alt={item.name}
-                      className="h-full w-full rounded object-cover"
+                      className="composer-thumb-img"
                     />
                     <button
                       type="button"
                       onClick={() =>
                         setAttachments((current) => current.filter((entry) => entry.id !== item.id))
                       }
-                      className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-surface text-muted hover:text-text"
+                      className="composer-remove"
                       aria-label={`移除 ${item.name}`}
                     >
                       <X size={12} />
                     </button>
                   </div>
                   {item.error && (
-                    <p className="mt-1 text-center text-[11px] leading-3 text-danger">
+                    <p className="composer-tile-error">
                       {item.error}
                     </p>
                   )}
@@ -114,13 +109,13 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
               ))}
             </div>
           )}
-          <div className="flex items-end gap-2">
+          <div className="composer-row">
             <input
               ref={fileInputRef}
               type="file"
               accept="image/*"
               multiple
-              className="hidden"
+              className="composer-file-input"
               onChange={(e) => {
                 void addFiles(Array.from(e.target.files ?? []));
                 e.target.value = '';
@@ -149,7 +144,7 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
               onChange={(e) => setValue(e.target.value)}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
-              className="focus-outline-none max-h-40 flex-1 resize-none bg-transparent py-1.5 text-[13px] leading-[1.55] outline-none placeholder:text-faint"
+              className="focus-outline-none composer-input"
             />
             {stopping ? (
               <IconButton
@@ -172,11 +167,11 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
           </div>
         </div>
         {attachmentError ? (
-          <p className="mt-2 text-center text-[11px] text-danger">{attachmentError}</p>
+          <p className="composer-hint composer-hint--danger">{attachmentError}</p>
         ) : !canAttachImages ? (
-          <p className="mt-2 text-center text-[11px] text-faint">当前 agent 未声明图片输入能力</p>
+          <p className="composer-hint composer-hint--faint">当前 agent 未声明图片输入能力</p>
         ) : (
-          <p className="mt-2 text-center text-[11px] text-faint">
+          <p className="composer-hint composer-hint--faint">
             Enter 发送，Shift+Enter 换行 · 可粘贴或选择图片
           </p>
         )}
