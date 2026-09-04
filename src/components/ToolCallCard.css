@@ -1,23 +1,29 @@
 /* Tool-call card: summary row + expandable raw input and results. */
 
 .tool-card {
-  margin-block: 12px; /* my-3 */
+  /* ZCode spacing ladder: text↔tool 14px, tool↔tool 8px. The default
+   * (14px) covers text↔first-card and last-card↔text; MessageStream adds
+   * the run modifiers below from the flat block sequence. 14px < body
+   * line height (22.4px) is intentional: ZCode keeps block gaps under a
+   * line of body text — grouping is signalled by the quiet row style,
+   * not air. */
+  margin-block: 14px;
 }
 
+/* Run modifiers: cards inside a run of consecutive tool calls sit 8px
+ * apart. BOTH sides must drop — margins collapse through the item
+ * wrappers (no block padding/border), so a single 8px side would still
+ * read 14px. Set in React (itemContent) because CSS sibling selectors
+ * can't see across the virtualizer's per-item wrappers. */
+.tool-card--after-tool { margin-block-start: 8px; }
+.tool-card--before-tool { margin-block-end: 8px; }
+
+/* ZCode-style: no card box. The tool call is a lightweight quiet row that
+ * sits directly on the page surface; state lives in the trailing badge,
+ * expansion in the indented details rail. Radius only shapes the row
+ * hover wash. */
 .tool-card-frame {
-  border: 1px solid var(--color-border);
   border-radius: var(--panda-radius-lg);
-  background: var(--color-surface);
-  transition: var(--panda-colors-transition);
-}
-.tool-card-frame--pending {
-  border-left: 2px solid color-mix(in oklab, var(--color-warn) 60%, transparent);
-}
-.tool-card-frame--running {
-  border-left: 2px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
-}
-.tool-card-frame--failed {
-  border-left: 2px solid color-mix(in oklab, var(--color-danger) 60%, transparent);
 }
 
 .tool-card-toggle {
@@ -25,7 +31,9 @@
   width: 100%;
   align-items: center;
   gap: 10px; /* gap-2.5 */
-  padding: 8px 12px; /* px-3 py-2 */
+  /* No inline padding — the row (icon → title) must sit flush with the
+   * left edge of body text, which has none either. */
+  padding: 6px 0;
   text-align: left;
   transition: var(--panda-colors-transition);
 }
@@ -35,19 +43,40 @@
 
 .tool-card-icon {
   flex-shrink: 0;
-  color: var(--color-muted);
+  color: var(--panda-chrome-text);
+}
+
+/* File-type icon (FileTypeIcon): an <img>, not a lucide <svg> — keep it
+ * unsquashed in the flex row; alignment comes from the row's centering. */
+.tool-file-icon {
+  flex: none;
+  display: block;
+}
+
+/* Basename in the file row: a filename is a code string, so mono — unlike
+ * the verb span, which stays sans like every other tool title. */
+.tool-card-file {
+  min-width: 0;
+  font-family: var(--panda-font-code);
+  color: var(--panda-chrome-text);
 }
 
 .tool-card-title {
   min-width: 0;
-  font-size: 12px; /* text-xs */
-  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+  /* ZCode-style tool row: body (sans) face, quiet color — the name reads
+   * as chrome, not content. One size for the whole content area
+   * (joint-debug): hierarchy by grayscale only. Sans, not mono: the
+   * reference client renders tool names like permission prompts (Inter),
+   * mono is for the payload inside the expanded rail. */
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--panda-chrome-text);
 }
 
 .tool-card-stats {
   flex-shrink: 0;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 14px;
 }
 .tool-stats-add { color: var(--color-add); }
 .tool-stats-del { color: var(--color-danger); }
@@ -55,7 +84,7 @@
 .tool-card-path {
   min-width: 0;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 14px;
   color: var(--color-faint);
 }
 
@@ -63,6 +92,9 @@
   display: flex;
   align-items: center;
   margin-left: auto;
+  /* Astryx Badge pins its own 12px; the content area runs one size —
+   * (0,1,1) outspecifies the badge's single stylex class. */
+  & span { font-size: 14px; }
 }
 
 .tool-status-icon { flex-shrink: 0; }
@@ -96,7 +128,7 @@
 
 .tool-input-summary {
   padding: 6px 12px; /* px-3 py-1.5 */
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--color-faint);
   cursor: pointer;
@@ -114,8 +146,8 @@
   overflow-x: auto;
   padding: 0 12px 10px; /* px-3 pb-2.5 */
   font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.625; /* leading-relaxed */
+  font-size: 14px;
+  line-height: 1.5;
   color: var(--color-muted);
 }
 
@@ -132,6 +164,13 @@
   align-items: center;
   gap: 8px;
   padding: 2px 4px; /* px-1 py-0.5 */
-  font-size: 12px;
+  font-size: 14px;
+  color: var(--color-faint);
+}
+
+/* Fallback row for protocol content Panda cannot render (audio, resource,
+ * terminal, …) — wire.ts maps those to explicit `unsupported` entries so the
+ * stream admits they exist instead of silently losing them. */
+.tool-unsupported {
   color: var(--color-faint);
 }

@@ -19,21 +19,29 @@ Panda 的 UI 设计系统文档（single source of truth）。与 [CONTEXT.md](C
 - **暗色不是二等公民**：所有颜色经 Astryx 的 `light-dark()` token 自动翻转，
   任何新样式必须在两种模式下检查。
 
-## 主题与模式（Phase 4：全主题可切换）
+## 主题与模式（Phase 4：全主题可切换 → joint-debug 后单主题暴露）
 
-**七个官方主题全部打包，零定制、全用默认 token，用户在界面上自由选择**
-（原 Phase 4 计划"拷 matcha 源码按品牌精调"已废弃——matcha 底子本身
-不满意，方向改为给用户选择权）：
+**七个官方主题全部打包，零定制、全用默认 token**（原 Phase 4 计划"拷
+matcha 源码按品牌精调"已废弃——matcha 底子本身不满意，方向改为给用户
+选择权）。
+
+**2026-09 joint-debug 修正**：多主题并行维护成本过高，**只暴露
+chocolate 一个**（`src/theme.ts` 的 `EXPOSED_THEME_IDS`），其余六个保持
+打包但不出现在选择器；localStorage 里存的旧选择（如 neutral）响亮回落
+到 chocolate。选择器在暴露数 ≤1 时整个隐藏。恢复多主题 = 改一个数组。
 
 | 主题 | 性格 | 亮底 / 暗底 | 正文 / 标题字体 |
 | --- | --- | --- | --- |
-| neutral（**默认**） | 黑白灰工程感 | `#f1f1f1` / `#1b1b1b` | Figtree / Figtree |
+| neutral | 黑白灰工程感 | `#f1f1f1` / `#1b1b1b` | Figtree / Figtree |
 | matcha | 软、复古（Phase 1–3 的旧默认） | `#F0F0E0` / `#12140e` | DM Sans / Playwrite US Trad（手写体） |
 | stone | 冷灰、圆角小一号 | `#f3f3f5` / `#111015` | Figtree / Montserrat |
 | butter | 奶油底电光蓝，撞色大胆 | `#FDFBE4` / `#261A13` | Outfit / Outfit |
-| chocolate | 大地暖棕 terminal 风 | `#FFFCF7` / `#141010` | Albert Sans / Fraunces（衬线） |
+| chocolate（**默认 + 唯一暴露**） | 大地暖棕 terminal 风 | `#FFFCF7` / `#141010` | Albert Sans / Fraunces（衬线） |
 | gothic | **纯暗色**（无亮 token） | — / `#101314` | Fustat / Fustat |
 | y2k | 全直角、复古糖果 | `#CCCFFA` / `#0e0f1a` | Poppins / Poppins |
+
+（表中"字体"是主题自带的栈，仅存档——实际渲染字体已被 Panda 钉死，
+见「字体」节。）
 
 机制（`src/theme.ts` + `src/main.tsx` 的 `ThemeRoot`）：
 
@@ -73,8 +81,8 @@ Panda 的 UI 设计系统文档（single source of truth）。与 [CONTEXT.md](C
 | `--color-add` | `--color-success` | 成功/新增 |
 | `--color-diff-add` | `--color-success-muted` | diff 新增行底色 |
 | `--color-diff-del` | `--color-error-muted` | diff 删除行底色 |
-| `--font-sans` | `--font-family-body` | 正文（随主题：Figtree/DM Sans/…，见「字体」） |
-| `--font-mono` | `--font-family-code` | 代码（JetBrains Mono 栈；neutral 主题例外，系统等宽） |
+| `--font-sans` | `--font-family-body` | 正文（**Panda 钉死为 Inter + 系统 CJK 栈**，不随主题；见「字体」） |
+| `--font-mono` | `--font-family-code` | 代码（**Panda 钉死为 JetBrains Mono**，不随主题；见「字体」） |
 
 **不别名的两个名字（同名直解）**：`--color-border` 与 `--color-accent`
 和 Astryx 系统 token 同名。别名层里写 `var(--color-…)` 会自引用成循环，
@@ -213,25 +221,36 @@ Astryx 不是全盘替代；以下保持在 `src/index.css` 的纯 CSS 里，颜
 - **focus-visible 轮廓**与 `.focus-outline-none` 退出：键盘可达性兜底。
 - **`.message-scroller`** 的 scrollbar-gutter 媒体查询：虚拟流滚动条对称预留。
 
-## 字体（Phase 4：webfont 全量引入）
+## 字体（joint-debug 后：所有权归 Panda，variable 自托管）
 
-每个主题声明自己的字体栈（正文/标题/代码，见主题表），Astryx built 主题
-只设 `font-family` 不加载文件。`src/fonts.css` 用 **fontsource 静态包**
-（`@fontsource/figtree` 等，非 variable 包）按主题分组 `@import`：
+**2026-09 联调改版**：对齐参考客户端（ZCode）的字形后，字体不再随主题走。
+`src/index.css` 在 `:root` 与 `[data-astryx-theme]` 双锚点上 unlayered 钉死：
 
-- 静态包的 `@font-face` family 名与主题栈精确一致（variable 包注册的是
-  `"Figtree Variable"` 这类带后缀的名字，永远匹配不上主题栈——这是选
-  静态包的原因）。
-- 字重取 Panda 与 Astryx 类型阶实际用的 normal/medium/semibold
-  （400/500/600）；Playwrite US Trad 是单字重设计（400），semibold 由
-  浏览器合成。
-- 打包 67 个 woff2（全子集全字重 ~950KB 进 dist），浏览器按
-  `unicode-range` 惰性下载——实际运行只取各字体的 latin 子集
-  （每字重 ~15–25KB）。
-- neutral 主题**有意不装**等宽 webfont：它的代码栈就是系统等宽
-  （`ui-monospace, SF Mono…`），主题级设计决定，保持原样。
-- 新增主题时：查它的三个 `--font-family-*` 栈，缺的字体补进
-  `fonts.css` 对应分组。
+- `--panda-font-body` = `'Inter Variable', -apple-system, … 'PingFang SC', …`
+  → 喂给 `--font-family-body/heading`。拉丁字形是 Inter 的（高 x-height、
+  直杆 l、直尾 y），`-apple-system` 渲染的 SF Pro 复现不出来；Inter 无
+  CJK 覆盖，混排汉字回落系统栈（苹方/雅黑）。
+- `--panda-font-code` = `'JetBrains Mono Variable', ui-monospace, …`
+  → 喂给 `--font-family-code`。行内代码/代码块/diff/工具参数统一观感，
+  且跨主题一致（此前 neutral 落到系统 SF Mono，与参考差异明显）。
+
+两个 variable 包直接在 `index.css` 顶部 `@import`（`@fontsource-variable/
+inter`、`@fontsource-variable/jetbrains-mono`），无 CDN 依赖。
+
+**历史包袱已清**：Phase 4 的 `src/fonts.css`（十个 fontsource 静态包、
+67 个 woff2 ≈ 950KB）曾为七主题各自的字体栈供文件；token 被钉死后这些
+栈再无消费者，文件与依赖一并移除。若将来恢复"字体随主题"，注意当初选
+静态包的原因：variable 包的 `@font-face` family 带 ` Variable` 后缀，
+与主题栈字面名永远匹配不上。
+
+**字号三档体系**（同轮联调定案，层级 = 档位 × 灰度，不再用第二种正文
+字号）：
+
+| 档 | 尺寸 | 角色 |
+| --- | --- | --- |
+| 内容 | 14px | 消息流全量（含工具行/diff/权限卡，流根 `.stream-root` 钉继承基准）+ 输入框文字 |
+| chrome | 13px | 侧栏行/品牌、连接面板、顶栏标题 |
+| micro | 11px | 状态栏、分组标签、meta/版本、提示、错误小字 |
 
 ## 已知的视觉变化（迁移期有意接受）
 
@@ -261,3 +280,5 @@ Astryx 不是全盘替代；以下保持在 `src/index.css` 的纯 CSS 里，颜
   持久化**（默认 neutral），零定制全用默认 token；各主题 webfont 经
   fontsource 静态包全量引入（`src/fonts.css`）；gothic 强制暗色。
   `#32` 至此四个阶段全部完成。
+  （后注 ×2：joint-debug 字体接管后 fonts.css 与静态包已移除，见
+  「字体」节；同轮起只暴露 chocolate，见本节开头的修正段。）

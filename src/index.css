@@ -5,6 +5,16 @@
  * relied on). */
 @import "@astryxdesign/core/reset.css";
 @import "@astryxdesign/core/astryx.css";
+/* Latin body face (joint-debug): the reference client's Latin glyphs match
+ * Inter (tall x-height, straight-stem l, straight-tail y, no-serif 1), not
+ * SF Pro that -apple-system renders — that stack left mixed-script text a
+ * notch thinner and narrower than the reference. Self-hosted variable font,
+ * no CDN dependency. */
+@import "@fontsource-variable/inter";
+/* Mono face (joint-debug): paired with Inter, and pinned for the same
+ * ownership reason — neutral's system mono (SF Mono) visibly differed from
+ * the reference client's code glyphs. */
+@import "@fontsource-variable/jetbrains-mono";
 /* All seven official themes (#32 Phase 4): each theme.css is @scope'd under
  * its own data-astryx-theme attribute, so they coexist and only the one
  * <Theme> anchors is live. Selection is a runtime user choice (src/theme.ts). */
@@ -41,7 +51,98 @@
 
   --font-sans: var(--font-family-body);
   --font-mono: var(--font-family-code);
+}
 
+/* ---------------------------------------------------------------------------
+ * Fonts — Panda owns the typefaces, not the themes.
+ *
+ * Inter (self-hosted variable) for Latin + the system CJK stack (PingFang
+ * SC on macOS, YaHei on Windows): the reference client's Latin glyphs are
+ * Inter's — tall x-height, straight-stem l, straight-tail y — which
+ * -apple-system (SF Pro) does not reproduce, and theme webfonts (Figtree
+ * etc.) thinned the text further. Inter has no CJK coverage, so mixed
+ * scripts fall through to the system stack for Han.
+ *
+ * JetBrains Mono (self-hosted variable) for every code surface — inline
+ * code, fenced blocks, diffs, tool payloads. The classic Inter pairing,
+ * and it replaces both theme monos (JetBrains Mono on matcha as a webfont,
+ * SF Mono via neutral's system stack) so code renders identically across
+ * themes. Both declared on :root AND [data-astryx-theme] (both Astryx
+ * anchors re-inject theme tokens), and unlayered so every theme layer
+ * loses. Astryx components keep consuming --font-family-*, now fed from
+ * --panda-font-body / --panda-font-code.
+ * ------------------------------------------------------------------------- */
+:root,
+[data-astryx-theme] {
+  --panda-font-body: 'Inter Variable', -apple-system, BlinkMacSystemFont,
+    'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    sans-serif;
+  --font-family-body: var(--panda-font-body);
+  --font-family-heading: var(--panda-font-body);
+
+  --panda-font-code: 'JetBrains Mono Variable', ui-monospace, 'SF Mono',
+    'Cascadia Code', Menlo, Consolas, monospace;
+  --font-family-code: var(--panda-font-code);
+}
+
+/* Pin the type scale across all seven themes (joint-debug finding, #32
+ * follow-up): themes ship their own full --font-size-* ladders and split
+ * into two density presets — comfortable (matcha/gothic/y2k, base 1rem) vs
+ * compact (neutral/stone/butter/chocolate, base 0.875rem). Letting the
+ * ladder switch rescaled message text 14↔16px on theme switch while
+ * Panda's card components stayed pinned at px — half-following looked
+ * like a bug. Same rationale and mechanism as --space-* below: values are
+ * core defaults, and unlayered declarations beat every theme layer.
+ * Declared on :root AND on [data-astryx-theme] because Astryx anchors
+ * themes on two elements (html for color-scheme, App's <Theme> div for
+ * the component tree) and each anchor re-injects the theme ladder — a
+ * :root-only pin never reaches past the inner div's own declaration.
+ * Weights still follow the theme; sizes and families are Panda's.
+ *
+ * Type roles (joint-debug, SSOT in DESIGN.md「字体」): 14px = content
+ * (whole message stream + composer input), 13px = chrome (sidebar rows,
+ * connect panel, header title), 11px = micro (statusbar, labels, meta,
+ * hints). Hierarchy is tier × grayscale — no second content size. */
+
+:root,
+[data-astryx-theme] {
+  --font-size-4xs: 0.375rem;
+  --font-size-3xs: 0.4375rem;
+  --font-size-2xs: 0.5rem;
+  --font-size-xs: 0.625rem;
+  --font-size-sm: 0.75rem;
+  --font-size-base: 0.875rem;
+  --font-size-lg: 1.0625rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.8125rem;
+  --font-size-4xl: 2.1875rem;
+  --font-size-5xl: 2.625rem;
+
+  /* Chrome text (tool rows, thinking rows): ZCode keeps process rows at
+   * ~3:1 contrast — clearly present, clearly not content. Sits between
+   * muted and faint so both polarities weaken symmetrically. */
+  --panda-chrome-text: color-mix(in oklab, var(--color-muted) 30%, var(--color-faint) 70%);
+}
+
+/* ZCode contrast calibration (joint-debug): neutral ships a #f1f1f1 body
+ * which flattens the hierarchy — near-black text can't read deep enough
+ * and mid-gray chrome reads muddy. The reference client sits on #f8f8f7;
+ * lifting only the light side restores both directions at once (dark
+ * side keeps the theme's #1b1b1b). Scoped to neutral: other themes own
+ * their own tinted bodies.
+ *
+ * The :root[...] arm must out-specify the theme's @scope rules — @scope
+ * preambles DO count into specificity ((0,2,0) here) and the html anchor
+ * is where :root's --color-bg alias resolves, so a bare attribute
+ * selector (0,1,0) gets overridden back on html (the div anchor, being
+ * the scope's exclusive lower bound, has no competing theme rule). */
+:root[data-astryx-theme='neutral'],
+[data-astryx-theme='neutral'] {
+  --color-background-body: light-dark(#f8f8f7, #1b1b1b);
+}
+
+:root {
   /* Panda geometry stayed on a 4px step when Tailwind left (#32 Phase 1
    * pinned --spacing for the same reason: matcha's --spacing-1 is 6px and
    * a straight swap rescales the whole layout 1.5x). Component CSS uses
@@ -78,7 +179,12 @@ body {
   background-color: var(--color-bg);
   color: var(--color-fg);
   font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
+  /* Un-do the Astryx reset's antialiased/grayscale smoothing: on macOS it
+   * thins every glyph (no subpixel AA), which read as "our font is thinner
+   * than the reference client". `auto` restores platform default and the
+   * unlayered rule beats the reset layer. */
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
 }
 
 /* Keep keyboard focus visible while using Panda's own accent system. */
@@ -104,6 +210,22 @@ body {
 }
 .mono {
   font-family: var(--font-mono);
+}
+/* Live think/thought rows: a fixed-width single-line window onto the tail of
+ * the reasoning stream. dir="rtl" anchors the text to the right and cuts on
+ * the LEFT (ellipsis lands there), so as the text grows the newest part
+ * stays visible — it reads as content flushing leftwards. unicode-bidi:
+ * plaintext keeps Latin/CJK glyph order intact inside the rtl line box.
+ * Shared by ToolCallCard (think tool calls) and ThoughtBlock (thought
+ * chunks). */
+.tool-think-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  unicode-bidi: plaintext;
+  color: var(--color-faint);
 }
 @keyframes panda-pulse {
   50% { opacity: 0.5; }
@@ -136,21 +258,22 @@ body {
  * wrapping every element in components.
  * ------------------------------------------------------------------------- */
 .md-body {
-  /* 13px / 1.55 — terminal-client density (ZCode-style). Secondary surfaces
-   * (tool calls, thoughts) step down to 12px via --sm. */
-  font-size: 13px;
-  line-height: 1.55;
-}
-/* Secondary markdown surfaces (thought bodies, tool results) sit one step
- * below primary messages in the type scale. This must be its own class:
- * .md-body is unlayered CSS, which beats Tailwind's layered utilities — a
- * utility like text-[13px] on the same element would never apply. */
-.md-body--sm {
-  font-size: 12px;
+  /* 14px / 1.6 — terminal-client density (ZCode-style). One size for the
+   * whole content area (joint-debug): hierarchy is carried by weight and
+   * grayscale only — secondary surfaces (tool bodies, thoughts) use the
+   * same size with muted color. Block gaps (cards at 14px↔text) stay
+   * under a line of body text so block boundaries read stronger than
+   * line breaks. */
+  font-size: 14px;
+  line-height: 1.6;
 }
 .md-body > :first-child { margin-top: 0; }
 .md-body > :last-child { margin-bottom: 0; }
-.md-body p { margin: 0.5em 0; }
+/* p must re-inherit the container size: theme reset layers declare
+ * :where(p) { font-size: var(--font-size-base) } and an element's own
+ * declaration always beats inheritance — without this, paragraphs ran one
+ * step larger than lists in the same message. */
+.md-body p { margin: 0.5em 0; font-size: inherit; line-height: inherit; }
 .md-body strong { font-weight: 600; color: var(--color-fg); }
 .md-body em { color: var(--color-muted); }
 .md-body ul { margin: 0.5em 0; padding-left: 1.5em; list-style: disc; }
@@ -158,16 +281,15 @@ body {
 .md-body li { margin: 0.2em 0; }
 .md-body li::marker { color: var(--color-faint); }
 
+/* Headings stay at body size (joint-debug): one size per content area,
+ * hierarchy via weight (600) and margins alone. */
 .md-body h1, .md-body h2, .md-body h3,
 .md-body h4, .md-body h5, .md-body h6 {
   margin: 1em 0 0.4em;
   font-weight: 600;
+  font-size: 1em;
   line-height: 1.3;
 }
-.md-body h1 { font-size: 1.3em; }
-.md-body h2 { font-size: 1.2em; }
-.md-body h3 { font-size: 1.1em; }
-.md-body h4, .md-body h5, .md-body h6 { font-size: 1em; }
 
 .md-body blockquote {
   margin: 0.5em 0;
@@ -194,7 +316,6 @@ body {
   margin: 0.6em 0;
   overflow-x: auto;
   border-collapse: collapse;
-  font-size: 0.95em;
 }
 .md-body th, .md-body td {
   border: 1px solid var(--color-border);
@@ -205,10 +326,12 @@ body {
 
 .md-body code {
   font-family: var(--font-mono);
-  font-size: 0.85em;
+  /* Same size as body text — ZCode-style: inline code is differentiated by
+   * the mono face + tinted background, never by a border or a smaller
+   * size. */
+  font-size: 1em;
   background: var(--color-raised);
-  border: 1px solid var(--color-border);
-  padding: 0.1em 0.35em;
+  padding: 0.15em 0.4em;
   border-radius: 5px;
 }
 /* Fenced blocks render through CodeBlock (header + shiki tokens, below).
@@ -222,7 +345,7 @@ body {
   padding: 10px 12px;
   overflow-x: auto;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.6;
 }
 .md-body > pre code {
@@ -251,7 +374,7 @@ body {
 }
 .md-codeblock-lang {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.5;
   color: var(--color-faint);
 }
@@ -274,6 +397,6 @@ body {
   padding: 10px 12px;
   overflow-x: auto;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.6;
 }

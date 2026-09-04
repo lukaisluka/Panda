@@ -49,7 +49,7 @@ describe('toAcpUpdates raw preservation', () => {
     warnSpy.mockRestore();
   });
 
-  it('keeps tool calls with unsupported-only content on the create event only', () => {
+  it('maps unsupported tool content (terminal) to an explicit unsupported entry', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const n = note({
       sessionUpdate: 'tool_call',
@@ -61,13 +61,61 @@ describe('toAcpUpdates raw preservation', () => {
     expect(events).toHaveLength(2);
     expect(events[0]).toMatchObject({ sessionUpdate: 'tool_call', toolCallId: 't-1' });
     expect((events[0] as { raw?: SessionNotification }).raw).toBe(n); // terminal payload stays reachable via raw
+    // Not dropped: the follow-up update carries an explicit unsupported row
+    // the stream can render, instead of a silent empty content list.
     expect(events[1]).toMatchObject({
       sessionUpdate: 'tool_call_update',
       toolCallId: 't-1',
-      content: [],
+      content: [{ type: 'unsupported', blockType: 'terminal' }],
     });
     expect('raw' in (events[1] as object)).toBe(false);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('terminal'));
+    warnSpy.mockRestore();
+  });
+
+  it('maps unsupported content blocks (audio) inside tool content to unsupported entries', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const n = note({
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 't-2',
+      content: [
+        { type: 'content', content: { type: 'text', text: 'done' } },
+        { type: 'content', content: { type: 'audio', data: 'AQID', mimeType: 'audio/wav' } },
+      ],
+    } as object);
+    expect(toAcpUpdates(n)).toEqual([
+      {
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 't-2',
+        title: undefined,
+        status: undefined,
+        content: [
+          { type: 'content', content: { type: 'text', text: 'done' } },
+          { type: 'unsupported', blockType: 'audio' },
+        ],
+        locations: undefined,
+        rawOutput: undefined,
+        raw: n,
+      },
+    ]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('audio'));
+    warnSpy.mockRestore();
+  });
+
+  it('passes tool rawOutput through and drops non-object values loudly', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const ok = note({
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 't-3',
+      rawOutput: { exitCode: 0, stdout: 'ok' },
+    } as object);
+    expect(toAcpUpdates(ok)).toMatchObject([
+      { sessionUpdate: 'tool_call_update', toolCallId: 't-3', rawOutput: { exitCode: 0, stdout: 'ok' } },
+    ]);
+
+    const bad = note({ sessionUpdate: 'tool_call_update', toolCallId: 't-4', rawOutput: 'oops' } as object);
+    expect(toAcpUpdates(bad)).toMatchObject([{ sessionUpdate: 'tool_call_update', toolCallId: 't-4', rawOutput: undefined }]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('rawOutput'));
     warnSpy.mockRestore();
   });
 

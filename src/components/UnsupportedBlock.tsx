@@ -17,7 +17,7 @@ export function UnsupportedBlock({ block }: { block: UnsupportedBlockModel }) {
   return (
     <div className="disclosure">
       <button onClick={() => setOpen((o) => !o)} className="disclosure-toggle">
-        <CircleAlert size={13} className="disclosure-icon" />
+        <CircleAlert size={16} className="disclosure-icon" />
         <span className="disclosure-label">暂不支持的 ACP 事件 · {kind}</span>
         <ChevronDown
           size={13}

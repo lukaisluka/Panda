@@ -7,7 +7,7 @@ export function PlanCard({ entries }: { entries: AcpPlanEntry[] }) {
   return (
     <div className="plan-card">
       <div className="plan-card-head">
-        <ListTodo size={14} className="plan-card-head-icon" />
+        <ListTodo size={16} className="plan-card-head-icon" />
         计划
       </div>
       <ol className="plan-card-list">

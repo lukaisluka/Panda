@@ -1,7 +1,8 @@
 /* Turn-scoped plan checklist. */
 
 .plan-card {
-  margin-block: 12px; /* my-3 */
+  /* 24px: matches .tool-card — block gaps exceed the primary line height. */
+  margin-block: 24px;
   border: 1px solid var(--color-border);
   border-radius: var(--panda-radius-xl);
   background: var(--color-surface);
@@ -13,7 +14,7 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 10px; /* mb-2.5 */
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--color-muted);
 }
@@ -35,8 +36,8 @@
   display: flex;
   align-items: flex-start;
   gap: 10px; /* gap-2.5 */
-  font-size: 12px;
-  line-height: 1.625;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .plan-card-item-icon {

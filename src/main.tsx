@@ -2,7 +2,6 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Theme } from '@astryxdesign/core/theme';
 import './index.css';
-import './fonts.css';
 import App from './App';
 import { AstryxSmoke } from './dev/AstryxSmoke';
 import { loadThemeId, resolveTheme, subscribeTheme } from './theme';

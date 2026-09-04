@@ -16,7 +16,7 @@
   display: flex;
   align-items: center;
   gap: 8px; /* gap-2 */
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--color-warn);
 }
@@ -26,7 +26,7 @@
 
 .permission-title {
   margin-top: 8px; /* mt-2 */
-  font-size: 12px;
+  font-size: 14px;
   color: color-mix(in oklab, var(--color-fg) 90%, transparent);
 }
 .permission-title--dim {
@@ -35,7 +35,7 @@
 
 .permission-reason {
   margin-top: 6px; /* mt-1.5 */
-  font-size: 11px;
+  font-size: 14px;
   color: var(--color-faint);
 }
 

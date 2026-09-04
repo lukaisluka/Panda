@@ -25,8 +25,9 @@ import {
  *  - Every mapped event carries its source `SessionNotification` as `raw`,
  *    so the document preserves protocol data by ownership (message blocks,
  *    tool calls, session-level latest) even where rendering is partial —
- *    e.g. audio/resource content blocks or `terminal` tool content are not
- *    rendered, but their notification stays attached to the owning entity.
+ *    e.g. audio/resource content blocks or `terminal` tool content become
+ *    explicit `unsupported` entries in the tool content list (rendered as a
+ *    fallback row), and their notification stays attached to the owner.
  *  - A chunk whose only content block is unsupported (audio/resource)
  *    becomes an explicit `unsupported` event: rendered as a fallback block
  *    and kept in the document.
@@ -213,10 +214,12 @@ export function echoRelation(
   return 'equal';
 }
 
-function toRawInput(rawInput: unknown, toolCallId: string): Record<string, unknown> | undefined {
-  if (rawInput == null) return undefined;
-  if (typeof rawInput === 'object' && !Array.isArray(rawInput)) return rawInput as Record<string, unknown>;
-  warn(`tool_call ${toolCallId}: rawInput is not a JSON object — dropped`);
+/** Shared JSON-object guard for `rawInput`/`rawOutput`: the protocol types
+ * them as unknown, but the rendering model only accepts plain objects. */
+function toRawJson(value: unknown, toolCallId: string, field: string): Record<string, unknown> | undefined {
+  if (value == null) return undefined;
+  if (typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
+  warn(`tool_call ${toolCallId}: ${field} is not a JSON object — dropped`);
   return undefined;
 }
 
@@ -229,8 +232,15 @@ function toToolContent(items: ToolCallContent[] | null | undefined, toolCallId: 
     } else if (item.type === 'content') {
       const content = toContentBlock(item.content, `tool_call ${toolCallId} content`);
       if (content) mapped.push({ type: 'content', content });
+      else {
+        // Not dropped: an explicit unsupported row keeps the stream honest
+        // about blocks Panda cannot render (audio/resource/…).
+        mapped.push({ type: 'unsupported', blockType: item.content.type });
+      }
     } else {
-      warn(`tool_call ${toolCallId}: content type "terminal" not supported yet — preserved as raw only`);
+      // e.g. terminal tool content (v1): same explicit-unsupported contract.
+      warn(`tool_call ${toolCallId}: content type "${item.type}" not supported yet — shown as an unsupported row`);
+      mapped.push({ type: 'unsupported', blockType: item.type });
     }
   }
   return mapped;
@@ -250,7 +260,7 @@ function toToolCall(call: ToolCall, raw: SessionNotification): AcpSessionUpdate[
     title: call.title,
     kind: call.kind,
     status: call.status,
-    rawInput: toRawInput(call.rawInput, call.toolCallId),
+    rawInput: toRawJson(call.rawInput, call.toolCallId, 'rawInput'),
     locations: toToolLocations(call.locations),
     raw,
   };
@@ -269,6 +279,7 @@ function toToolCallUpdate(call: ToolCallUpdate, raw: SessionNotification): AcpSe
     status: call.status ?? undefined,
     content: toToolContent(call.content, call.toolCallId),
     locations: toToolLocations(call.locations),
+    rawOutput: toRawJson(call.rawOutput, call.toolCallId, 'rawOutput'),
     raw,
   };
 }

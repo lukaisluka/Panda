@@ -21,8 +21,15 @@ import { ContentColumn } from './ContentColumn';
 import { AttachedPermissionCard } from './PermissionCard';
 import { UnsupportedBlock } from './UnsupportedBlock';
 import { useMessageStreamItems } from '../projector/hooks';
-import type { AttachedPermission } from '../projector/messageStream';
+import type { AttachedPermission, BlockFlatItem, FlatItem } from '../projector/messageStream';
 import './MessageStream.css';
+
+/** Tool-run membership for the ZCode spacing ladder: cards inside a run
+ * of consecutive tool_call blocks sit 8px apart; run edges against text
+ * stay at 14px. CSS can't express this across the virtualizer's item
+ * wrappers, so the flat sequence decides it here. */
+const isToolItem = (item: FlatItem | undefined): item is BlockFlatItem =>
+  item?.kind === 'block' && item.block.kind === 'tool_call';
 
 /**
  * Scroll-following policy: stick to the bottom while the user is already
@@ -183,7 +190,7 @@ export function MessageStream({ onResolvePermission }: {
         className="stream-scroller"
         increaseViewportBy={{ top: 600, bottom: 600 }}
         computeItemKey={(_, item) => item.key}
-        itemContent={(_, item) => {
+        itemContent={(index, item) => {
           if (item.kind === 'permission') {
             return (
               <ContentColumn>
@@ -201,6 +208,8 @@ export function MessageStream({ onResolvePermission }: {
                 streaming={item.streaming}
                 permission={item.permission}
                 onResolvePermission={onResolvePermission}
+                prevIsTool={isToolItem(items[index - 1])}
+                nextIsTool={isToolItem(items[index + 1])}
               />
             </ContentColumn>
           );
@@ -225,11 +234,15 @@ export function MessageStream({ onResolvePermission }: {
  * Shallow-compare memo: the projection keeps untouched item identities
  * (ADR 0006), so only the block a chunk landed in re-renders.
  */
-const BlockView = memo(function BlockView({ block, streaming, permission, onResolvePermission }: {
+const BlockView = memo(function BlockView({ block, streaming, permission, onResolvePermission, prevIsTool, nextIsTool }: {
   block: Block;
   streaming: boolean;
   permission: AttachedPermission | null;
   onResolvePermission: (toolCallId: string, kind: PermissionOptionKind) => void;
+  /** Neighbor flags (primitive so the memo's shallow compare stays stable):
+   * only tool_call blocks consume them — see isToolItem above. */
+  prevIsTool: boolean;
+  nextIsTool: boolean;
 }) {
   switch (block.kind) {
     case 'user_message':
@@ -237,7 +250,7 @@ const BlockView = memo(function BlockView({ block, streaming, permission, onReso
     case 'agent_message':
       return <AgentMessage block={block} streaming={streaming} />;
     case 'thought':
-      return <ThoughtBlock block={block} />;
+      return <ThoughtBlock block={block} streaming={streaming} />;
     case 'plan':
       return <PlanCard entries={block.entries} />;
     case 'tool_call':
@@ -245,6 +258,8 @@ const BlockView = memo(function BlockView({ block, streaming, permission, onReso
         <ToolCallCard
           call={block.call}
           permission={permission}
+          prevIsTool={prevIsTool}
+          nextIsTool={nextIsTool}
           // Bound here (inside the memo) so the stable outer callback keeps
           // BlockView's shallow compare intact; the card only invokes it
           // while a pending permission is attached.

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge } from '@astryxdesign/core/Badge';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import {
@@ -29,10 +29,12 @@ import type {
 } from '../protocol/types';
 import { markdownComponents } from './CodeBlock';
 import { DiffView } from './DiffView';
+import { FileTypeIcon, splitFilePath } from './FileTypeIcon';
 import { MessageImage } from './MessageImage';
 import { AttachedPermissionCard } from './PermissionCard';
 import type { AttachedPermission } from '../projector/messageStream';
 import { diffStats } from './diff-utils';
+import { settledToolTitle } from './tool-title';
 import './ToolCallCard.css';
 
 const KIND_ICON: Record<AcpToolKind, LucideIcon> = {
@@ -46,6 +48,17 @@ const KIND_ICON: Record<AcpToolKind, LucideIcon> = {
   fetch: Globe,
   switch_mode: Repeat,
   other: Wrench,
+};
+
+/** File-operating kinds get the ZCode-style row: kind icon + verb + file-type
+ * icon + basename + parent dir + diff stats. The kind's verb is display-only
+ * (from the protocol enum — stable, unlike titles); the original title
+ * (verb + full path + notes) degrades to a hover tooltip on the basename. */
+const FILE_VERB: Partial<Record<AcpToolKind, string>> = {
+  read: 'Read',
+  edit: 'Edit',
+  delete: 'Delete',
+  move: 'Move',
 };
 
 function StatusBadge({ status }: { status: ToolCallStatus }) {
@@ -63,54 +76,96 @@ function StatusBadge({ status }: { status: ToolCallStatus }) {
   }
 }
 
-const CARD_EDGE: Partial<Record<ToolCallStatus, string>> = {
-  pending: 'tool-card-frame--pending',
-  in_progress: 'tool-card-frame--running',
-  failed: 'tool-card-frame--failed',
-};
-
 /**
  * The workhorse of the message stream: a collapsed summary row that expands
  * into raw input + results. Arrival order is preserved; cards sit between
- * the text that surrounds them.
+ * the text that surrounds them. Expanding is purely manual — running cards
+ * never pop open on their own (joint-debug decision; the think row streams
+ * its tail, every other kind shows the status badge).
  */
-export function ToolCallCard({ call, permission, onResolvePermission }: {
+export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool = false, nextIsTool = false }: {
   call: ToolCallState;
-  /** The permission attached to this call — pending (user answers) or
+  /** Permission attached to this call — pending (user answers) or
    * policy-denied (terminal record, issue #22). */
   permission: AttachedPermission | null;
   onResolvePermission: (kind: PermissionOptionKind) => void;
+  /** Stream neighbors (see isToolItem in MessageStream): drive the ZCode
+   * spacing ladder — 8px inside a tool run, 14px against text. */
+  prevIsTool?: boolean;
+  nextIsTool?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
-  // Lifecycle choreography: auto-expand while running, collapse when done.
-  useEffect(() => {
-    setOpen(call.status === 'in_progress');
-  }, [call.status]);
-
-  const Icon = KIND_ICON[call.kind];
+  // Inbound notifications are not schema-validated, so `kind` may be a
+  // vendor/extension value outside the TS union (that's how switch_mode got
+  // here). Fall back to the Wrench instead of rendering undefined.
+  const Icon = KIND_ICON[call.kind] ?? Wrench;
   const path = call.locations[0]?.path;
+  // Progressive → settled verb once the call ends ("Editing x" → "Edit x");
+  // think calls show the fixed kind label instead (Thinking/Thought) —
+  // protocol title is untouched in both cases, this is display-only.
+  const displayTitle = settledToolTitle(call.title, call.status, call.kind);
+  const live = call.status === 'pending' || call.status === 'in_progress';
+  // Live think rows stream their tail beside the label: the latest text of
+  // the call's (replace-style) content, one line, cut from the left so the
+  // newest reasoning always stays visible — the full text needs expanding.
+  const thinkPreview =
+    call.kind === 'think' && live
+      ? [...call.content].reverse().find((c): c is { type: 'content'; content: { type: 'text'; text: string } } => c.type === 'content' && c.content.type === 'text')?.content.text ?? ''
+      : null;
+  // File row data (null for non-file kinds or calls without a location).
+  const fileVerb = path ? FILE_VERB[call.kind] : undefined;
+  const fileRow = path && fileVerb ? { path, verb: fileVerb, ...splitFilePath(path) } : null;
   const diffPart = call.content.find((c): c is Extract<typeof c, { type: 'diff' }> => c.type === 'diff');
   const stats = useMemo(
     () => (diffPart ? diffStats(diffPart.oldText, diffPart.newText) : null),
     [diffPart],
   );
-  const hasDetails = (call.rawInput && Object.keys(call.rawInput).length > 0) || call.content.length > 0;
+  const hasRawOutput = !!call.rawOutput && Object.keys(call.rawOutput).length > 0;
+  const hasDetails =
+    (call.rawInput && Object.keys(call.rawInput).length > 0) ||
+    hasRawOutput ||
+    call.content.length > 0;
 
   return (
-    <div className="tool-card">
-      <div className={`tool-card-frame ${CARD_EDGE[call.status] ?? ''}`}>
+    <div
+      className={[
+        'tool-card',
+        prevIsTool && 'tool-card--after-tool',
+        nextIsTool && 'tool-card--before-tool',
+      ].filter(Boolean).join(' ')}
+    >
+      <div className="tool-card-frame">
         <button onClick={() => setOpen((o) => !o)} className="tool-card-toggle">
-          <Icon size={14} className="tool-card-icon" />
-          <span className="truncate tool-card-title">{call.title}</span>
+          {fileRow ? (
+            <>
+              <Icon size={16} className="tool-card-icon" />
+              <span className="tool-card-title">{fileRow.verb}</span>
+              <FileTypeIcon path={fileRow.path} />
+              <span className="truncate tool-card-file" title={call.title}>{fileRow.base}</span>
+              {fileRow.dir && <span className="truncate tool-card-path">{fileRow.dir}</span>}
+            </>
+          ) : (
+            <>
+              <Icon size={16} className="tool-card-icon" />
+              {thinkPreview !== null ? (
+                <>
+                  <span className="tool-card-title">{displayTitle}</span>
+                  <span className="tool-think-preview" dir="rtl">{thinkPreview}</span>
+                </>
+              ) : (
+                <span className="truncate tool-card-title">{displayTitle}</span>
+              )}
+              {path && !call.title.includes(path) && (
+                <span className="truncate tool-card-path">{path}</span>
+              )}
+            </>
+          )}
           {stats && (
             <span className="tool-card-stats">
               <span className="tool-stats-add">+{stats.additions}</span>{' '}
               <span className="tool-stats-del">−{stats.deletions}</span>
             </span>
-          )}
-          {path && !call.title.includes(path) && (
-            <span className="truncate tool-card-path">{path}</span>
           )}
           <span className="tool-card-status">
             <StatusBadge status={call.status} />
@@ -136,6 +191,16 @@ export function ToolCallCard({ call, permission, onResolvePermission }: {
               </pre>
             </details>
           )}
+          {hasRawOutput && (
+            <details className="tool-input-details" open>
+              <summary className="tool-input-summary">
+                Output
+              </summary>
+              <pre className="tool-input-pre">
+                {JSON.stringify(call.rawOutput, null, 2)}
+              </pre>
+            </details>
+          )}
           {call.content.map((item, i) => {
             if (item.type === 'diff') return <DiffView key={i} diff={item} />;
             if (item.type === 'content' && item.content.type === 'image') {
@@ -143,12 +208,19 @@ export function ToolCallCard({ call, permission, onResolvePermission }: {
             }
             if (item.type === 'content' && item.content.type === 'text') {
               return (
-                <div key={i} className="md-body md-body--sm tool-text-box">
+                <div key={i} className="md-body tool-text-box">
                   <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{item.content.text}</ReactMarkdown>
                 </div>
               );
             }
-            return null;
+            if (item.type === 'unsupported') {
+              return (
+                <div key={i} className="tool-unsupported">
+                  未支持的内容块({item.blockType})
+                </div>
+              );
+            }
+            return <div key={i} className="tool-unsupported">未支持的内容块({String(item.type)})</div>;
           })}
           {call.status === 'in_progress' && call.content.length === 0 && (
             <div className="tool-waiting">

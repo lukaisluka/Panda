@@ -312,6 +312,26 @@ describe('projection identity stability (ADR 0006)', () => {
     expect(running[3]).not.toBe(idle[3]); // the streaming flag is part of the item
   });
 
+  it('streams a trailing thought while running and settles it once a block follows', () => {
+    // The thought is the very last block of a running turn → live (Thinking
+    // label + tail preview).
+    let doc = applyUpdate(
+      applyUpdate(emptySession(), {
+        sessionUpdate: 'user_message',
+        content: [{ type: 'text', text: 'go' }],
+      }),
+      { sessionUpdate: 'agent_thought_chunk', messageId: 'th-1', content: { type: 'text', text: 'analyzing…' } },
+    );
+    doc = { ...doc, status: 'running' };
+    expect(blockItem(projectMessageStream(doc)[1]!).streaming).toBe(true);
+
+    // Any later block (a tool call here) settles the thought — its label
+    // must flip to Thought even though the turn is still running.
+    doc = applyUpdate(doc, { sessionUpdate: 'tool_call', toolCallId: 't-9', title: 'Run', kind: 'execute' });
+    const settled = projectMessageStream(doc);
+    expect(blockItem(settled[1]!).streaming).toBe(false);
+  });
+
   it('yields equal output for structurally equal input (fresh identities, no cache)', () => {
     const doc = seed();
     expect(projectMessageStream(structuredClone(doc))).toEqual(projectMessageStream(doc));

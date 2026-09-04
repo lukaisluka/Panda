@@ -11,3 +11,6 @@ test-agent/sandbox/
 test-agent/__pycache__/
 test-agent/panda_test_agent/__pycache__/
 .playwright-mcp/
+
+# synced by scripts/sync-material-icons.mjs (postinstall)
+public/material-icons/
