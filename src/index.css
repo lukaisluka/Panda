@@ -180,7 +180,12 @@ body {
 }
 .md-body > :first-child { margin-top: 0; }
 .md-body > :last-child { margin-bottom: 0; }
-.md-body p { margin: 0.5em 0; }
+/* p must re-inherit the container size: theme reset layers declare
+ * :where(p) { font-size: var(--font-size-base) } and an element's own
+ * declaration always beats inheritance — without this, paragraphs ran one
+ * step larger than lists in the same message (and .md-body--sm surfaces
+ * leaked full-size paragraphs into 12px tool bodies). */
+.md-body p { margin: 0.5em 0; font-size: inherit; line-height: inherit; }
 .md-body strong { font-weight: 600; color: var(--color-fg); }
 .md-body em { color: var(--color-muted); }
 .md-body ul { margin: 0.5em 0; padding-left: 1.5em; list-style: disc; }
