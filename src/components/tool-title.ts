@@ -2,11 +2,13 @@
  * Status-aware tool titles (joint-debug): live agents stream their titles in
  * the progressive form ("Editing src/a.ts") and never rewrite them when the
  * call settles — the reference client flips the verb instead ("Edit
- * src/a.ts"), and "Thinking…" becomes "Thought". Panda rewrites at the
- * display layer only; the protocol title stays untouched in the document.
+ * src/a.ts"). Panda rewrites at the display layer only; the protocol title
+ * stays untouched in the document.
  *
- * Not every verb has a distinct progressive form ("Read x" reads the same
- * both ways) — unmapped titles pass through unchanged on purpose.
+ * think calls are the exception: their titles are placeholders, so the row
+ * shows a fixed kind label ("Thinking…" → "Thought"). Not every verb has a
+ * distinct progressive form ("Read x" reads the same both ways) — unmapped
+ * titles pass through unchanged on purpose.
  */
 
 /** Progressive → settled verb, first word of the title, case-preserving. */
@@ -47,16 +49,14 @@ export function settledToolTitle(
   status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled',
   kind?: string,
 ): string {
-  if (!title) {
-    // deepagents' think tool streams an EMPTY title — without a fallback the
-    // card renders icon-only. Only think gets a kind default: its two labels
-    // are unambiguous, while every other kind's phrasing is the agent's to
-    // choose.
-    if (kind === 'think') {
-      return status === 'completed' || status === 'failed' ? 'Thought' : 'Thinking…';
-    }
-    return title;
+  if (kind === 'think') {
+    // Think titles are placeholders (deepagents sends "思考", sometimes
+    // nothing) — the row reads as a fixed kind label, like the reference
+    // client: "Thinking…" while live, "Thought" once settled. The actual
+    // reasoning text lives in the expanded content, not the title.
+    return status === 'completed' || status === 'failed' ? 'Thought' : 'Thinking…';
   }
+  if (!title) return title;
   if (status !== 'completed' && status !== 'failed') return title;
   const stripped = stripEllipsis(title);
   const [first, ...rest] = stripped.split(' ');
