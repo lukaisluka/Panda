@@ -39,22 +39,31 @@
   --color-diff-add: var(--color-success-muted);
   --color-diff-del: var(--color-error-muted);
 
+  /* ZCode alignment (joint-debug): body text uses the system UI stack, not
+   * the themes' webfonts (Figtree et al.) — their light geometric strokes
+   * clash with the CJK fallback (PingFang SC) and read thin next to the
+   * reference client, which renders SF Pro + PingFang SC as one family.
+   * Pinned on the anchors because theme scopes also style :where(p)/
+   * headings directly via these tokens — an inherited font on .md-body
+   * alone loses to those element-level declarations. Code font keeps the
+   * theme's (system mono on neutral). */
   --font-sans: var(--font-family-body);
   --font-mono: var(--font-family-code);
+}
 
-  /* Pin the type scale across all seven themes (joint-debug finding, #32
-   * follow-up): themes ship their own full --font-size-* ladders and split
-   * into two density presets — comfortable (matcha/gothic/y2k, base 1rem) vs
-   * compact (neutral/stone/butter/chocolate, base 0.875rem). Letting the
-   * ladder switch rescaled message text 14↔16px on theme switch while
-   * Panda's card components stayed pinned at px — half-following looked
-   * like a bug. Same rationale and mechanism as --space-* below: values are
-   * core defaults, and unlayered declarations beat every theme layer.
-   * Declared on :root AND on [data-astryx-theme] because Astryx anchors
-   * themes on two elements (html for color-scheme, App's <Theme> div for
-   * the component tree) and each anchor re-injects the theme ladder — a
-   * :root-only pin never reaches past the inner div's own declaration.
-   * Font families and weights still follow the theme; only sizes pinned. */
+/* Pin the type scale across all seven themes (joint-debug finding, #32
+ * follow-up): themes ship their own full --font-size-* ladders and split
+ * into two density presets — comfortable (matcha/gothic/y2k, base 1rem) vs
+ * compact (neutral/stone/butter/chocolate, base 0.875rem). Letting the
+ * ladder switch rescaled message text 14↔16px on theme switch while
+ * Panda's card components stayed pinned at px — half-following looked
+ * like a bug. Same rationale and mechanism as --space-* below: values are
+ * core defaults, and unlayered declarations beat every theme layer.
+ * Declared on :root AND on [data-astryx-theme] because Astryx anchors
+ * themes on two elements (html for color-scheme, App's <Theme> div for
+ * the component tree) and each anchor re-injects the theme ladder — a
+ * :root-only pin never reaches past the inner div's own declaration.
+ * Font families and weights still follow the theme; only sizes pinned. */
 
 :root,
 [data-astryx-theme] {
@@ -70,8 +79,40 @@
   --font-size-3xl: 1.8125rem;
   --font-size-4xl: 2.1875rem;
   --font-size-5xl: 2.625rem;
+
+  /* Font families pinned too (joint-debug): the theme webfonts (Figtree on
+   * neutral) thin the text and clash with the CJK fallback; the system UI
+   * stack (SF Pro + PingFang SC on macOS) is what the reference client
+   * renders and keeps Latin/CJK in one family. */
+  --font-family-body: -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-family-heading: -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+
+  /* Chrome text (tool rows, thinking rows): ZCode keeps process rows at
+   * ~3:1 contrast — clearly present, clearly not content. Sits between
+   * muted and faint so both polarities weaken symmetrically. */
+  --panda-chrome-text: color-mix(in oklab, var(--color-muted) 30%, var(--color-faint) 70%);
 }
 
+/* ZCode contrast calibration (joint-debug): neutral ships a #f1f1f1 body
+ * which flattens the hierarchy — near-black text can't read deep enough
+ * and mid-gray chrome reads muddy. The reference client sits on #f8f8f7;
+ * lifting only the light side restores both directions at once (dark
+ * side keeps the theme's #1b1b1b). Scoped to neutral: other themes own
+ * their own tinted bodies.
+ *
+ * The :root[...] arm must out-specify the theme's @scope rules — @scope
+ * preambles DO count into specificity ((0,2,0) here) and the html anchor
+ * is where :root's --color-bg alias resolves, so a bare attribute
+ * selector (0,1,0) gets overridden back on html (the div anchor, being
+ * the scope's exclusive lower bound, has no competing theme rule). */
+:root[data-astryx-theme='neutral'],
+[data-astryx-theme='neutral'] {
+  --color-background-body: light-dark(#f8f8f7, #1b1b1b);
+}
+
+:root {
   /* Panda geometry stayed on a 4px step when Tailwind left (#32 Phase 1
    * pinned --spacing for the same reason: matcha's --spacing-1 is 6px and
    * a straight swap rescales the whole layout 1.5x). Component CSS uses
@@ -108,7 +149,12 @@ body {
   background-color: var(--color-bg);
   color: var(--color-fg);
   font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
+  /* Un-do the Astryx reset's antialiased/grayscale smoothing: on macOS it
+   * thins every glyph (no subpixel AA), which read as "our font is thinner
+   * than the reference client". `auto` restores platform default and the
+   * unlayered rule beats the reset layer. */
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
 }
 
 /* Keep keyboard focus visible while using Panda's own accent system. */

@@ -20,7 +20,7 @@ export function ThoughtBlock({ block }: { block: ThoughtBlockModel }) {
     <div className="disclosure">
       <button onClick={() => setOpen((o) => !o)} className="disclosure-toggle">
         <Brain size={13} className="disclosure-icon" />
-        <span className="disclosure-label disclosure-label--italic">{open ? '思考过程' : preview || 'Thinking…'}</span>
+        <span className="disclosure-label">{open ? '思考过程' : preview || 'Thinking…'}</span>
         <ChevronDown
           size={13}
           className={`disclosure-chevron ${open ? 'disclosure-chevron--open' : ''}`}

@@ -19,7 +19,7 @@
   text-align: left;
   font-family: var(--font-mono);
   font-size: 13px;
-  color: var(--color-muted);
+  color: var(--panda-chrome-text);
   transition: var(--panda-colors-transition);
 }
 .disclosure-toggle:hover {
@@ -35,9 +35,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.disclosure-label--italic {
-  font-style: italic;
 }
 
 .disclosure-chevron {
@@ -57,9 +54,9 @@
   padding: 0 0 0 12px;
 }
 
-/* ThoughtBlock body: markdown, muted italic prose. */
+/* ThoughtBlock body: markdown, muted prose. No italics — CJK oblique
+ * synthesis distorts glyphs; the muted color already reads "aside". */
 .disclosure-body--thought {
-  font-style: italic;
   color: var(--color-muted);
 }
 
