@@ -1,3 +1,4 @@
+import type { RequestPermissionRequest } from '@agentclientprotocol/sdk';
 import { LiveAcpClient } from './acp/LiveAcpClient';
 import { WebSocketTransport } from './acp/transport/WebSocketTransport';
 import type {
@@ -8,6 +9,7 @@ import type {
 } from './protocol/types';
 import { connectionStorePort, usePanda, type ConnectionStorePort, type SessionEntry, type SessionSwitchSnapshot } from './store';
 import { updateProfileFields, type AgentProfile } from './profiles';
+import { alwaysAskPolicy, type PermissionDecision, type PermissionPolicy } from './policy';
 
 /**
  * Live connection manager (issue #21, ADR 0002): one `LiveAcpClient` + one
@@ -165,6 +167,34 @@ type LiveConnection = {
 
 const liveConnections = new Map<string, LiveConnection>();
 
+/**
+ * The active permission policy (issue #22): every `session/request_permission`
+ * on every connection consults it before hanging for the user. The default
+ * hands every decision to the user (ADR 0004 — auto-approval is not
+ * expressible); tests (and a future settings surface) swap this seam.
+ */
+let activePermissionPolicy: PermissionPolicy = alwaysAskPolicy;
+
+/** Test seam: override the active permission policy; null restores the default. */
+export function __setPermissionPolicy(policy: PermissionPolicy | null): void {
+  activePermissionPolicy = policy ?? alwaysAskPolicy;
+}
+
+/**
+ * Binds the policy's connection context (issue #22): the policy sees WHICH
+ * connection and endpoint a permission belongs to. The url is read at
+ * request time — it is only known once connect() has stored it.
+ */
+function bindPolicyToConnection(
+  connectionId: string,
+): (request: RequestPermissionRequest) => PermissionDecision {
+  return (request) =>
+    activePermissionPolicy(request, {
+      connectionId,
+      url: usePanda.getState().connections[connectionId]?.connection.url ?? null,
+    });
+}
+
 /** Test seams: per-id overrides and a fallback for ids created after setup. */
 const clientFactories = new Map<string, LiveClientFactory>();
 let defaultClientFactory: LiveClientFactory | null = null;
@@ -182,7 +212,7 @@ function ensureEntry(connectionId: string): LiveConnection {
   const factory =
     clientFactories.get(connectionId) ??
     defaultClientFactory ??
-    ((handlers) => new LiveAcpClient(handlers));
+    ((handlers) => new LiveAcpClient(handlers, { policy: bindPolicyToConnection(connectionId) }));
   entry.client = factory(wireHandlers(entry));
   liveConnections.set(connectionId, entry);
   return entry;
@@ -545,6 +575,7 @@ export function __resetLiveConnections(): void {
   liveConnections.clear();
   clientFactories.clear();
   defaultClientFactory = null;
+  activePermissionPolicy = alwaysAskPolicy;
 }
 
 /** For tests: the live connection ids, in creation order. */

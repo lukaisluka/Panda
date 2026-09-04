@@ -14,7 +14,6 @@ import { ArrowDown } from 'lucide-react';
 import type {
   Block,
   PermissionOptionKind,
-  PermissionRequest,
   SessionDocument,
 } from '../protocol/types';
 import { AgentMessage } from './AgentMessage';
@@ -23,7 +22,7 @@ import { ThoughtBlock } from './ThoughtBlock';
 import { ToolCallCard } from './ToolCallCard';
 import { UserMessage } from './UserMessage';
 import { ContentColumn } from './ContentColumn';
-import { PermissionCard } from './PermissionCard';
+import { DeniedPermissionCard, PermissionCard, type AttachedPermission } from './PermissionCard';
 import { UnsupportedBlock } from './UnsupportedBlock';
 
 /**
@@ -58,13 +57,13 @@ type BlockFlatItem = {
   kind: 'block';
   block: Block;
   streaming: boolean;
-  permission: PermissionRequest | null;
+  permission: AttachedPermission | null;
 };
 
 type StandalonePermissionItem = {
   key: string;
   kind: 'permission';
-  request: PermissionRequest;
+  permission: AttachedPermission;
 };
 
 export type FlatItem = BlockFlatItem | StandalonePermissionItem;
@@ -76,8 +75,13 @@ const StreamFooter = () => <div className="h-[6.75rem]" />;
 
 export function MessageStream({ doc, permissions, onResolvePermission }: {
   doc: SessionDocument;
-  /** Pending permission requests — rendered concurrently (issue #18). */
-  permissions: PermissionRequest[];
+  /**
+   * Permission cards to render — pending requests (answered concurrently,
+   * issue #18) plus policy-denied terminal records (issue #22). Minted by
+   * App's memo: wrapper identities must survive unrelated document churn
+   * or the memoized block views re-render on every chunk.
+   */
+  permissions: AttachedPermission[];
   onResolvePermission: (toolCallId: string, kind: PermissionOptionKind) => void;
 }) {
   const [pinned, setPinned] = useState(true);
@@ -211,10 +215,17 @@ export function MessageStream({ doc, permissions, onResolvePermission }: {
           if (item.kind === 'permission') {
             return (
               <ContentColumn>
-                <PermissionCard
-                  request={item.request}
-                  onResolve={(kind) => onResolvePermission(item.request.toolCallId, kind)}
-                />
+                {item.permission.state === 'pending' ? (
+                  <PermissionCard
+                    request={item.permission.request}
+                    onResolve={(kind) => onResolvePermission(item.permission.request.toolCallId, kind)}
+                  />
+                ) : (
+                  <DeniedPermissionCard
+                    request={item.permission.request}
+                    response={item.permission.response}
+                  />
+                )}
               </ContentColumn>
             );
           }
@@ -247,7 +258,7 @@ export function MessageStream({ doc, permissions, onResolvePermission }: {
 
 export function flatten(
   doc: SessionDocument,
-  permissions: PermissionRequest[],
+  permissions: AttachedPermission[],
   streamingBlock: Block | null,
 ): FlatItem[] {
   const items: FlatItem[] = [];
@@ -270,19 +281,21 @@ export function flatten(
 }
 
 /**
- * Places one pending permission: onto its exact tool-call block, else onto
- * the current turn's single pending call (some ACP bridges emit an interrupt
- * ID for request_permission instead of the preceding tool_call ID — attach
- * only when that leaves no doubt), else as an independent card at the end.
- * A block is only ever claimed by one permission — a second one degrades to
- * an independent card instead of silently evicting the first.
+ * Places one permission — pending or policy-denied alike — onto its exact
+ * tool-call block, else onto the current turn's single pending call (some
+ * ACP bridges emit an interrupt ID for request_permission instead of the
+ * preceding tool_call ID — attach only when that leaves no doubt), else as
+ * an independent card at the end. A block is only ever claimed by one
+ * permission — a second one degrades to an independent card instead of
+ * silently evicting the first.
  */
-function attachPermission(items: FlatItem[], doc: SessionDocument, permission: PermissionRequest): void {
+function attachPermission(items: FlatItem[], doc: SessionDocument, permission: AttachedPermission): void {
+  const toolCallId = permission.request.toolCallId;
   const exactMatch = items.find(
     (item): item is BlockFlatItem =>
       item.kind === 'block' &&
       item.block.kind === 'tool_call' &&
-      item.block.call.id === permission.toolCallId,
+      item.block.call.id === toolCallId,
   );
   if (exactMatch && exactMatch.permission === null) {
     exactMatch.permission = permission;
@@ -306,9 +319,9 @@ function attachPermission(items: FlatItem[], doc: SessionDocument, permission: P
   }
 
   items.push({
-    key: `permission-${permission.toolCallId}`,
+    key: `${permission.state}-${toolCallId}`,
     kind: 'permission',
-    request: permission,
+    permission,
   });
 }
 
@@ -330,7 +343,7 @@ function findStreamingBlock(doc: SessionDocument): Block | null {
 const BlockView = memo(function BlockView({ block, streaming, permission, onResolvePermission }: {
   block: Block;
   streaming: boolean;
-  permission: PermissionRequest | null;
+  permission: AttachedPermission | null;
   onResolvePermission: (toolCallId: string, kind: PermissionOptionKind) => void;
 }) {
   switch (block.kind) {
@@ -349,8 +362,8 @@ const BlockView = memo(function BlockView({ block, streaming, permission, onReso
           permission={permission}
           // Bound here (inside the memo) so the stable outer callback keeps
           // BlockView's shallow compare intact; the card only invokes it
-          // while a permission is attached.
-          onResolvePermission={(kind) => onResolvePermission(permission?.toolCallId ?? '', kind)}
+          // while a pending permission is attached.
+          onResolvePermission={(kind) => onResolvePermission(permission?.request.toolCallId ?? '', kind)}
         />
       );
     case 'unsupported':

@@ -26,6 +26,8 @@ import {
   toAcpUpdates,
   toPermissionRequest,
 } from './wire';
+import { PANDA_HOST_CAPABILITIES, effectiveCapability, type CapabilityKey } from '../capabilities';
+import { denyResolution, type PermissionDecision } from '../policy';
 
 /**
  * Live ACP client (Phase 1+2): speaks v1 ACP over an injected `AcpTransport`
@@ -100,6 +102,16 @@ export type LiveClientHandlers = {
   onSessionSwitchRollback(reason: string, era: number): void;
 };
 
+/**
+ * Client options (issue #22). `policy` is consulted for every
+ * `session/request_permission` before it hangs for the user — the
+ * connection layer binds the connection context (connectionId, url) into
+ * it, because the client itself knows neither.
+ */
+export type LiveClientOptions = {
+  policy?: (request: RequestPermissionRequest) => PermissionDecision;
+};
+
 type PendingPermission = {
   wireOptions: RequestPermissionRequest['options'];
   resolve: (response: RequestPermissionResponse) => void;
@@ -156,6 +168,8 @@ function readCaps(caps: AgentCapabilities | null | undefined): AgentCaps {
 
 export class LiveAcpClient {
   private readonly handlers: LiveClientHandlers;
+  /** Host-side permission policy (issue #22); default hands every decision to the user. */
+  private readonly policy: (request: RequestPermissionRequest) => PermissionDecision;
   private connection: ClientConnection | null = null;
   /**
    * The transport of the most recent connect attempt (issue #20) — owned
@@ -191,8 +205,12 @@ export class LiveAcpClient {
   private connectionGeneration = 0;
   private disconnectReported = false;
 
-  constructor(handlers: LiveClientHandlers) {
+  constructor(handlers: LiveClientHandlers, options: LiveClientOptions = {}) {
     this.handlers = handlers;
+    // Mirrors alwaysAskPolicy (policy.ts) for this context-bound seam: the
+    // connection layer binds (connectionId, url) into injected policies, so
+    // the default needs no context at all.
+    this.policy = options.policy ?? (() => 'ask');
   }
 
   /**
@@ -287,14 +305,14 @@ export class LiveAcpClient {
 
       this.capabilities = readCaps(init.agentCapabilities);
       this.handlers.onCapabilities(this.capabilities);
-      if (this.capabilities.list) await this.fetchSessionList(connection, generation);
+      if (this.can('list')) await this.fetchSessionList(connection, generation);
       if (!isCurrent()) {
         discardSuperseded('session list');
         return;
       }
 
       if (resume?.sessionId) {
-        if (this.capabilities.resume) {
+        if (this.can('resume')) {
           // Transcript stays as-is: the agent context resumes without replay.
           this.sessionId = resume.sessionId;
           this.handlers.onSessionId(resume.sessionId, cwd);
@@ -307,7 +325,7 @@ export class LiveAcpClient {
             return;
           }
           console.info(`[panda/acp] resumed session ${resume.sessionId} (transcript kept)`);
-        } else if (this.capabilities.loadSession) {
+        } else if (this.can('loadSession')) {
           await this.loadSessionInternal(connection, resume.sessionId, cwd, generation);
           if (!isCurrent()) {
             discardSuperseded('load');
@@ -381,7 +399,7 @@ export class LiveAcpClient {
       console.warn('[panda/acp] loadSession ignored: not connected');
       return;
     }
-    if (!this.capabilities.loadSession) {
+    if (!this.can('loadSession')) {
       console.warn('[panda/acp] loadSession ignored: agent does not support session/load');
       return;
     }
@@ -418,7 +436,7 @@ export class LiveAcpClient {
       console.warn('[panda/acp] deleteSession ignored: not connected');
       return;
     }
-    if (!this.capabilities.delete) {
+    if (!this.can('delete')) {
       console.warn('[panda/acp] deleteSession ignored: agent does not support session/delete');
       return;
     }
@@ -463,7 +481,12 @@ export class LiveAcpClient {
       console.warn('[panda/acp] send ignored: a session switch is still in flight');
       return;
     }
-    if (!this.capabilities.image && content.some((block) => block.type === 'image')) {
+    // The execution path consumes the effective-capability decision point
+    // (issue #22), never the raw agent declaration.
+    if (
+      !this.can('image') &&
+      content.some((block) => block.type === 'image')
+    ) {
       throw new Error('agent 未声明 promptCapabilities.image，拒绝发送图片');
     }
     const generation = this.connectionGeneration;
@@ -556,6 +579,15 @@ export class LiveAcpClient {
   }
 
   // -- internals ------------------------------------------------------------
+
+  /**
+   * One capability's effective verdict (issue #22): every capability
+   * decision in this client — protocol method choice included — goes
+   * through the single decision point, never the raw declaration.
+   */
+  private can(key: CapabilityKey): boolean {
+    return effectiveCapability(key, this.capabilities, PANDA_HOST_CAPABILITIES).available;
+  }
 
   private async establishSession(connection: ClientConnection, cwd: string, generation: number): Promise<void> {
     const session = await connection.agent.request(methods.agent.session.new, {
@@ -800,6 +832,26 @@ export class LiveAcpClient {
         `[panda/acp] duplicate session/request_permission for ${key} — superseding the stale waiter`,
       );
       this.settlePermission(key, params.toolCall.toolCallId, { outcome: { outcome: 'cancelled' } }, { outcome: 'cancelled' });
+    }
+    // Host policy consult (issue #22): BEFORE the request hangs for the
+    // user. A deny settles here — the card still lands in the document
+    // (traceable, explicitly marked 非用户决定) but no waiter registers and
+    // the turn never enters requires_action: nothing waits on the user.
+    if (this.policy(params) === 'deny') {
+      const { wire, ui } = denyResolution(params.options);
+      console.info(
+        `[panda/acp] permission ${key} denied by host policy — answered ${ui.kind ?? 'cancelled'}`,
+      );
+      this.handlers.onUpdate({
+        sessionUpdate: 'permission_requested',
+        request: toPermissionRequest(params),
+      });
+      this.handlers.onUpdate({
+        sessionUpdate: 'permission_resolved',
+        toolCallId: params.toolCall.toolCallId,
+        response: ui,
+      });
+      return Promise.resolve(wire);
     }
     this.handlers.onUpdate({
       sessionUpdate: 'permission_requested',

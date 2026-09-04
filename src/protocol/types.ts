@@ -290,10 +290,19 @@ export type PermissionRequest = {
   options: PermissionOption[];
 };
 
-/** How a permission settled — the chosen option, or a cancellation. */
+/**
+ * How a permission settled — the chosen option, a cancellation, or a host
+ * policy denial (issue #22): `denied-by-policy` marks a settlement the user
+ * never decided; `kind` is the reject option answered on the wire, null when
+ * the agent offered no reject option and was answered cancelled.
+ */
 export type PermissionResponse =
   | { outcome: 'selected'; kind: PermissionOptionKind }
-  | { outcome: 'cancelled' };
+  | { outcome: 'cancelled' }
+  | { outcome: 'denied-by-policy'; kind: PermissionOptionKind | null };
+
+/** The policy-denial variant, extracted for the UI's terminal card. */
+export type DeniedPermissionResponse = Extract<PermissionResponse, { outcome: 'denied-by-policy' }>;
 
 /** One permission's lifecycle state, session-scoped in the document. */
 export type PermissionState = {

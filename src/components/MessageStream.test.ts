@@ -6,6 +6,7 @@ import type {
   SessionNotification,
   ToolCallState,
 } from '../protocol/types';
+import type { AttachedPermission } from './PermissionCard';
 
 const permission: PermissionRequest = {
   toolCallId: 'permission-id',
@@ -18,6 +19,17 @@ const secondPermission: PermissionRequest = {
   title: 'Approve the other operation',
   options: [{ id: 'approve', name: 'Approve', kind: 'allow_once' }],
 };
+
+const pending = (request: PermissionRequest): AttachedPermission => ({
+  state: 'pending',
+  request,
+});
+
+const denied = (request: PermissionRequest): AttachedPermission => ({
+  state: 'denied',
+  request,
+  response: { outcome: 'denied-by-policy', kind: 'reject_once' },
+});
 
 function toolCall(id: string, status: ToolCallState['status'] = 'pending'): ToolCallState {
   return { id, title: id, kind: 'other', status, content: [], locations: [] };
@@ -36,50 +48,50 @@ function documentWith(...calls: ToolCallState[]): SessionDocument {
 
 describe('flatten permission placement', () => {
   it('mounts a permission card on the exact matching tool call', () => {
-    const items = flatten(documentWith(toolCall('permission-id')), [permission], null);
+    const items = flatten(documentWith(toolCall('permission-id')), [pending(permission)], null);
 
-    expect(items[0]).toMatchObject({ kind: 'block', permission });
+    expect(items[0]).toMatchObject({ kind: 'block', permission: pending(permission) });
   });
 
   it('mounts an unmatched permission on the sole pending tool call in the current turn', () => {
-    const items = flatten(documentWith(toolCall('stream-id')), [permission], null);
+    const items = flatten(documentWith(toolCall('stream-id')), [pending(permission)], null);
 
-    expect(items[0]).toMatchObject({ kind: 'block', permission });
+    expect(items[0]).toMatchObject({ kind: 'block', permission: pending(permission) });
   });
 
   it('renders an unmatched permission independently when multiple pending calls make attachment ambiguous', () => {
     const items = flatten(
       documentWith(toolCall('first-pending'), toolCall('second-pending')),
-      [permission],
+      [pending(permission)],
       null,
     );
 
     expect(items).toHaveLength(3);
-    expect(items[2]).toMatchObject({ kind: 'permission', request: permission });
+    expect(items[2]).toMatchObject({ kind: 'permission', permission: pending(permission) });
   });
 
   it('renders several pending permissions concurrently, each answered independently (issue #18)', () => {
     const items = flatten(
       documentWith(toolCall('permission-id'), toolCall('second-permission-id')),
-      [permission, secondPermission],
+      [pending(permission), pending(secondPermission)],
       null,
     );
 
     // Both cards attach to their own tool call — no first-wins cancellation.
-    expect(items[0]).toMatchObject({ kind: 'block', permission });
-    expect(items[1]).toMatchObject({ kind: 'block', permission: secondPermission });
+    expect(items[0]).toMatchObject({ kind: 'block', permission: pending(permission) });
+    expect(items[1]).toMatchObject({ kind: 'block', permission: pending(secondPermission) });
   });
 
   it('renders unmatched concurrent permissions as stacked independent cards', () => {
     const items = flatten(
       documentWith(toolCall('first-pending'), toolCall('second-pending')),
-      [permission, secondPermission],
+      [pending(permission), pending(secondPermission)],
       null,
     );
 
     expect(items).toHaveLength(4);
-    expect(items[2]).toMatchObject({ kind: 'permission', request: permission });
-    expect(items[3]).toMatchObject({ kind: 'permission', request: secondPermission });
+    expect(items[2]).toMatchObject({ kind: 'permission', permission: pending(permission) });
+    expect(items[3]).toMatchObject({ kind: 'permission', permission: pending(secondPermission) });
   });
 
   it('never evicts a mounted permission — an unmatched one degrades to an independent card', () => {
@@ -87,12 +99,34 @@ describe('flatten permission placement', () => {
     // sole-pending-call fallback would land on the same block.
     const items = flatten(
       documentWith(toolCall('permission-id')),
-      [permission, secondPermission],
+      [pending(permission), pending(secondPermission)],
       null,
     );
 
-    expect(items[0]).toMatchObject({ kind: 'block', permission });
-    expect(items[1]).toMatchObject({ kind: 'permission', request: secondPermission });
+    expect(items[0]).toMatchObject({ kind: 'block', permission: pending(permission) });
+    expect(items[1]).toMatchObject({ kind: 'permission', permission: pending(secondPermission) });
+  });
+
+  it('attaches a policy-denied record to its exact tool call (issue #22)', () => {
+    // The denied tool retired to cancelled status — exact-match attachment
+    // must still find it by id (the fallback heuristic must not claim it).
+    const items = flatten(
+      documentWith(toolCall('permission-id', 'cancelled')),
+      [denied(permission)],
+      null,
+    );
+
+    expect(items[0]).toMatchObject({ kind: 'block', permission: denied(permission) });
+  });
+
+  it('renders a policy-denied record independently when its tool call is absent', () => {
+    const items = flatten(documentWith(toolCall('other-call', 'in_progress')), [denied(permission)], null);
+
+    expect(items).toHaveLength(2);
+    expect(items[1]).toMatchObject({ kind: 'permission', permission: denied(permission) });
+    // Standalone keys disambiguate by state: a re-ask after a deny can ping-pong
+    // the same toolCallId between pending and denied records.
+    expect(items[1]!.key).toBe('denied-permission-id');
   });
 });
 

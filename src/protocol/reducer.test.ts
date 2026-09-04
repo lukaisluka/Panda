@@ -407,6 +407,29 @@ describe('reducer permission lifecycle (issue #18)', () => {
     expect(doc.permissions['t-2']).toMatchObject({ status: 'pending' });
   });
 
+  it('denied-by-policy settles as resolved, retires the pending tool, and is not pending (issue #22)', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'permission_requested', request: request('t-policy') },
+      { sessionUpdate: 'permission_resolved', toolCallId: 't-policy', response: { outcome: 'denied-by-policy', kind: 'reject_once' } },
+    ]);
+    expect(doc.permissions['t-policy']).toEqual({
+      status: 'resolved',
+      request: request('t-policy'),
+      response: { outcome: 'denied-by-policy', kind: 'reject_once' },
+    });
+    // The placeholder tool the request planted must retire — the tool will
+    // not run, exactly like a user reject.
+    expect(doc.turns[0]!.blocks).toContainEqual(
+      expect.objectContaining({
+        kind: 'tool_call',
+        call: expect.objectContaining({ id: 't-policy', status: 'cancelled' }),
+      }),
+    );
+    // 不再点亮「需要关注」：policy 拒绝是终态，不是挂起。
+    expect(Object.values(doc.permissions).some((permission) => permission.status === 'pending')).toBe(false);
+  });
+
   it('plants a placeholder tool record when the permission precedes its tool_call, then merges', () => {
     const before = fold([
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
