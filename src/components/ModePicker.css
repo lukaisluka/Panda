@@ -1,0 +1,96 @@
+/* Composer's bottom-left session-mode picker (ModePicker). Chrome tier:
+ * 13px sans — the picker is input affordance, not content. */
+
+.mode-picker {
+  position: relative;
+}
+
+.mode-picker-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-full);
+  background: transparent;
+  color: var(--color-muted);
+  padding: 2px 10px;
+  font-size: 12px;
+  line-height: 18px;
+  transition: var(--panda-colors-transition);
+}
+
+.mode-picker-pill:hover {
+  background: color-mix(in oklab, var(--color-raised) 40%, transparent);
+  color: var(--color-fg);
+}
+
+.mode-picker-chevron {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.mode-picker-chevron--open {
+  transform: rotate(180deg);
+}
+
+/* Opens upward: the pill sits in the composer's bottom row. */
+.mode-picker-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  min-width: 260px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-high);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mode-picker-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: none;
+  border-radius: var(--panda-radius-md);
+  background: transparent;
+  color: var(--color-fg);
+  padding: 7px 8px;
+  text-align: left;
+  transition: var(--panda-colors-transition);
+}
+
+.mode-picker-option:hover {
+  background: color-mix(in oklab, var(--color-raised) 60%, transparent);
+}
+
+.mode-picker-check {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-accent);
+}
+
+.mode-picker-check--hidden {
+  visibility: hidden; /* keeps every option's text column aligned */
+}
+
+.mode-picker-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mode-picker-option-name {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.mode-picker-option-desc {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--color-faint);
+}

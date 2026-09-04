@@ -16,6 +16,7 @@ import {
   removeLiveConnection,
   resolveLivePermission,
   sendLive,
+  setLiveMode,
 } from './liveConnections';
 import type { AgentProfile } from './profiles';
 import { cwdToWorkspace, type Workspace } from './workspace';
@@ -91,6 +92,7 @@ export function useLiveSession() {
       send: (content: AcpContentBlock[]) => sendLive(content),
       resolvePermission: (toolCallId: string, kind: PermissionOptionKind) => resolveLivePermission(toolCallId, kind),
       cancel: cancelLiveTurn,
+      setMode: (modeId: string) => setLiveMode(modeId),
       newSession: (cwd: string) => newLiveSession(cwd),
       deleteSession: (connectionId: string, sessionId: string) => deleteLiveSession(connectionId, sessionId),
     }),

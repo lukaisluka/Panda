@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { applyUpdate, emptySession } from './reducer';
 import type {
+  AcpSessionModeState,
   AcpSessionUpdate,
   SessionDocument,
   SessionNotification,
@@ -249,16 +250,58 @@ describe('reducer session-level latest notifications', () => {
   });
 
   it('keeps only the newest notification per session-level kind', () => {
-    const r1 = rawNote('mode-1');
-    const r2 = rawNote('mode-2');
+    const r1 = rawNote('config-1');
+    const r2 = rawNote('config-2');
     const doc = fold([
-      { sessionUpdate: 'session_state', kind: 'current_mode_update', raw: r1 },
-      { sessionUpdate: 'session_state', kind: 'current_mode_update', raw: r2 },
+      { sessionUpdate: 'session_state', kind: 'config_option_update', raw: r1 },
+      { sessionUpdate: 'session_state', kind: 'config_option_update', raw: r2 },
       { sessionUpdate: 'session_state', kind: 'compaction_update', raw: r1 },
     ]);
-    expect(doc.latestNotifications.current_mode_update).toBe(r2);
+    expect(doc.latestNotifications.config_option_update).toBe(r2);
     expect(doc.latestNotifications.compaction_update).toBe(r1);
     expect(doc.turns).toHaveLength(0); // session_state never opens a turn
+  });
+});
+
+describe('reducer session modes', () => {
+  const MODES: AcpSessionModeState = {
+    currentModeId: 'ask_before_edits',
+    availableModes: [
+      { id: 'ask_before_edits', name: 'Ask before edits' },
+      { id: 'accept_everything', name: 'Accept everything', description: '全自动' },
+    ],
+  };
+
+  it('starts with no mode state (agents without modes render no picker)', () => {
+    expect(emptySession().modes).toBeNull();
+  });
+
+  it('modes_initialized adopts the result state; null replaces advertised modes', () => {
+    const doc = fold([{ sessionUpdate: 'modes_initialized', modes: MODES }]);
+    expect(doc.modes).toEqual(MODES);
+    const cleared = applyUpdate(doc, { sessionUpdate: 'modes_initialized', modes: null });
+    expect(cleared.modes).toBeNull();
+  });
+
+  it('mode_changed moves currentModeId and records the notification as latest', () => {
+    const raw = rawNote('mode-changed');
+    const doc = fold(
+      [
+        { sessionUpdate: 'modes_initialized', modes: MODES },
+        carryingRaw({ sessionUpdate: 'mode_changed', modeId: 'accept_everything' }, raw),
+      ],
+    );
+    expect(doc.modes?.currentModeId).toBe('accept_everything');
+    expect(doc.modes?.availableModes).toHaveLength(2); // the list itself never changes
+    expect(doc.latestNotifications.mode).toBe(raw);
+    expect(doc.turns).toHaveLength(0); // mode changes never open a turn
+  });
+
+  it('mode_changed without advertised modes records only, loudly', () => {
+    const raw = rawNote('rogue-mode');
+    const doc = fold([carryingRaw({ sessionUpdate: 'mode_changed', modeId: 'x' }, raw)]);
+    expect(doc.modes).toBeNull();
+    expect(doc.latestNotifications.mode).toBe(raw);
   });
 });
 

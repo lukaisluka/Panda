@@ -12,6 +12,7 @@ import type {
 import {
   isSessionStateKind,
   type AcpContentBlock,
+  type AcpSessionModeState,
   type AcpSessionUpdate,
   type AcpToolCallContent,
   type AcpToolCallLocation,
@@ -32,8 +33,9 @@ import {
  *    becomes an explicit `unsupported` event: rendered as a fallback block
  *    and kept in the document.
  *  - Session-level kinds Panda recognizes but does not render in the flow
- *    (modes, config, commands, compaction, …) become `session_state` events
- *    recorded as the latest raw notification of their kind.
+ *    (config, commands, compaction, …) become `session_state` events
+ *    recorded as the latest raw notification of their kind. Mode switches
+ *    get a dedicated `mode_changed` event instead — they drive UI state.
  *  - Unknown `sessionUpdate` kinds (future protocol versions, vendor
  *    extensions) become `unsupported` events — logged loudly, never lost.
  *
@@ -329,6 +331,17 @@ export function toAcpUpdates(notification: SessionNotification): AcpSessionUpdat
           raw,
         },
       ];
+    case 'current_mode_update': {
+      // Field is `currentModeId` on the wire (SessionUpdate.currentModeId);
+      // notifications are not schema-validated, so a malformed one surfaces as
+      // unsupported instead of a silent no-op.
+      const modeId = (update as { currentModeId?: unknown }).currentModeId;
+      if (typeof modeId !== 'string') {
+        warn('current_mode_update without a currentModeId string — preserved as unsupported');
+        return [{ sessionUpdate: 'unsupported', raw }];
+      }
+      return [{ sessionUpdate: 'mode_changed', modeId, raw }];
+    }
     default: {
       // Recognized session-level kinds without in-flow rendering: keep the
       // latest raw notification of each kind (list owned by types.ts).
@@ -351,6 +364,25 @@ export function toPermissionRequest(request: RequestPermissionRequest): Permissi
       id: option.optionId,
       name: option.name,
       kind: option.kind,
+    })),
+  };
+}
+
+/**
+ * Whitelists a `session/new` · `session/load` result's mode state into the
+ * protocol-layer type (drops the wire `_meta` bag). null passes through as
+ * null — "no modes" is a state, not an error.
+ */
+export function toSessionModeState(
+  modes: { currentModeId: string; availableModes: Array<{ id: string; name: string; description?: string | null | undefined }> } | null | undefined,
+): AcpSessionModeState | null {
+  if (!modes) return null;
+  return {
+    currentModeId: modes.currentModeId,
+    availableModes: modes.availableModes.map((mode) => ({
+      id: mode.id,
+      name: mode.name,
+      ...(mode.description ? { description: mode.description } : {}),
     })),
   };
 }

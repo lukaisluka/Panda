@@ -92,6 +92,15 @@
   gap: 8px;
 }
 
+/* Bottom row inside the card: the mode picker sits bottom-left (ZCode-style
+ * input footer). Rendered only when the session has mode state — a
+ * picker-less agent keeps the card at its one-row height. */
+.composer-footer {
+  display: flex;
+  align-items: center;
+  padding-top: 8px;
+}
+
 .composer-file-input {
   display: none;
 }

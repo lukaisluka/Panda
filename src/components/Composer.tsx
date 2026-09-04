@@ -7,11 +7,12 @@ import {
   fileToAttachment,
   type ImageAttachment,
 } from '../attachments';
-import type { AcpContentBlock } from '../protocol/types';
+import type { AcpContentBlock, AcpSessionModeState } from '../protocol/types';
 import { ContentColumn } from './ContentColumn';
+import { ModePicker } from './ModePicker';
 import './Composer.css';
 
-export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onStop }: {
+export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onStop, modes, onSetMode }: {
   onSend: (content: AcpContentBlock[]) => void;
   disabled: boolean;
   hint?: string;
@@ -19,6 +20,9 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
   /** True while a live turn runs — the send button becomes a stop button. */
   canStop?: boolean;
   onStop?: () => void;
+  /** Session modes from the document; null hides the picker entirely. */
+  modes: AcpSessionModeState | null;
+  onSetMode: (modeId: string) => void;
 }) {
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
@@ -165,6 +169,11 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
               />
             )}
           </div>
+          {modes && (
+            <div className="composer-footer">
+              <ModePicker modes={modes} onSetMode={onSetMode} />
+            </div>
+          )}
         </div>
         {attachmentError ? (
           <p className="composer-hint composer-hint--danger">{attachmentError}</p>

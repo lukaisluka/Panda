@@ -14,6 +14,7 @@ import {
 import type { AcpTransport } from './transport/AcpTransport';
 import type {
   AcpContentBlock,
+  AcpSessionModeState,
   AcpSessionUpdate,
   PermissionOptionKind,
   PermissionResponse,
@@ -25,6 +26,7 @@ import {
   removeSdkStrictSessionUpdateRouter,
   toAcpUpdates,
   toPermissionRequest,
+  toSessionModeState,
 } from './wire';
 import { PANDA_HOST_CAPABILITIES, effectiveCapability, type AgentCapabilityDeclarations, type CapabilityKey, type EffectiveCapability } from '../capabilities';
 import { alwaysAskPolicy, denyResolution, UNKNOWN_POLICY_CONTEXT, type PermissionDecision } from '../policy';
@@ -72,6 +74,12 @@ export type LiveClientHandlers = {
   onStatus(status: SessionStatus): void;
   onConnected(info: { agentName: string; protocolVersion: number }): void;
   onSessionId(sessionId: string, cwd: string): void;
+  /**
+   * Session modes from a session/new · session/load result (null = the agent
+   * advertises none). Not emitted on resume: v1's ResumeSessionResponse
+   * carries no modes, so the document keeps whatever it already had.
+   */
+  onSessionModes(modes: AcpSessionModeState | null): void;
   /** null reason = clean disconnect; a string = failure shown to the user. */
   onDisconnected(reason: string | null): void;
   onCapabilities(caps: AgentCaps): void;
@@ -466,6 +474,42 @@ export class LiveAcpClient {
     }
   }
 
+  /**
+   * `session/set_mode` (protocol/v1 session-modes). The switch is
+   * confirmation-driven: only the resolved RPC updates the document — and it
+   * must, because deepagents-acp never emits `current_mode_update` after
+   * set_mode. A compliant agent's later notification lands on the same
+   * `mode_changed` event idempotently. Failure is logged, never swallowed:
+   * the picker stays on the old mode, which is the honest state.
+   */
+  async setMode(modeId: string): Promise<void> {
+    const connection = this.connection;
+    const sessionId = this.sessionId;
+    if (!connection || !sessionId) {
+      console.warn('[panda/acp] set_mode ignored: not connected');
+      return;
+    }
+    const generation = this.connectionGeneration;
+    try {
+      await connection.agent.request(methods.agent.session.setMode, { sessionId, modeId });
+      if (generation !== this.connectionGeneration) {
+        // Superseded mid-request: the newer era owns the session state, a
+        // late mode_changed would write into its document.
+        return;
+      }
+      this.handlers.onUpdate({ sessionUpdate: 'mode_changed', modeId });
+      console.info(`[panda/acp] mode switched: ${modeId}`);
+    } catch (err) {
+      if (generation !== this.connectionGeneration) {
+        // The replacement's close() rejected the request — expected, and the
+        // newer era owns the state; not an error of the current connection.
+        console.info('[panda/acp] superseded set_mode failed after replacement — failure discarded');
+        return;
+      }
+      console.error(`[panda/acp] set_mode(${modeId}) failed`, err);
+    }
+  }
+
   /** Sends one ordered set of user content blocks and owns the turn until it resolves. */
   async send(content: AcpContentBlock[]): Promise<void> {
     if (content.length === 0) return;
@@ -608,6 +652,7 @@ export class LiveAcpClient {
     }
     this.sessionId = session.sessionId;
     this.handlers.onSessionId(session.sessionId, cwd);
+    this.handlers.onSessionModes(toSessionModeState(session.modes));
   }
 
   /**
@@ -637,7 +682,11 @@ export class LiveAcpClient {
       this.sessionId = sessionId;
       this.handlers.onSessionSwitchStage(sessionId, cwd, generation);
       this.handlers.onReplayStart();
-      await connection.agent.request(methods.agent.session.load, { sessionId, cwd, mcpServers: [] });
+      const loaded = await connection.agent.request(methods.agent.session.load, {
+        sessionId,
+        cwd,
+        mcpServers: [],
+      });
       if (generation !== this.connectionGeneration) {
         console.warn(
           `[panda/acp] session/load for ${sessionId} completed after the connection was replaced — rolled back`,
@@ -648,6 +697,9 @@ export class LiveAcpClient {
         this.handlers.onSessionSwitchRollback('连接已被更新的连接替换', generation);
         return;
       }
+      // The load's modes land before commit: the staged document is the one
+      // the UI will adopt, and onReplayStart already reset its modes to null.
+      this.handlers.onSessionModes(toSessionModeState(loaded.modes));
       this.handlers.onSessionSwitchCommit(generation);
     } catch (err) {
       if (generation !== this.connectionGeneration) {

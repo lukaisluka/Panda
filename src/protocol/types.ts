@@ -61,6 +61,25 @@ export type AcpPlanEntry = {
 
 export type AcpCost = { amount: number; currency: string };
 
+// -- session modes (protocol/v1 session-modes) --------------------------------
+
+export type AcpSessionMode = {
+  id: string;
+  name: string;
+  description?: string;
+};
+
+/**
+ * The agent's operating-mode state, mirrored from `session/new` /
+ * `session/load` results (and switchable via `session/set_mode`). `null` in
+ * the document means the agent did not advertise modes — the mode picker
+ * hides entirely rather than rendering an empty control.
+ */
+export type AcpSessionModeState = {
+  currentModeId: string;
+  availableModes: AcpSessionMode[];
+};
+
 export type AcpToolCallContent =
   | { type: 'content'; content: AcpContentBlock }
   | { type: 'diff'; path: string; oldText: string | null; newText: string }
@@ -139,8 +158,23 @@ export type AcpSessionUpdate =
       raw?: SessionNotification;
     }
   /**
+   * The session's mode state arrived (session/new or session/load result).
+   * Not a wire notification — the drivers translate the RPC result into this
+   * event, exactly like the permission lifecycle events below. null = the
+   * agent supports no modes; a later result replaces the whole state.
+   */
+  | { sessionUpdate: 'modes_initialized'; modes: AcpSessionModeState | null }
+  /**
+   * The current mode changed: either confirmed by a successful
+   * `session/set_mode` RPC (deepagents-acp never emits the notification, so
+   * the RPC result must drive the update) or observed as a
+   * `current_mode_update` notification (agent-side switch, e.g. an approved
+   * switch_mode tool call). Idempotent — both sources land on this event.
+   */
+  | { sessionUpdate: 'mode_changed'; modeId: string; raw?: SessionNotification }
+  /**
    * A known session-level update kind Panda recognizes but does not render
-   * in the message flow (modes, config, commands, compaction, …). Recorded
+   * in the message flow (config, commands, compaction, …). Recorded
    * as the latest raw notification of its kind — nothing is dropped.
    */
   | { sessionUpdate: 'session_state'; kind: AcpSessionLevelKind; raw: SessionNotification }
@@ -171,14 +205,14 @@ export type AcpSessionUpdate =
  * Session-level kinds mapped to `session_state` events (latest-wins recording,
  * no in-flow rendering). Single source of truth: adding a kind here updates
  * the wire mapping and the `latestNotifications` key type together.
- * `plan` / `usage_update` are session-level too (reducer records their latest
- * alongside their dedicated in-flow events) but keep dedicated wire cases.
+ * `plan` / `usage_update` / `mode` are session-level too (reducer records
+ * their latest alongside their dedicated in-flow events) but keep dedicated
+ * wire cases.
  */
 export const SESSION_STATE_KINDS = [
   'plan_update',
   'plan_removed',
   'available_commands_update',
-  'current_mode_update',
   'config_option_update',
   'session_info_update',
   'compaction_update',
@@ -186,7 +220,11 @@ export const SESSION_STATE_KINDS = [
 ] as const;
 
 /** All kinds that own a `latestNotifications` slot. */
-export type AcpSessionLevelKind = 'plan' | 'usage_update' | (typeof SESSION_STATE_KINDS)[number];
+export type AcpSessionLevelKind =
+  | 'plan'
+  | 'usage_update'
+  | 'mode'
+  | (typeof SESSION_STATE_KINDS)[number];
 
 /** Narrowing guard for the session-state kinds without a dedicated wire case. */
 export function isSessionStateKind(kind: string): kind is (typeof SESSION_STATE_KINDS)[number] {
@@ -253,6 +291,12 @@ export type SessionDocument = {
   turns: Turn[];
   status: SessionStatus;
   usage: Usage;
+  /**
+   * Session modes from the agent (session/new · session/load results, then
+   * mode_changed updates). null until a result arrives — and permanently
+   * null for agents that support no modes; the UI hides the picker then.
+   */
+  modes: AcpSessionModeState | null;
   /**
    * Permission lifecycle per tool call (issue #18), keyed by toolCallId and
    * kept for the whole session — pending requests render as cards, resolved

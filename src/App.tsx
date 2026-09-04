@@ -35,6 +35,7 @@ export default function App() {
 
   const send = liveActive ? live.send : demo.send;
   const resolvePermission = liveActive ? live.resolvePermission : demo.resolvePermission;
+  const setMode = liveActive ? live.setMode : demo.setMode;
 
   // A session switch in flight is busy too: the composer must not send into a
   // session that has not settled yet, and the sidebar locks other switches.
@@ -96,6 +97,8 @@ export default function App() {
           canAttachImages={!liveActive || effectiveCaps.image.available}
           canStop={liveActive && connected && doc.status === 'running'}
           onStop={live.cancel}
+          modes={doc.modes}
+          onSetMode={setMode}
         />
       </main>
     </div>

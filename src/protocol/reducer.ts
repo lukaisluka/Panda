@@ -26,6 +26,7 @@ export function emptySession(): SessionDocument {
     turns: [],
     status: 'idle',
     usage: { used: 0, size: 0, cost: null },
+    modes: null,
     permissions: {},
     latestNotifications: {},
     unhandledNotifications: [],
@@ -102,6 +103,23 @@ export function applyUpdate(
           },
         },
         'usage_update',
+        update.raw,
+      );
+
+    case 'modes_initialized':
+      return { ...doc, modes: update.modes };
+
+    case 'mode_changed':
+      // Without advertised modes there is no state to move — an agent that
+      // never declared modes yet switches one is violating the protocol, so
+      // record the notification but leave the document untouched (loud).
+      if (!doc.modes) {
+        console.warn(`[reducer] mode_changed to "${update.modeId}" without advertised modes — recorded only`);
+        return withLatest(doc, 'mode', update.raw);
+      }
+      return withLatest(
+        { ...doc, modes: { ...doc.modes, currentModeId: update.modeId } },
+        'mode',
         update.raw,
       );
 
