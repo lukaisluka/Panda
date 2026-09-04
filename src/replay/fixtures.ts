@@ -265,6 +265,42 @@ function allowBranch(): ReplayStep[] {
       },
       700,
     ),
+    // Tests green — pushing the branch needs GitHub, which only the user can
+    // authorize. The url-mode elicitation demos consent → open → complete.
+    {
+      kind: 'elicitation_url',
+      afterMs: 500,
+      request: elicitUrlRequest,
+      onResolve: () => [
+        statusStep('running', 200),
+        ...streamText(
+          'agent_message_chunk',
+          'msg-ci-skip',
+          '好，不连 GitHub 了——改动都已在本地验证过，分支留在本地，需要推送时你自己来。',
+          { firstMs: 450 },
+        ),
+        ...finalTail(),
+      ],
+      onOpen: () => [
+        statusStep('running', 200),
+        // The out-of-band OAuth flow runs while the card waits on it; the
+        // agent's elicitation/complete notification then lands.
+        { kind: 'elicitation_url_complete', afterMs: 1800, elicitationId: elicitUrlRequest.id },
+        ...streamText(
+          'agent_message_chunk',
+          'msg-ci-ok',
+          'GitHub 已连接，分支 `auth-refactor` 已推送，CI 已排队（run #128）。结果出来我会汇报。',
+          { firstMs: 450 },
+        ),
+        ...finalTail(),
+      ],
+    },
+  ];
+}
+
+/** The closing beat every allow path shares (summary message + plan + usage). */
+function finalTail(): ReplayStep[] {
+  return [
     ...streamText('agent_message_chunk', 'msg-3', messageFinal, { firstMs: 550 }),
     updateStep({ sessionUpdate: 'agent_message_chunk', messageId: 'msg-3', content: TEST_OUTPUT_IMAGE }, 300),
     updateStep({ sessionUpdate: 'plan', entries: planDone }, 250),
@@ -326,6 +362,7 @@ function editSteps(): ReplayStep[] {
  * form control the live wire schema can produce.
  */
 const elicitRequest: ElicitationRequest = {
+  mode: 'form',
   id: 'elicit-1',
   toolCallId: null,
   title: '重构选项确认',
@@ -376,6 +413,19 @@ const elicitRequest: ElicitationRequest = {
       required: false,
     },
   ],
+};
+
+/**
+ * The url-mode elicitation fixture: consent to an external OAuth flow. The
+ * card shows the message + full URL + highlighted host; accepting opens the
+ * link and the timeline waits for the (scripted) elicitation/complete.
+ */
+const elicitUrlRequest: ElicitationRequest = {
+  mode: 'url',
+  id: 'elicit-url-1',
+  toolCallId: null,
+  message: '改动已就绪。要推送分支并触发 CI 吗？需要你授权连接 GitHub。',
+  url: 'https://github.com/login/oauth/authorize?client_id=panda-demo&scope=repo',
 };
 
 /** What happens after the user answers the elicitation form. */

@@ -24,4 +24,18 @@ export type ReplayStep =
       request: ElicitationRequest;
       /** Branches the timeline on the user's answer (accepted / declined). */
       onResolve: (response: ElicitationResponse) => ReplayStep[];
+    }
+  | {
+      kind: 'elicitation_url';
+      afterMs: number;
+      request: ElicitationRequest;
+      /** Decline branch — accept goes through `onOpen` instead. */
+      onResolve: (response: ElicitationResponse) => ReplayStep[];
+      /** Consent branch: the RPC answers accept and the timeline keeps rolling. */
+      onOpen: () => ReplayStep[];
+    }
+  | {
+      kind: 'elicitation_url_complete';
+      afterMs: number;
+      elicitationId: string;
     };

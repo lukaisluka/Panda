@@ -4,6 +4,7 @@ import type {
   ContentBlock,
   CreateElicitationRequest,
   ElicitationFormMode,
+  ElicitationUrlMode,
   IntegerPropertySchema,
   MultiSelectPropertySchema,
   NumberPropertySchema,
@@ -403,10 +404,10 @@ type KnownElicitationProperty =
  * exactly one field variant; anything else (future/vendor types) becomes an
  * explicit `unsupported` field so the form shows it instead of losing it.
  */
-export function toElicitationRequest(
+export function toElicitationFormRequest(
   id: string,
   params: CreateElicitationRequest,
-): ElicitationRequest {
+): Extract<ElicitationRequest, { mode: 'form' }> {
   // Caller-checked form mode; the cast strips the url/unknown-mode branches
   // the wire union keeps (requestedSchema lives on the form branch only).
   // `?? {}` guards a spec-violating form request without one.
@@ -473,11 +474,36 @@ export function toElicitationRequest(
   const toolCallId =
     'toolCallId' in params && typeof params.toolCallId === 'string' ? params.toolCallId : null;
   return {
+    mode: 'form',
     id,
     toolCallId,
     title: schema.title ?? null,
     description: schema.description ?? null,
     fields,
+  };
+}
+
+/**
+ * Whitelists an `elicitation/create` request (url mode) into the UI card
+ * model. The wire `elicitationId` becomes the record id unchanged — the
+ * later `elicitation/complete` notification matches on it, and the spec
+ * says to treat it as opaque. No schema to whitelist here; the card shows
+ * the message and the full URL and lets consent do the rest.
+ */
+export function toElicitationUrlRequest(
+  params: CreateElicitationRequest,
+): Extract<ElicitationRequest, { mode: 'url' }> {
+  // Caller-checked url mode; the cast strips the form/unknown-mode branches
+  // the wire union keeps (elicitationId and url live on the url branch only).
+  const urlMode = params as ElicitationUrlMode;
+  const toolCallId =
+    'toolCallId' in params && typeof params.toolCallId === 'string' ? params.toolCallId : null;
+  return {
+    mode: 'url',
+    id: urlMode.elicitationId,
+    toolCallId,
+    message: params.message,
+    url: urlMode.url,
   };
 }
 

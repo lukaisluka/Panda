@@ -78,11 +78,19 @@ export function useReplaySession() {
   /**
    * The demo holds at most one pending elicitation, so the id needs no
    * routing — the driver settles whoever is waiting (the live path keys its
-   * waiters by the Panda-local mint instead).
+   * waiters by the wire elicitationId / Panda-local mint instead).
    */
   const resolveElicitation = useCallback(
     (_id: string, response: ElicitationResponse) => {
       driver.resolveElicitation(response);
+    },
+    [driver],
+  );
+
+  /** The demo's url-mode consent: the card already opened the window; this answers the RPC accept. */
+  const openElicitationUrl = useCallback(
+    (_id: string) => {
+      driver.openElicitationUrl();
     },
     [driver],
   );
@@ -110,5 +118,5 @@ export function useReplaySession() {
     driver.play(demoScenario());
   }, [driver, port]);
 
-  return { send, resolvePermission, resolveElicitation, setMode, replayDemo };
+  return { send, resolvePermission, resolveElicitation, openElicitationUrl, setMode, replayDemo };
 }

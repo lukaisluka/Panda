@@ -53,11 +53,14 @@ export type StandalonePermissionItem = {
 /**
  * An elicitation as the flow renders it: always an independent trailing
  * card (never attached to a tool call — a form stands on its own). Pending
- * is the form; settled keeps a one-line terminal record.
+ * is the interactive card; `opened` is the url-only between-state (link
+ * open, out-of-band flow running); settled keeps a one-line terminal
+ * record (url `completed` settles with a null response — no user answer).
  */
 export type AttachedElicitation =
   | { state: 'pending'; request: ElicitationRequest }
-  | { state: 'settled'; request: ElicitationRequest; response: ElicitationResponse };
+  | { state: 'opened'; request: ElicitationRequest }
+  | { state: 'settled'; request: ElicitationRequest; response: ElicitationResponse | null };
 
 export type StandaloneElicitationItem = {
   key: string;
@@ -160,7 +163,9 @@ function attachedElicitations(record: Record<string, ElicitationState>): Attache
     const next: AttachedElicitation =
       state.status === 'pending'
         ? { state: 'pending', request: state.request }
-        : { state: 'settled', request: state.request, response: state.response! };
+        : state.status === 'opened'
+          ? { state: 'opened', request: state.request }
+          : { state: 'settled', request: state.request, response: state.response };
     attachedElicitationCache.set(state, next);
     return next;
   });

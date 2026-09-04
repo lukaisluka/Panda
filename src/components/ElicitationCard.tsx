@@ -22,12 +22,16 @@ export function ElicitationCard({ elicitation, onResolve }: {
   elicitation: AttachedElicitation;
   onResolve: (id: string, response: ElicitationResponse) => void;
 }) {
-  if (elicitation.state === 'settled') return <SettledElicitationCard elicitation={elicitation} />;
-  return <PendingElicitationCard request={elicitation.request} onResolve={onResolve} />;
+  const { request } = elicitation;
+  if (request.mode !== 'form') return null; // url renders via ElicitationUrlCard
+  if (elicitation.state === 'settled') return <SettledElicitationCard elicitation={{ ...elicitation, request }} />;
+  return <PendingElicitationCard request={request} onResolve={onResolve} />;
 }
 
+type FormRequest = Extract<ElicitationRequest, { mode: 'form' }>;
+
 function PendingElicitationCard({ request, onResolve }: {
-  request: ElicitationRequest;
+  request: FormRequest;
   onResolve: (id: string, response: ElicitationResponse) => void;
 }) {
   const [values, setValues] = useState<Record<string, string | number | boolean | string[]>>({});
@@ -227,11 +231,13 @@ function ElicitationField({ field, value, onChange }: {
   );
 }
 
-function SettledElicitationCard({ elicitation }: { elicitation: Extract<AttachedElicitation, { state: 'settled' }> }) {
-  const summary =
-    elicitation.response.outcome === 'accepted'
-      ? `已提交(${Object.keys(elicitation.response.content).length} 项)`
-      : elicitation.response.outcome === 'declined'
+function SettledElicitationCard({ elicitation }: { elicitation: { request: FormRequest; response: ElicitationResponse | null } }) {
+  const response = elicitation.response;
+  const summary = !response
+    ? '已完成' // url-completed shape; a form settle always carries a response
+    : response.outcome === 'accepted'
+      ? `已提交(${Object.keys(response.content).length} 项)`
+      : response.outcome === 'declined'
         ? '已拒绝'
         : '已取消(非用户决定)';
   return (

@@ -548,13 +548,23 @@ export function resolveLivePermission(toolCallId: string, kind: PermissionOption
 }
 
 /**
- * Answers one pending form-mode `elicitation/create` (submit / decline /
- * cancel) on the foreground connection. The id is the Panda-local mint
- * (`elicit-N`) the request was folded into the document under.
+ * Answers one pending `elicitation/create` (form submit/decline, url decline
+ * / cancel) on the foreground connection. Form ids are Panda-local mints
+ * (`elicit-N`); url ids are the wire's opaque elicitationIds.
  */
 export function resolveLiveElicitation(id: string, response: ElicitationResponse): void {
   const entry = foregroundEntry('resolveElicitation');
   if (entry) entry.client.resolveElicititation(id, response);
+}
+
+/**
+ * Consents to a url-mode elicitation on the foreground connection: answers
+ * the RPC accept. The window itself is opened by the card, synchronously in
+ * the click gesture — an async window.open would be popup-blocked.
+ */
+export function openLiveElicitationUrl(id: string): void {
+  const entry = foregroundEntry('openElicitationUrl');
+  if (entry) entry.client.openElicitationUrl(id);
 }
 
 export function cancelLiveTurn(): void {

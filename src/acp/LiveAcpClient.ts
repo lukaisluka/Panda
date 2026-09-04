@@ -4,6 +4,7 @@ import {
   methods,
   type AgentCapabilities,
   type ClientConnection,
+  type CompleteElicitationNotification,
   type ContentBlock,
   type CreateElicitationRequest,
   type CreateElicitationResponse,
@@ -28,7 +29,8 @@ import {
   parseSessionNotification,
   removeSdkStrictSessionUpdateRouter,
   toAcpUpdates,
-  toElicitationRequest,
+  toElicitationFormRequest,
+  toElicitationUrlRequest,
   toPermissionRequest,
   toSessionModeState,
 } from './wire';
@@ -284,6 +286,13 @@ export class LiveAcpClient {
             this.handleUpdate(ctx.params);
           },
         )
+        .onNotification(methods.client.elicitation.complete, (ctx) => {
+          if (generation !== this.connectionGeneration) {
+            console.warn('[panda/acp] elicitation/complete from a superseded connection — dropped');
+            return;
+          }
+          this.handleElicitationComplete(ctx.params);
+        })
         .onRequest(methods.client.session.requestPermission, (ctx) => {
           if (generation !== this.connectionGeneration) {
             console.warn(
@@ -312,10 +321,9 @@ export class LiveAcpClient {
 
       const init: InitializeResponse = await connection.agent.request(methods.agent.initialize, {
         protocolVersion: PROTOCOL_VERSION,
-        // Only form-mode elicitation is implemented; url mode arrives next —
-        // advertising it per-mode keeps spec-compliant agents from sending
-        // what Panda cannot render yet.
-        clientCapabilities: { elicitation: { form: {} } },
+        // Both elicitation modes are implemented — advertising per-mode keeps
+        // spec-compliant agents from sending what Panda cannot render.
+        clientCapabilities: { elicitation: { form: {}, url: {} } },
         clientInfo: CLIENT_INFO,
       });
       if (!isCurrent()) {
@@ -630,9 +638,9 @@ export class LiveAcpClient {
   }
 
   /**
-   * Answers one pending `elicitation/create` (form mode): the user submitted
-   * the form (accepted), refused it (declined) — or it was cancelled without
-   * a user decision (turn cancel / disconnect, via settleElicitation).
+   * Answers one pending `elicitation/create`: form submit (accepted) /
+   * refusal (declined) — url-mode decline routes here too. Cancellations
+   * without a user decision arrive via settleElicitation instead.
    */
   resolveElicititation(id: string, response: ElicitationResponse): void {
     if (!this.elicitationWaiters.has(id)) {
@@ -640,6 +648,34 @@ export class LiveAcpClient {
       return;
     }
     this.settleElicitation(id, response);
+  }
+
+  /**
+   * Answers one pending url-mode `elicitation/create` with accept — the user
+   * consented to opening the link. Per protocol/v1 the RPC ends here (accept
+   * means consent, NOT completion); the card then waits for the agent's
+   * `elicitation/complete` notification. The window itself is opened by the
+   * UI in the click gesture, before this is called — async window.open would
+   * be popup-blocked.
+   */
+  openElicitationUrl(id: string): void {
+    const waiter = this.elicitationWaiters.get(id);
+    if (!waiter) {
+      console.warn(`[panda/acp] openElicitationUrl ignored: no pending request ${id}`);
+      return;
+    }
+    this.elicitationWaiters.delete(id);
+    // URL-mode accept carries no content — the interaction completes
+    // out-of-band.
+    waiter.resolve({ action: 'accept' });
+    this.handlers.onUpdate({ sessionUpdate: 'elicitation_url_opened', elicitationId: id });
+    this.handlers.onStatus(
+      this.elicitationWaiters.size > 0 || this.permissionWaiters.size > 0
+        ? 'requires_action'
+        : this.pendingPrompt
+          ? 'running'
+          : 'idle',
+    );
   }
 
   /** Cancels the in-flight turn: `session/cancel` + cancelled permission outcomes. */
@@ -1028,8 +1064,8 @@ export class LiveAcpClient {
   }
 
   /**
-   * `elicitation/create` (form mode): folds the request into the document as
-   * a form card and hangs the RPC until the user answers. Mode- and
+   * `elicitation/create` (form + url modes): folds the request into the
+   * document as a card and hangs the RPC until the user answers. Mode- and
    * session-gated like permissions — an unsupported mode is declined (never
    * hung), a foreign/request-scoped elicitation is cancelled loudly.
    */
@@ -1037,8 +1073,8 @@ export class LiveAcpClient {
     params: CreateElicitationRequest,
     signal: AbortSignal,
   ): Promise<CreateElicitationResponse> {
-    if (params.mode !== 'form') {
-      // The capability negotiation advertises form only; anything else is a
+    if (params.mode !== 'form' && params.mode !== 'url') {
+      // The capability negotiation advertises form+url; anything else is a
       // spec violation — decline so the agent can degrade, never hang.
       console.warn(`[panda/acp] elicitation/create with unsupported mode "${String(params.mode)}" — declined`);
       return Promise.resolve({ action: 'decline' });
@@ -1054,18 +1090,29 @@ export class LiveAcpClient {
       );
       return Promise.resolve({ action: 'cancel' });
     }
-    const id = `elicit-${++this.elicitationSeq}`;
+    // Url ids come from the wire (opaque, unique per connection — the
+    // complete notification matches on them); form ids are minted locally.
+    const request =
+      params.mode === 'url'
+        ? toElicitationUrlRequest(params)
+        : toElicitationFormRequest(`elicit-${++this.elicitationSeq}`, params);
+    if (this.elicitationWaiters.has(request.id)) {
+      // Double-flight on one id would strand one RPC with no card — decline
+      // the repeat loudly; the reducer separately guards settled records.
+      console.warn(`[panda/acp] elicitation/create reuses pending id ${request.id} — declined`);
+      return Promise.resolve({ action: 'decline' });
+    }
     this.handlers.onUpdate({
       sessionUpdate: 'elicitation_requested',
-      request: toElicitationRequest(id, params),
+      request,
     });
     return new Promise((resolve) => {
       const waiter: PendingElicitation = { resolve };
-      this.elicitationWaiters.set(id, waiter);
+      this.elicitationWaiters.set(request.id, waiter);
       const settleAborted = () => {
-        if (this.elicitationWaiters.get(id) !== waiter) return;
-        console.warn(`[panda/acp] elicitation ${id} aborted by the agent — settling as cancelled`);
-        this.settleElicitation(id, { outcome: 'cancelled' });
+        if (this.elicitationWaiters.get(request.id) !== waiter) return;
+        console.warn(`[panda/acp] elicitation ${request.id} aborted by the agent — settling as cancelled`);
+        this.settleElicitation(request.id, { outcome: 'cancelled' });
       };
       signal.addEventListener('abort', settleAborted);
       if (signal.aborted) settleAborted();
@@ -1099,6 +1146,32 @@ export class LiveAcpClient {
     for (const id of [...this.elicitationWaiters.keys()]) {
       this.settleElicitation(id, { outcome: 'cancelled' });
     }
+  }
+
+  /**
+   * `elicitation/complete` (url mode): the agent reports the out-of-band
+   * interaction finished. The reducer ignores unknown/finished ids (spec
+   * requirement); a still-pending waiter means the user never clicked open
+   * yet the flow finished anyway — answer accept, the interaction did happen.
+   * Opened cards need no waiter work: their RPC already answered accept, and
+   * they live on past turn cancels (the out-of-band flow outruns the turn).
+   */
+  private handleElicitationComplete(params: CompleteElicitationNotification): void {
+    const id = params.elicitationId;
+    const waiter = this.elicitationWaiters.get(id);
+    if (waiter) {
+      console.warn(`[panda/acp] elicitation/complete for ${id} that was never opened — answering accept`);
+      this.elicitationWaiters.delete(id);
+      waiter.resolve({ action: 'accept' });
+      this.handlers.onStatus(
+        this.elicitationWaiters.size > 0 || this.permissionWaiters.size > 0
+          ? 'requires_action'
+          : this.pendingPrompt
+            ? 'running'
+            : 'idle',
+      );
+    }
+    this.handlers.onUpdate({ sessionUpdate: 'elicitation_url_completed', elicitationId: id });
   }
 
   /**

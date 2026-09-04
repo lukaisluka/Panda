@@ -36,9 +36,10 @@ export type HostCapabilities = Record<HostCapabilityShard, boolean>;
 
 /**
  * The browser host today: Panda answers permissions, absorbs session
- * updates, and serves form-mode elicitation (`elicitation/create`, form);
- * client-side MCP and url-mode elicitation are not implemented yet. `false`
- * is a statement of fact ("the host lacks the shard"), not a configuration.
+ * updates, and serves both elicitation modes (`elicitation/create` form +
+ * url, with the url mode's `elicitation/complete` notification); client-side
+ * MCP is not implemented yet. `false` is a statement of fact ("the host
+ * lacks the shard"), not a configuration.
  */
 export const PANDA_HOST_CAPABILITIES: HostCapabilities = {
   permission: true,

@@ -111,18 +111,29 @@ export type AcpElicitationField =
   | { key: string; type: 'unsupported'; title: string; required: false; propertyType: string };
 
 /**
- * The UI card model for a `elicitation/create` request (form mode). The id
- * is Panda-local (minted per RPC — form-mode requests carry no wire id) and
- * keys the document record, the pending waiter and the UI's answer.
+ * The UI card model for a `elicitation/create` request, discriminated by
+ * mode. The form id is Panda-local (minted per RPC — form-mode requests
+ * carry no wire id); the url id IS the wire `elicitationId`, because the
+ * later `elicitation/complete` notification matches on it.
  */
-export type ElicitationRequest = {
-  id: string;
-  /** The scope's optional tool call, shown as context on the card. */
-  toolCallId: string | null;
-  title: string | null;
-  description: string | null;
-  fields: AcpElicitationField[];
-};
+export type ElicitationRequest =
+  | {
+      mode: 'form';
+      id: string;
+      /** The scope's optional tool call, shown as context on the card. */
+      toolCallId: string | null;
+      title: string | null;
+      description: string | null;
+      fields: AcpElicitationField[];
+    }
+  | {
+      mode: 'url';
+      id: string;
+      toolCallId: string | null;
+      /** The wire `message` — what the agent wants the user to authorize. */
+      message: string | null;
+      url: string;
+    };
 
 /**
  * How an elicitation settled. `accepted.content` conforms to the requested
@@ -135,8 +146,16 @@ export type ElicitationResponse =
   | { outcome: 'declined' }
   | { outcome: 'cancelled' };
 
+/**
+ * `pending` is awaiting the user (form: submit/decline; url: open/decline).
+ * `opened` is url-only: the user consented and the link is open, but the
+ * out-of-band interaction is still running — the RPC already answered
+ * accept, the card now waits for `elicitation/complete`. `completed` is the
+ * url terminal state that notification drives. `resolved`/`cancelled` come
+ * from `elicitation_resolved` (form settle, url decline, any cancel).
+ */
 export type ElicitationState = {
-  status: 'pending' | 'resolved' | 'cancelled';
+  status: 'pending' | 'opened' | 'resolved' | 'completed' | 'cancelled';
   request: ElicitationRequest;
   response: ElicitationResponse | null;
 };
@@ -289,11 +308,15 @@ export type AcpSessionUpdate =
    * response); only the pending card disappears from the UI.
    */
   | { sessionUpdate: 'permission_resolved'; toolCallId: string; response: PermissionResponse }
-  // -- elicitation lifecycle (elicitation/create RPC, form mode) --------------
+  // -- elicitation lifecycle (elicitation/create RPC + elicitation/complete) ---
   // Same translation pattern as permissions: the drivers turn the client-side
   // RPC into these events so the reducer folds elicitations into the document.
+  // Form and url requests share the record map; the url-only events below
+  // carry the accept-is-not-final lifecycle (open → out-of-band → complete).
   | { sessionUpdate: 'elicitation_requested'; request: ElicitationRequest }
-  | { sessionUpdate: 'elicitation_resolved'; elicitationId: string; response: ElicitationResponse };;
+  | { sessionUpdate: 'elicitation_resolved'; elicitationId: string; response: ElicitationResponse }
+  | { sessionUpdate: 'elicitation_url_opened'; elicitationId: string }
+  | { sessionUpdate: 'elicitation_url_completed'; elicitationId: string }
 
 /**
  * Session-level kinds mapped to `session_state` events (latest-wins recording,

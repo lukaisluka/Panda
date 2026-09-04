@@ -24,13 +24,19 @@ export type DriverHandlers = {
  * answer. The request and its resolution flow into the document as
  * `permission_requested` / `permission_resolved` and
  * `elicitation_requested` / `elicitation_resolved` events (issues #18),
- * exactly like the live client's translation of the RPCs.
+ * exactly like the live client's translation of the RPCs. Url-mode
+ * elicitations replay the same split the wire has: consent ends the RPC
+ * (`elicitation_url_opened`), the agent's `elicitation/complete`
+ * notification lands later as its own step.
  */
 export class ReplayDriver {
   private queue: ReplayStep[] = [];
   private timer: ReturnType<typeof setTimeout> | null = null;
   private waitingPermission: { request: PermissionRequest; onResolve: (decision: PermissionOptionKind) => ReplayStep[] } | null = null;
-  private waitingElicitation: { request: ElicitationRequest; onResolve: (response: ElicitationResponse) => ReplayStep[] } | null = null;
+  private waitingElicitation:
+    | { kind: 'form'; request: ElicitationRequest; onResolve: (response: ElicitationResponse) => ReplayStep[] }
+    | { kind: 'url'; request: ElicitationRequest; onResolve: (response: ElicitationResponse) => ReplayStep[]; onOpen: () => ReplayStep[] }
+    | null = null;
   private stopped = false;
 
   constructor(private readonly handlers: DriverHandlers) {}
@@ -98,6 +104,20 @@ export class ReplayDriver {
     this.tick();
   }
 
+  /** The url-mode consent: answer accept, keep playing (completion arrives as its own step). */
+  openElicitationUrl(): void {
+    const pending = this.waitingElicitation;
+    if (!pending || pending.kind !== 'url') return;
+    this.waitingElicitation = null;
+    this.handlers.onUpdate({
+      sessionUpdate: 'elicitation_url_opened',
+      elicitationId: pending.request.id,
+    });
+    const followUps = pending.onOpen();
+    this.queue = [...followUps, ...this.queue];
+    this.tick();
+  }
+
   private tick(): void {
     if (this.stopped) return;
     const step = this.queue.shift();
@@ -124,11 +144,26 @@ export class ReplayDriver {
           break;
         case 'elicitation':
           this.handlers.onStatus('requires_action');
-          this.waitingElicitation = { request: step.request, onResolve: step.onResolve };
+          this.waitingElicitation = { kind: 'form', request: step.request, onResolve: step.onResolve };
           this.handlers.onUpdate({
             sessionUpdate: 'elicitation_requested',
             request: step.request,
           });
+          break;
+        case 'elicitation_url':
+          this.handlers.onStatus('requires_action');
+          this.waitingElicitation = { kind: 'url', request: step.request, onResolve: step.onResolve, onOpen: step.onOpen };
+          this.handlers.onUpdate({
+            sessionUpdate: 'elicitation_requested',
+            request: step.request,
+          });
+          break;
+        case 'elicitation_url_complete':
+          this.handlers.onUpdate({
+            sessionUpdate: 'elicitation_url_completed',
+            elicitationId: step.elicitationId,
+          });
+          this.tick();
           break;
       }
     }, step.afterMs);

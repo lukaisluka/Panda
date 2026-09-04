@@ -6,7 +6,8 @@ import {
   parseSessionNotification,
   removeSdkStrictSessionUpdateRouter,
   toAcpUpdates,
-  toElicitationRequest,
+  toElicitationFormRequest,
+  toElicitationUrlRequest,
 } from './wire';
 
 /** Loose constructor: unknown-kind payloads need to bypass the SDK's closed union. */
@@ -264,7 +265,7 @@ describe('echoRelation (sent prompt vs agent echo)', () => {
   });
 });
 
-describe('toElicitationRequest (form mode whitelisting)', () => {
+describe('toElicitationFormRequest (form mode whitelisting)', () => {
   it('maps every known property type to its field variant, honoring required and defaults', () => {
     const params = {
       sessionId: 's-1',
@@ -302,7 +303,8 @@ describe('toElicitationRequest (form mode whitelisting)', () => {
         },
       },
     };
-    expect(toElicitationRequest('elicit-1', params as never)).toEqual({
+    expect(toElicitationFormRequest('elicit-1', params as never)).toEqual({
+      mode: 'form',
       id: 'elicit-1',
       toolCallId: null,
       title: '重构选项',
@@ -349,7 +351,7 @@ describe('toElicitationRequest (form mode whitelisting)', () => {
         },
       },
     };
-    const mapped = toElicitationRequest('elicit-2', params as never);
+    const mapped = toElicitationFormRequest('elicit-2', params as never);
     expect(mapped.fields[0]).toMatchObject({
       type: 'string',
       options: [
@@ -369,11 +371,11 @@ describe('toElicitationRequest (form mode whitelisting)', () => {
   it('carries the session scope toolCallId when present, null when absent', () => {
     const schema = { properties: { tag: { type: 'string' } } };
     const withTool = { sessionId: 's-1', toolCallId: 't-9', mode: 'form', message: 'm', requestedSchema: schema };
-    expect(toElicitationRequest('e', withTool as never).toolCallId).toBe('t-9');
+    expect(toElicitationFormRequest('e', withTool as never).toolCallId).toBe('t-9');
     const noTool = { sessionId: 's-1', mode: 'form', message: 'm', requestedSchema: schema };
-    expect(toElicitationRequest('e', noTool as never).toolCallId).toBe(null);
+    expect(toElicitationFormRequest('e', noTool as never).toolCallId).toBe(null);
     const requestScoped = { requestId: 'r-1', mode: 'form', message: 'm', requestedSchema: schema };
-    expect(toElicitationRequest('e', requestScoped as never).toolCallId).toBe(null);
+    expect(toElicitationFormRequest('e', requestScoped as never).toolCallId).toBe(null);
   });
 
   it('an unknown property type becomes an inert unsupported field (warned, not dropped)', () => {
@@ -388,11 +390,44 @@ describe('toElicitationRequest (form mode whitelisting)', () => {
         },
       },
     };
-    const mapped = toElicitationRequest('elicit-3', params as never);
+    const mapped = toElicitationFormRequest('elicit-3', params as never);
     expect(mapped.fields).toEqual([
       { key: 'custom', type: 'unsupported', title: '自定义', required: false, propertyType: '_vendorObject' },
     ]);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('custom'));
     warnSpy.mockRestore();
+  });
+});
+
+describe('toElicitationUrlRequest (url mode whitelisting)', () => {
+  it('maps message/url and keeps the wire elicitationId as the record id', () => {
+    const params = {
+      sessionId: 's-1',
+      mode: 'url',
+      message: '授权连接 GitHub',
+      elicitationId: 'github-oauth-001',
+      url: 'https://github.com/login/oauth/authorize?client_id=panda',
+    };
+    expect(toElicitationUrlRequest(params as never)).toEqual({
+      mode: 'url',
+      id: 'github-oauth-001', // unchanged — elicitation/complete matches on it
+      toolCallId: null,
+      message: '授权连接 GitHub',
+      url: 'https://github.com/login/oauth/authorize?client_id=panda',
+    });
+  });
+
+  it('carries the session scope toolCallId when present, null when absent', () => {
+    const withTool = {
+      sessionId: 's-1',
+      toolCallId: 't-9',
+      mode: 'url',
+      message: 'm',
+      elicitationId: 'e-1',
+      url: 'https://example.com/a',
+    };
+    expect(toElicitationUrlRequest(withTool as never).toolCallId).toBe('t-9');
+    const requestScoped = { requestId: 'r-1', mode: 'url', message: 'm', elicitationId: 'e-2', url: 'https://example.com/b' };
+    expect(toElicitationUrlRequest(requestScoped as never).toolCallId).toBe(null);
   });
 });

@@ -19,6 +19,7 @@ import { UserMessage } from './UserMessage';
 import { ContentColumn } from './ContentColumn';
 import { AttachedPermissionCard } from './PermissionCard';
 import { ElicitationCard } from './ElicitationCard';
+import { ElicitationUrlCard } from './ElicitationUrlCard';
 import { UnsupportedBlock } from './UnsupportedBlock';
 import { useMessageStreamItems } from '../projector/hooks';
 import type { AttachedPermission, BlockFlatItem, FlatItem } from '../projector/messageStream';
@@ -63,9 +64,10 @@ const DETACH_DISTANCE_PX = 48;
 const StreamHeader = () => <div className="stream-header-space" />;
 const StreamFooter = () => <div className="stream-footer-space" />;
 
-export function MessageStream({ onResolvePermission, onResolveElicitation }: {
+export function MessageStream({ onResolvePermission, onResolveElicitation, onOpenElicitationUrl }: {
   onResolvePermission: (toolCallId: string, kind: PermissionOptionKind) => void;
   onResolveElicitation: (id: string, response: ElicitationResponse) => void;
+  onOpenElicitationUrl: (id: string) => void;
 }) {
   const [pinned, setPinned] = useState(true);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -205,10 +207,18 @@ export function MessageStream({ onResolvePermission, onResolveElicitation }: {
           if (item.kind === 'elicitation') {
             return (
               <ContentColumn>
-                <ElicitationCard
-                  elicitation={item.elicitation}
-                  onResolve={onResolveElicitation}
-                />
+                {item.elicitation.request.mode === 'url' ? (
+                  <ElicitationUrlCard
+                    elicitation={item.elicitation}
+                    onOpen={onOpenElicitationUrl}
+                    onDecline={onResolveElicitation}
+                  />
+                ) : (
+                  <ElicitationCard
+                    elicitation={item.elicitation}
+                    onResolve={onResolveElicitation}
+                  />
+                )}
               </ContentColumn>
             );
           }

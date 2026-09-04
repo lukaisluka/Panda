@@ -627,6 +627,7 @@ describe('reducer permission lifecycle (issue #18)', () => {
 
 describe('reducer elicitation lifecycle (form mode)', () => {
   const request = (id: string, title = `表单 ${id}`) => ({
+    mode: 'form' as const,
     id,
     toolCallId: null,
     title,
@@ -679,6 +680,98 @@ describe('reducer elicitation lifecycle (form mode)', () => {
     const doc = fold([{ sessionUpdate: 'elicitation_resolved', elicitationId: 'ghost', response: { outcome: 'declined' } }]);
     expect(doc.elicitations).toEqual({});
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('ghost'));
+    warnSpy.mockRestore();
+  });
+
+  it('a live id cannot be overwritten by a second request for it', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'elicitation_requested', request: request('elicit-1', '第一份') },
+      { sessionUpdate: 'elicitation_requested', request: request('elicit-1', '重复') },
+    ]);
+    expect(doc.elicitations['elicit-1']).toMatchObject({ request: { title: '第一份' } });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('elicit-1'));
+    warnSpy.mockRestore();
+  });
+});
+
+describe('reducer elicitation lifecycle (url mode)', () => {
+  const request = (id: string) => ({
+    mode: 'url' as const,
+    id,
+    toolCallId: null,
+    message: '授权连接 GitHub',
+    url: `https://github.com/login/oauth/authorize?state=${id}`,
+  });
+
+  it('consent moves pending → opened; complete moves opened → completed', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'elicitation_requested', request: request('gh-1') },
+      { sessionUpdate: 'elicitation_url_opened', elicitationId: 'gh-1' },
+    ]);
+    expect(doc.elicitations['gh-1']).toMatchObject({ status: 'opened', response: null });
+    const done = applyUpdate(doc, { sessionUpdate: 'elicitation_url_completed', elicitationId: 'gh-1' });
+    expect(done.elicitations['gh-1']).toMatchObject({ status: 'completed', response: null });
+  });
+
+  it('complete also lands on a still-pending url elicitation (user never clicked open)', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'elicitation_requested', request: request('gh-2') },
+      { sessionUpdate: 'elicitation_url_completed', elicitationId: 'gh-2' },
+    ]);
+    expect(doc.elicitations['gh-2']).toMatchObject({ status: 'completed' });
+  });
+
+  it('decline reuses elicitation_resolved and keeps the terminal record', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'elicitation_requested', request: request('gh-3') },
+      { sessionUpdate: 'elicitation_resolved', elicitationId: 'gh-3', response: { outcome: 'declined' } },
+    ]);
+    expect(doc.elicitations['gh-3']).toEqual({
+      status: 'resolved',
+      request: request('gh-3'),
+      response: { outcome: 'declined' },
+    });
+  });
+
+  it('ignores complete for unknown ids and for already-finished elicitations (spec requirement)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const unknown = fold([{ sessionUpdate: 'elicitation_url_completed', elicitationId: 'ghost' }]);
+    expect(unknown.elicitations).toEqual({});
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('ghost'));
+
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'elicitation_requested', request: request('gh-4') },
+      { sessionUpdate: 'elicitation_url_opened', elicitationId: 'gh-4' },
+      { sessionUpdate: 'elicitation_url_completed', elicitationId: 'gh-4' },
+    ]);
+    warnSpy.mockClear();
+    const replayed = applyUpdate(doc, { sessionUpdate: 'elicitation_url_completed', elicitationId: 'gh-4' });
+    expect(replayed.elicitations['gh-4']).toEqual(doc.elicitations['gh-4']); // unchanged
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('gh-4'));
+    warnSpy.mockRestore();
+  });
+
+  it('a late resolve after completion is ignored, not folded over the terminal record', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'elicitation_requested', request: request('gh-5') },
+      { sessionUpdate: 'elicitation_url_opened', elicitationId: 'gh-5' },
+      { sessionUpdate: 'elicitation_url_completed', elicitationId: 'gh-5' },
+    ]);
+    const late = applyUpdate(doc, {
+      sessionUpdate: 'elicitation_resolved',
+      elicitationId: 'gh-5',
+      response: { outcome: 'declined' },
+    });
+    expect(late.elicitations['gh-5']).toEqual(doc.elicitations['gh-5']); // still completed
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('gh-5'));
     warnSpy.mockRestore();
   });
 });
