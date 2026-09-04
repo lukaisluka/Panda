@@ -31,7 +31,9 @@
   width: 100%;
   align-items: center;
   gap: 10px; /* gap-2.5 */
-  padding: 6px 8px;
+  /* No inline padding — the row (icon → title) must sit flush with the
+   * left edge of body text, which has none either. */
+  padding: 6px 0;
   text-align: left;
   transition: var(--panda-colors-transition);
 }

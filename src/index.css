@@ -253,11 +253,11 @@ body {
 .md-body code {
   font-family: var(--font-mono);
   /* Same size as body text — ZCode-style: inline code is differentiated by
-   * the mono face + raised chip, never by shrinking the font. */
+   * the mono face + tinted background, never by a border or a smaller
+   * size. */
   font-size: 1em;
   background: var(--color-raised);
-  border: 1px solid var(--color-border);
-  padding: 0.1em 0.35em;
+  padding: 0.15em 0.4em;
   border-radius: 5px;
 }
 /* Fenced blocks render through CodeBlock (header + shiki tokens, below).
