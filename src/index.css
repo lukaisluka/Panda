@@ -178,6 +178,14 @@ body {
 .md-body--sm {
   font-size: 12px;
 }
+/* Nesting rule (joint-debug): an expanded detail level never renders
+ * larger than its host surface. Secondary bodies always sit inside a
+ * 12px card, so their markdown heading steps (1.3em/1.2em/…) are
+ * flattened to host size — hierarchy inside cards is carried by weight
+ * and color alone. Doubled class beats the .md-body h1…h6 steps below
+ * without relying on source order. */
+.md-body.md-body--sm h1, .md-body.md-body--sm h2, .md-body.md-body--sm h3,
+.md-body.md-body--sm h4, .md-body.md-body--sm h5, .md-body.md-body--sm h6 { font-size: 1em; }
 .md-body > :first-child { margin-top: 0; }
 .md-body > :last-child { margin-bottom: 0; }
 /* p must re-inherit the container size: theme reset layers declare
