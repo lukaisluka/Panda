@@ -25,7 +25,7 @@ export function ThoughtBlock({ block, streaming }: { block: ThoughtBlockModel; s
   return (
     <div className="disclosure">
       <button onClick={() => setOpen((o) => !o)} className="disclosure-toggle">
-        <Brain size={13} className="disclosure-icon" />
+        <Brain size={16} className="disclosure-icon" />
         <span className="disclosure-label">{streaming ? 'Thinking' : 'Thought'}</span>
         {tail !== null && (
           <span className="tool-think-preview" dir="rtl">{tail}</span>
