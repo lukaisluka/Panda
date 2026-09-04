@@ -14,6 +14,9 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^1.4.0",
+    "@astryxdesign/core": "0.5.2",
+    "@astryxdesign/theme-matcha": "0.5.2",
+    "@stylexjs/stylex": "0.19.0",
     "diff": "^9.0.0",
     "lucide-react": "^1.37.0",
     "react": "^19.2.8",

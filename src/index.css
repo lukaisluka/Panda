@@ -1,24 +1,54 @@
-@import "tailwindcss";
+/* Astryx + Tailwind v4 coexistence (#32 Phase 1). Layer order is load-bearing:
+ * unlayered styles beat every named layer and later layers beat earlier ones,
+ * so this declaration must come before any @import and every stylesheet must
+ * land in a layer — explicitly via layer() below (Tailwind), or internally
+ * (Astryx files declare their own @layer reset / astryx-base / astryx-theme).
+ * Order per the Astryx migration guide: system first, utilities last, so a
+ * utility on className can intentionally override component defaults. */
+@layer reset, theme, base, astryx-base, astryx-theme, components, utilities;
 
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "@astryxdesign/core/reset.css";
+@import "@astryxdesign/core/astryx.css";
+@import "@astryxdesign/theme-matcha/theme.css";
+@import "@astryxdesign/core/tailwind-theme.css";
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* Panda token aliases onto Astryx system tokens (#32 Phase 1). Values resolve
+ * at runtime, so the matcha theme and light/dark switching flow through every
+ * utility and plain-CSS reference untouched.
+ *
+ * NOT redefined here, on purpose:
+ *  - --color-border, --color-accent: same name as the system token. A @theme
+ *    entry would be a self-referencing var() loop; the bridge's @theme inline
+ *    registration already powers the border-border / *-accent utilities, and
+ *    plain CSS var(--color-border|accent) resolves to the system :root values.
+ *  - --color-muted below intentionally shadows the bridge (which maps it to a
+ *    background token): our text-muted means secondary TEXT.
+ *
+ * --spacing: the bridge remaps it to the theme's --spacing-1 (matcha = 6px),
+ * which would rescale EVERY Tailwind spacing utility (w-*, p-*, gap-*) by
+ * 1.5x — a silent layout change, not a re-skin. Phase 1 keeps Panda's
+ * geometry on Tailwind's 4px base; Astryx components keep using their own
+ * --spacing-* vars internally and are unaffected. Revisit in Phase 2+ only
+ * if we adopt Astryx layout primitives. */
 @theme {
-  /* Panda palette: warm paper canvas, ink text, black accent — the panda's
-   * white fur carries the surfaces, its black patches carry emphasis. */
-  --color-bg: #f6f5f1;
-  --color-surface: #ffffff;
-  --color-raised: #edebe6;
-  --color-border: #e3e1da;
-  --color-fg: #1b1b1f;
-  --color-muted: #64646c;
-  --color-faint: #a2a2aa;
-  --color-accent: #1b1b1f;
-  --color-warn: #b45309;
-  --color-danger: #d14343;
-  --color-add: #3f9146;
-  --color-diff-add: #e9f4e9;
-  --color-diff-del: #faeae8;
+  --spacing: 0.25rem;
+  --color-bg: var(--color-background-body);
+  --color-surface: var(--color-background-surface);
+  --color-raised: var(--color-background-muted);
+  --color-fg: var(--color-text-primary);
+  --color-muted: var(--color-text-secondary);
+  --color-faint: var(--color-text-disabled);
+  --color-warn: var(--color-warning);
+  --color-danger: var(--color-error);
+  --color-add: var(--color-success);
+  --color-diff-add: var(--color-success-muted);
+  --color-diff-del: var(--color-error-muted);
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --font-sans: var(--font-family-body);
+  --font-mono: var(--font-family-code);
 }
 
 html, body, #root {
@@ -26,7 +56,8 @@ html, body, #root {
 }
 
 body {
-  color-scheme: light;
+  /* No hardcoded color-scheme: light/dark flips ride on light-dark() tokens,
+   * and <Theme> owns the scheme so both modes stay in sync (#32). */
   background-color: var(--color-bg);
   color: var(--color-fg);
   font-family: var(--font-sans);
