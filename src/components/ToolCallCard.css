@@ -1,12 +1,22 @@
 /* Tool-call card: summary row + expandable raw input and results. */
 
 .tool-card {
-  /* 24px: block gaps between cards (and cards ↔ text) must exceed the
-   * primary line height (14 × 1.6 = 22.4px) so block boundaries read
-   * stronger than line breaks. Adjacent-block margin collapsing takes
-   * the max, so card ↔ 6px text gaps land here too. */
-  margin-block: 24px;
+  /* ZCode spacing ladder: text↔tool 14px, tool↔tool 8px. The default
+   * (14px) covers text↔first-card and last-card↔text; MessageStream adds
+   * the run modifiers below from the flat block sequence. 14px < body
+   * line height (22.4px) is intentional: ZCode keeps block gaps under a
+   * line of body text — grouping is signalled by the mono row style,
+   * not air. */
+  margin-block: 14px;
 }
+
+/* Run modifiers: cards inside a run of consecutive tool calls sit 8px
+ * apart. BOTH sides must drop — margins collapse through the item
+ * wrappers (no block padding/border), so a single 8px side would still
+ * read 14px. Set in React (itemContent) because CSS sibling selectors
+ * can't see across the virtualizer's per-item wrappers. */
+.tool-card--after-tool { margin-block-start: 8px; }
+.tool-card--before-tool { margin-block-end: 8px; }
 
 /* ZCode-style: no card box. The tool call is a lightweight mono row that
  * sits directly on the page surface; state lives in the trailing badge,

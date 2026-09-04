@@ -68,12 +68,16 @@ function StatusBadge({ status }: { status: ToolCallStatus }) {
  * into raw input + results. Arrival order is preserved; cards sit between
  * the text that surrounds them.
  */
-export function ToolCallCard({ call, permission, onResolvePermission }: {
+export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool = false, nextIsTool = false }: {
   call: ToolCallState;
-  /** The permission attached to this call — pending (user answers) or
+  /** Permission attached to this call — pending (user answers) or
    * policy-denied (terminal record, issue #22). */
   permission: AttachedPermission | null;
   onResolvePermission: (kind: PermissionOptionKind) => void;
+  /** Stream neighbors (see isToolItem in MessageStream): drive the ZCode
+   * spacing ladder — 8px inside a tool run, 14px against text. */
+  prevIsTool?: boolean;
+  nextIsTool?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -92,7 +96,13 @@ export function ToolCallCard({ call, permission, onResolvePermission }: {
   const hasDetails = (call.rawInput && Object.keys(call.rawInput).length > 0) || call.content.length > 0;
 
   return (
-    <div className="tool-card">
+    <div
+      className={[
+        'tool-card',
+        prevIsTool && 'tool-card--after-tool',
+        nextIsTool && 'tool-card--before-tool',
+      ].filter(Boolean).join(' ')}
+    >
       <div className="tool-card-frame">
         <button onClick={() => setOpen((o) => !o)} className="tool-card-toggle">
           <Icon size={14} className="tool-card-icon" />
