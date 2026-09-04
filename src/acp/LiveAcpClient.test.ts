@@ -7,10 +7,12 @@ import {
   type AgentRequestContext,
   type AnyMessage,
   type PromptRequest,
+  type RequestPermissionRequest,
   type RequestPermissionResponse,
   type Stream,
 } from '@agentclientprotocol/sdk';
 import { LiveAcpClient, type LiveClientHandlers } from './LiveAcpClient';
+import type { PermissionDecision } from '../policy';
 import { StreamTransport } from './transport/StreamTransport';
 import type { AcpTransport } from './transport/AcpTransport';
 import {
@@ -86,6 +88,8 @@ type FakeAgentOptions = {
   /** Sees every JSON-RPC message the fake agent sends (wire-level assertions). */
   spyAgentOutgoing?: (message: AnyMessage) => void;
   onPrompt?: PromptHandler;
+  /** Host policy injected into the client (issue #22); default = always ask. */
+  clientPolicy?: (request: RequestPermissionRequest) => PermissionDecision;
 };
 
 function streamPair(): { clientStream: Stream; serverStream: Stream } {
@@ -230,7 +234,10 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     .onRequest(methods.agent.session.prompt, (ctx) => opts.onPrompt?.(ctx) ?? { stopReason: 'end_turn' })
     .connect(serverStream);
 
-  const acpClient = new LiveAcpClient(handlers);
+  const acpClient = new LiveAcpClient(
+    handlers,
+    opts.clientPolicy ? { policy: opts.clientPolicy } : {},
+  );
   await acpClient.connect(new StreamTransport(clientStream), '/tmp/project', opts.resume);
 
   return {
@@ -473,6 +480,73 @@ describe('LiveAcpClient', () => {
       sessionUpdate: 'permission_resolved',
       toolCallId: 'edit-1',
       response: { outcome: 'selected', kind: 'reject_once' },
+    });
+    h.closeAll();
+  });
+
+  // -- host policy (issue #22) --------------------------------------------------
+
+  it('policy deny answers reject_once immediately; the card lands and settles as denied-by-policy', async () => {
+    const harnessRef: { h?: Harness } = {};
+    const onPrompt: PromptHandler = async (ctx) => {
+      await askPermission(ctx, harnessRef.h!);
+      return { stopReason: 'end_turn' };
+    };
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const h = await setup({ onPrompt, clientPolicy: () => 'deny' });
+    harnessRef.h = h;
+
+    const turn = h.acpClient.send([{ type: 'text', text: 'edit it' }]);
+    await turn;
+
+    // Wire: the agent's reject_once option, answered without the user.
+    expect(h.agentState.permissionResponses).toEqual([
+      { outcome: { outcome: 'selected', optionId: 'reject-once' } },
+    ]);
+    // Document: requested then settled — traceable, marked 非用户决定.
+    expect(permissionEvents(h)).toEqual([
+      {
+        sessionUpdate: 'permission_requested',
+        request: expect.objectContaining({ toolCallId: 'edit-1' }),
+      },
+      {
+        sessionUpdate: 'permission_resolved',
+        toolCallId: 'edit-1',
+        response: { outcome: 'denied-by-policy', kind: 'reject_once' },
+      },
+    ]);
+    // The denial itself is traceable (issue #22 trace-log requirement).
+    // Restore only after asserting — mockRestore also wipes the call history.
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('denied by host policy'));
+    infoSpy.mockRestore();
+    // Nothing waits on the user: the turn never enters requires_action.
+    expect(h.statuses).not.toContain('requires_action');
+    h.closeAll();
+  });
+
+  it('policy deny with no reject option offered answers cancelled', async () => {
+    const harnessRef: { h?: Harness } = {};
+    const onPrompt: PromptHandler = async (ctx) => {
+      // A hostile/malformed agent: only allow options on offer.
+      const response = await ctx.client.request(methods.client.session.requestPermission, {
+        sessionId: ctx.params.sessionId,
+        toolCall: { toolCallId: 'edit-1', title: 'Edit file: src/a.ts', kind: 'edit', status: 'pending' },
+        options: [{ optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' }],
+      });
+      harnessRef.h!.agentState.permissionResponses.push(response);
+      return { stopReason: 'end_turn' };
+    };
+    const h = await setup({ onPrompt, clientPolicy: () => 'deny' });
+    harnessRef.h = h;
+
+    const turn = h.acpClient.send([{ type: 'text', text: 'edit it' }]);
+    await turn;
+
+    expect(h.agentState.permissionResponses).toEqual([{ outcome: { outcome: 'cancelled' } }]);
+    expect(permissionEvents(h).at(-1)).toEqual({
+      sessionUpdate: 'permission_resolved',
+      toolCallId: 'edit-1',
+      response: { outcome: 'denied-by-policy', kind: null },
     });
     h.closeAll();
   });

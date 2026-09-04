@@ -19,6 +19,7 @@ import {
   type ConnectionStatus,
   type SessionMode,
 } from '../store';
+import { effectiveCapability, PANDA_HOST_CAPABILITIES } from '../capabilities';
 import type { AgentProfile } from '../profiles';
 import { loadProfiles, saveProfiles, subscribeProfiles } from '../profiles';
 import { ConnectPanel, type FormPrefill } from './ConnectPanel';
@@ -294,7 +295,15 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
             // Offline slots keep retained documents clickable (查看历史);
             // sessions never loaded locally stay inert until connected.
             const hasDoc = slot.docs[entry.sessionId] !== undefined;
-            const canSwitch = connected ? slot.capabilities.loadSession && !busy : hasDoc;
+            // Capability gating goes through the effective-capability
+            // decision point (issue #22), never the raw declaration.
+            const loadSession = effectiveCapability(
+              'loadSession',
+              slot.capabilities,
+              PANDA_HOST_CAPABILITIES,
+            );
+            const canDelete = effectiveCapability('delete', slot.capabilities, PANDA_HOST_CAPABILITIES);
+            const canSwitch = connected ? loadSession.available && !busy : hasDoc;
             const label = entry.title ?? `${basename(entry.cwd)} · ${entry.sessionId.slice(-6)}`;
             return (
               <div key={entry.sessionId} className="group/s relative">
@@ -311,8 +320,10 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
                         ? '等待当前回合或切换完成'
                         : !connected && !hasDoc
                           ? '连接后可查看/切换该会话'
-                          : connected && !slot.capabilities.loadSession
-                            ? 'agent 不支持历史回放（session/load）'
+                          : connected && !loadSession.available
+                            ? loadSession.reason === 'unavailable-on-host'
+                              ? '宿主暂不支持会话回放'
+                              : 'agent 不支持历史回放（session/load）'
                             : entry.cwd
                   }
                   className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[12.5px] ${
@@ -326,7 +337,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
                   <MessagesSquare size={12} className="shrink-0 text-faint" />
                   <span className="truncate">{label}</span>
                 </button>
-                {slot.capabilities.delete && connected && !foregroundSession && !busy && (
+                {canDelete.available && connected && !foregroundSession && !busy && (
                   <button
                     onClick={() => live.deleteSession(connectionId, entry.sessionId)}
                     className="absolute right-1.5 top-1/2 hidden h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-faint transition-colors hover:text-danger group-hover/s:flex"

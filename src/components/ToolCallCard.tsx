@@ -23,14 +23,13 @@ import remarkGfm from 'remark-gfm';
 import type {
   AcpToolKind,
   PermissionOptionKind,
-  PermissionRequest,
   ToolCallState,
   ToolCallStatus,
 } from '../protocol/types';
 import { markdownComponents } from './CodeBlock';
 import { DiffView } from './DiffView';
 import { MessageImage } from './MessageImage';
-import { PermissionCard } from './PermissionCard';
+import { AttachedPermissionCard, type AttachedPermission } from './PermissionCard';
 import { diffStats } from './diff-utils';
 
 const KIND_ICON: Record<AcpToolKind, LucideIcon> = {
@@ -82,8 +81,9 @@ const CARD_EDGE: Partial<Record<ToolCallStatus, string>> = {
  */
 export function ToolCallCard({ call, permission, onResolvePermission }: {
   call: ToolCallState;
-  /** The pending permission request if it belongs to this call. */
-  permission: PermissionRequest | null;
+  /** The permission attached to this call — pending (user answers) or
+   * policy-denied (terminal record, issue #22). */
+  permission: AttachedPermission | null;
   onResolvePermission: (kind: PermissionOptionKind) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -166,7 +166,9 @@ export function ToolCallCard({ call, permission, onResolvePermission }: {
         </div>
       )}
 
-      {permission && <PermissionCard request={permission} onResolve={onResolvePermission} />}
+      {permission && (
+        <AttachedPermissionCard permission={permission} onResolve={onResolvePermission} />
+      )}
     </div>
   );
 }

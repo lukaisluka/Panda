@@ -26,6 +26,8 @@ import {
   toAcpUpdates,
   toPermissionRequest,
 } from './wire';
+import { PANDA_HOST_CAPABILITIES, effectiveCapability, type AgentCapabilityDeclarations, type CapabilityKey, type EffectiveCapability } from '../capabilities';
+import { alwaysAskPolicy, denyResolution, UNKNOWN_POLICY_CONTEXT, type PermissionDecision } from '../policy';
 
 /**
  * Live ACP client (Phase 1+2): speaks v1 ACP over an injected `AcpTransport`
@@ -53,14 +55,10 @@ import {
  * `connection.sessionId` / `activeSessionId` only move on commit.
  */
 
-/** Capability gates as advertised by the agent at initialize (v1). */
-export type AgentCaps = {
-  image: boolean;
-  loadSession: boolean;
-  list: boolean;
-  resume: boolean;
-  delete: boolean;
-};
+/** Capability gates as advertised by the agent at initialize (v1) — an alias
+ * of the composition module's declarations type (issue #22), so the five
+ * keys cannot drift between the client and the decision point. */
+export type AgentCaps = AgentCapabilityDeclarations;
 
 export type SessionSummary = {
   sessionId: string;
@@ -98,6 +96,16 @@ export type LiveClientHandlers = {
   onSessionSwitchCommit(era: number): void;
   /** The switch's session/load failed — the driver rolls back to the snapshot. */
   onSessionSwitchRollback(reason: string, era: number): void;
+};
+
+/**
+ * Client options (issue #22). `policy` is consulted for every
+ * `session/request_permission` before it hangs for the user — the
+ * connection layer binds the connection context (connectionId, url) into
+ * it, because the client itself knows neither.
+ */
+export type LiveClientOptions = {
+  policy?: (request: RequestPermissionRequest) => PermissionDecision;
 };
 
 type PendingPermission = {
@@ -156,6 +164,8 @@ function readCaps(caps: AgentCapabilities | null | undefined): AgentCaps {
 
 export class LiveAcpClient {
   private readonly handlers: LiveClientHandlers;
+  /** Host-side permission policy (issue #22); default hands every decision to the user. */
+  private readonly policy: (request: RequestPermissionRequest) => PermissionDecision;
   private connection: ClientConnection | null = null;
   /**
    * The transport of the most recent connect attempt (issue #20) — owned
@@ -191,8 +201,12 @@ export class LiveAcpClient {
   private connectionGeneration = 0;
   private disconnectReported = false;
 
-  constructor(handlers: LiveClientHandlers) {
+  constructor(handlers: LiveClientHandlers, options: LiveClientOptions = {}) {
     this.handlers = handlers;
+    // Single-sourced default (policy.ts): the context-bound seam carries no
+    // connection identity, so the unknown context stands in — alwaysAskPolicy
+    // ignores it, and real policies arrive pre-bound by the connection layer.
+    this.policy = options.policy ?? ((request) => alwaysAskPolicy(request, UNKNOWN_POLICY_CONTEXT));
   }
 
   /**
@@ -287,14 +301,14 @@ export class LiveAcpClient {
 
       this.capabilities = readCaps(init.agentCapabilities);
       this.handlers.onCapabilities(this.capabilities);
-      if (this.capabilities.list) await this.fetchSessionList(connection, generation);
+      if (this.can('list')) await this.fetchSessionList(connection, generation);
       if (!isCurrent()) {
         discardSuperseded('session list');
         return;
       }
 
       if (resume?.sessionId) {
-        if (this.capabilities.resume) {
+        if (this.can('resume')) {
           // Transcript stays as-is: the agent context resumes without replay.
           this.sessionId = resume.sessionId;
           this.handlers.onSessionId(resume.sessionId, cwd);
@@ -307,7 +321,7 @@ export class LiveAcpClient {
             return;
           }
           console.info(`[panda/acp] resumed session ${resume.sessionId} (transcript kept)`);
-        } else if (this.capabilities.loadSession) {
+        } else if (this.can('loadSession')) {
           await this.loadSessionInternal(connection, resume.sessionId, cwd, generation);
           if (!isCurrent()) {
             discardSuperseded('load');
@@ -381,7 +395,7 @@ export class LiveAcpClient {
       console.warn('[panda/acp] loadSession ignored: not connected');
       return;
     }
-    if (!this.capabilities.loadSession) {
+    if (!this.can('loadSession')) {
       console.warn('[panda/acp] loadSession ignored: agent does not support session/load');
       return;
     }
@@ -418,7 +432,7 @@ export class LiveAcpClient {
       console.warn('[panda/acp] deleteSession ignored: not connected');
       return;
     }
-    if (!this.capabilities.delete) {
+    if (!this.can('delete')) {
       console.warn('[panda/acp] deleteSession ignored: agent does not support session/delete');
       return;
     }
@@ -463,8 +477,19 @@ export class LiveAcpClient {
       console.warn('[panda/acp] send ignored: a session switch is still in flight');
       return;
     }
-    if (!this.capabilities.image && content.some((block) => block.type === 'image')) {
-      throw new Error('agent 未声明 promptCapabilities.image，拒绝发送图片');
+    // The execution path consumes the effective-capability decision point
+    // (issue #22), never the raw agent declaration; the message names the
+    // verdict's own reason, so it stays truthful if image ever gains a host
+    // shard or a capability policy.
+    const image = this.capability('image');
+    if (!image.available && content.some((block) => block.type === 'image')) {
+      const cause =
+        image.reason === 'unavailable-on-host'
+          ? '宿主不支持该能力'
+          : image.reason === 'blocked-by-policy'
+            ? '策略已禁止该能力'
+            : 'agent 未声明 promptCapabilities.image';
+      throw new Error(`${cause}，拒绝发送图片`);
     }
     const generation = this.connectionGeneration;
     // The reducer is the only path that opens a user turn — echo locally as
@@ -556,6 +581,19 @@ export class LiveAcpClient {
   }
 
   // -- internals ------------------------------------------------------------
+
+  /**
+   * One capability's effective verdict (issue #22): every capability
+   * decision in this client — protocol method choice included — goes
+   * through the single decision point, never the raw declaration.
+   */
+  private capability(key: CapabilityKey): EffectiveCapability {
+    return effectiveCapability(key, this.capabilities, PANDA_HOST_CAPABILITIES);
+  }
+
+  private can(key: CapabilityKey): boolean {
+    return this.capability(key).available;
+  }
 
   private async establishSession(connection: ClientConnection, cwd: string, generation: number): Promise<void> {
     const session = await connection.agent.request(methods.agent.session.new, {
@@ -800,6 +838,26 @@ export class LiveAcpClient {
         `[panda/acp] duplicate session/request_permission for ${key} — superseding the stale waiter`,
       );
       this.settlePermission(key, params.toolCall.toolCallId, { outcome: { outcome: 'cancelled' } }, { outcome: 'cancelled' });
+    }
+    // Host policy consult (issue #22): BEFORE the request hangs for the
+    // user. A deny settles here — the card still lands in the document
+    // (traceable, explicitly marked 非用户决定) but no waiter registers and
+    // the turn never enters requires_action: nothing waits on the user.
+    if (this.policy(params) === 'deny') {
+      const { wire, record } = denyResolution(params.options);
+      console.info(
+        `[panda/acp] permission ${key} denied by host policy — answered ${record.kind ?? 'cancelled'}`,
+      );
+      this.handlers.onUpdate({
+        sessionUpdate: 'permission_requested',
+        request: toPermissionRequest(params),
+      });
+      this.handlers.onUpdate({
+        sessionUpdate: 'permission_resolved',
+        toolCallId: params.toolCall.toolCallId,
+        response: record,
+      });
+      return Promise.resolve(wire);
     }
     this.handlers.onUpdate({
       sessionUpdate: 'permission_requested',

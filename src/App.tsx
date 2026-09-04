@@ -4,10 +4,11 @@ import { Sidebar } from './components/Sidebar';
 import { MessageStream } from './components/MessageStream';
 import { StatusBar } from './components/StatusBar';
 import { Composer } from './components/Composer';
+import type { AttachedPermission } from './components/PermissionCard';
 import {
-  useActiveCapabilities,
   useActiveConnection,
   useActiveDoc,
+  useActiveEffectiveCapabilities,
   useActiveSessions,
   useActiveSwitching,
   usePanda,
@@ -21,7 +22,9 @@ export default function App() {
   const doc = useActiveDoc();
   const connection = useActiveConnection();
   const sessions = useActiveSessions();
-  const capabilities = useActiveCapabilities();
+  // The foreground connection's effective capabilities (issue #22) — the
+  // single decision point, never the raw agent declaration.
+  const effectiveCaps = useActiveEffectiveCapabilities();
   const switching = useActiveSwitching();
 
   const demo = useReplaySession();
@@ -31,14 +34,22 @@ export default function App() {
 
   const send = liveActive ? live.send : demo.send;
   const resolvePermission = liveActive ? live.resolvePermission : demo.resolvePermission;
-  // Pending permission cards, insertion-ordered (issue #18): several can be
-  // on screen at once, each answered independently. Memoized so the array
-  // identity (a MessageStream dep) only changes when a permission does.
-  const pendingPermissions = useMemo(
+  // Permission cards, insertion-ordered (issue #18): pending ones, several at
+  // once, each answered independently — plus policy-denied terminal records
+  // (issue #22) that stay rendered. Memoized so the wrapper identities (a
+  // MessageStream dep the memoized block views lean on) only change when a
+  // permission does.
+  const attachedPermissions = useMemo(
     () =>
-      Object.values(doc.permissions)
-        .filter((permission) => permission.status === 'pending')
-        .map((permission) => permission.request),
+      Object.values(doc.permissions).flatMap((permission): AttachedPermission[] => {
+        if (permission.status === 'pending')
+          return [{ state: 'pending', request: permission.request }];
+        if (permission.response?.outcome === 'denied-by-policy')
+          return [
+            { state: 'denied', request: permission.request, response: permission.response },
+          ];
+        return [];
+      }),
     [doc.permissions],
   );
 
@@ -108,7 +119,7 @@ export default function App() {
         </header>
         <MessageStream
           doc={doc}
-          permissions={pendingPermissions}
+          permissions={attachedPermissions}
           onResolvePermission={resolvePermission}
         />
         <StatusBar
@@ -121,7 +132,7 @@ export default function App() {
           onSend={send}
           disabled={composerDisabled}
           hint={hint}
-          canAttachImages={!liveActive || capabilities.image}
+          canAttachImages={!liveActive || effectiveCaps.image.available}
           canStop={liveActive && connected && doc.status === 'running'}
           onStop={live.cancel}
         />
