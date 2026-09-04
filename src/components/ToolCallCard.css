@@ -46,6 +46,21 @@
   color: var(--panda-chrome-text);
 }
 
+/* File-type icon (FileTypeIcon): an <img>, not a lucide <svg> — keep it
+ * unsquashed in the flex row; alignment comes from the row's centering. */
+.tool-file-icon {
+  flex: none;
+  display: block;
+}
+
+/* Basename in the file row: a filename is a code string, so mono — unlike
+ * the verb span, which stays sans like every other tool title. */
+.tool-card-file {
+  min-width: 0;
+  font-family: var(--panda-font-code);
+  color: var(--panda-chrome-text);
+}
+
 .tool-card-title {
   min-width: 0;
   /* ZCode-style tool row: body (sans) face, quiet color — the name reads

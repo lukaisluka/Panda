@@ -29,6 +29,7 @@ import type {
 } from '../protocol/types';
 import { markdownComponents } from './CodeBlock';
 import { DiffView } from './DiffView';
+import { FileTypeIcon, splitFilePath } from './FileTypeIcon';
 import { MessageImage } from './MessageImage';
 import { AttachedPermissionCard } from './PermissionCard';
 import type { AttachedPermission } from '../projector/messageStream';
@@ -47,6 +48,17 @@ const KIND_ICON: Record<AcpToolKind, LucideIcon> = {
   fetch: Globe,
   switch_mode: Repeat,
   other: Wrench,
+};
+
+/** File-operating kinds get the ZCode-style row: kind icon + verb + file-type
+ * icon + basename + parent dir + diff stats. The kind's verb is display-only
+ * (from the protocol enum — stable, unlike titles); the original title
+ * (verb + full path + notes) degrades to a hover tooltip on the basename. */
+const FILE_VERB: Partial<Record<AcpToolKind, string>> = {
+  read: 'Read',
+  edit: 'Edit',
+  delete: 'Delete',
+  move: 'Move',
 };
 
 function StatusBadge({ status }: { status: ToolCallStatus }) {
@@ -101,6 +113,9 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
     call.kind === 'think' && live
       ? [...call.content].reverse().find((c): c is { type: 'content'; content: { type: 'text'; text: string } } => c.type === 'content' && c.content.type === 'text')?.content.text ?? ''
       : null;
+  // File row data (null for non-file kinds or calls without a location).
+  const fileVerb = path ? FILE_VERB[call.kind] : undefined;
+  const fileRow = path && fileVerb ? { path, verb: fileVerb, ...splitFilePath(path) } : null;
   const diffPart = call.content.find((c): c is Extract<typeof c, { type: 'diff' }> => c.type === 'diff');
   const stats = useMemo(
     () => (diffPart ? diffStats(diffPart.oldText, diffPart.newText) : null),
@@ -122,23 +137,35 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
     >
       <div className="tool-card-frame">
         <button onClick={() => setOpen((o) => !o)} className="tool-card-toggle">
-          <Icon size={14} className="tool-card-icon" />
-          {thinkPreview !== null ? (
+          {fileRow ? (
             <>
-              <span className="tool-card-title">{displayTitle}</span>
-              <span className="tool-think-preview" dir="rtl">{thinkPreview}</span>
+              <Icon size={14} className="tool-card-icon" />
+              <span className="tool-card-title">{fileRow.verb}</span>
+              <FileTypeIcon path={fileRow.path} />
+              <span className="truncate tool-card-file" title={call.title}>{fileRow.base}</span>
+              {fileRow.dir && <span className="truncate tool-card-path">{fileRow.dir}</span>}
             </>
           ) : (
-            <span className="truncate tool-card-title">{displayTitle}</span>
+            <>
+              <Icon size={14} className="tool-card-icon" />
+              {thinkPreview !== null ? (
+                <>
+                  <span className="tool-card-title">{displayTitle}</span>
+                  <span className="tool-think-preview" dir="rtl">{thinkPreview}</span>
+                </>
+              ) : (
+                <span className="truncate tool-card-title">{displayTitle}</span>
+              )}
+              {path && !call.title.includes(path) && (
+                <span className="truncate tool-card-path">{path}</span>
+              )}
+            </>
           )}
           {stats && (
             <span className="tool-card-stats">
               <span className="tool-stats-add">+{stats.additions}</span>{' '}
               <span className="tool-stats-del">−{stats.deletions}</span>
             </span>
-          )}
-          {path && !call.title.includes(path) && (
-            <span className="truncate tool-card-path">{path}</span>
           )}
           <span className="tool-card-status">
             <StatusBadge status={call.status} />
