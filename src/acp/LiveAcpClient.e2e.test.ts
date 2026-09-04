@@ -15,6 +15,7 @@ import {
   type LiveClientHandlers,
 } from './LiveAcpClient';
 import { StreamTransport } from './transport/StreamTransport';
+import { WORKSPACE_NONE_CWD } from '../workspace';
 import { applyUpdate, emptySession } from '../protocol/reducer';
 import type {
   AcpContentBlock,
@@ -428,6 +429,45 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
       expect(
         records.updates.filter((u) => u.sessionUpdate === 'plan').length,
       ).toBeGreaterThan(planCountBefore);
+    },
+  );
+
+  it(
+    '无工作区会话:cwd="/" 建会话、完整收发,并按同一 cwd 恢复(issue #23, ADR 0005)',
+    { timeout: 90_000 },
+    async () => {
+      await acpClient.newSession(WORKSPACE_NONE_CWD);
+      const sessionId = records.sessionIds.at(-1)!;
+      expect(sessionId).toBeTruthy();
+      const marker = records.updates.length;
+
+      const turn = acpClient.send([{ type: 'text', text: '重构 auth 校验' }]);
+      await approveAllPending(3);
+      await turn;
+      expect(records.statuses.at(-1)).toBe('idle');
+
+      // 完整收发:本回合的总结文字与真实 diff 都流过——test agent 把文件后端
+      // 钉在沙箱目录,协议 cwd 不参与路径解析,`/` 会话一样能干活。
+      const slice = records.updates.slice(marker);
+      const joined = slice
+        .map((u) => (u.sessionUpdate === 'agent_message_chunk' && u.content.type === 'text' ? u.content.text : ''))
+        .join('');
+      expect(joined).toContain('重构完成');
+      const diffs = slice.flatMap((u) =>
+        u.sessionUpdate === 'tool_call_update' ? (u.content ?? []) : [],
+      );
+      expect(diffs.some((c) => c.type === 'diff' && c.path === '/auth.ts')).toBe(true);
+
+      // 恢复必须逐字使用同一 cwd(deepagents-acp 的 session/load 相等校验):
+      // 重连 resume 该会话,`/` 原样发送,重放成功。
+      acpClient.disconnect();
+      await acpClient.connect(
+        new StreamTransport(createWebSocketStream(`ws://127.0.0.1:${port}/acp`)),
+        WORKSPACE_NONE_CWD,
+        { sessionId },
+      );
+      expect(records.replayStarts).toBe(2);
+      expect(records.sessionIds.at(-1)).toBe(sessionId);
     },
   );
 });

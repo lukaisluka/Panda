@@ -9,6 +9,7 @@ import type {
 } from './protocol/types';
 import { connectionStorePort, usePanda, type ConnectionStorePort, type SessionEntry, type SessionSwitchSnapshot } from './store';
 import { updateProfileFields, type AgentProfile } from './profiles';
+import { cwdToWorkspace, workspaceToCwd, type Workspace } from './workspace';
 import { alwaysAskPolicy, type PermissionDecision, type PermissionPolicy } from './policy';
 
 /**
@@ -51,11 +52,13 @@ function remember(key: string, value: string): void {
   }
 }
 
-/** Last-used endpoint values for prefilling the connect form. */
-export function lastConnectionDefaults(): { url: string; cwd: string } {
+/** Last-used endpoint values for prefilling the connect form. The remembered
+ * cwd reads back through `cwdToWorkspace` — `/` (the 无工作区 placeholder,
+ * ADR 0005) becomes `{kind: 'none'}`, anything else a local directory. */
+export function lastConnectionDefaults(): { url: string; workspace: Workspace } {
   return {
     url: localStorage.getItem(URL_KEY) ?? '',
-    cwd: localStorage.getItem(CWD_KEY) ?? '',
+    workspace: cwdToWorkspace(localStorage.getItem(CWD_KEY) ?? ''),
   };
 }
 
@@ -162,7 +165,7 @@ type LiveConnection = {
    */
   stagedSwitch: { snapshot: SessionSwitchSnapshot; era: number } | null;
   /** Profile targeted by the in-flight connect — consumed on success (write-back). */
-  pendingProfile: { id: string; url: string; cwd: string } | null;
+  pendingProfile: { id: string; url: string; workspace: Workspace } | null;
 };
 
 const liveConnections = new Map<string, LiveConnection>();
@@ -244,9 +247,9 @@ function wireHandlers(entry: LiveConnection) {
         protocolVersion: info.protocolVersion,
         error: null,
       });
-      // "默认工作目录" = what the last successful connect used (issue #2).
+      // "默认工作区" = what the last successful connect used (issue #2, #23).
       const pending = entry.pendingProfile;
-      if (pending) updateProfileFields(pending.id, { url: pending.url, cwd: pending.cwd });
+      if (pending) updateProfileFields(pending.id, { url: pending.url, workspace: pending.workspace });
       entry.pendingProfile = null;
     },
     onSessionId: (sessionId: string, cwd: string) => port.adoptSession(sessionId, cwd),
@@ -346,24 +349,33 @@ export type LiveConnectOptions = { resume?: boolean; profileId?: string | null }
  * Connects (or reconnects) one connection slot. Connecting an already-live
  * slot replaces its connection — the client's era machinery (issue #19)
  * retires the old one. `profileId` routes the on-success write-back.
+ *
+ * The workspace (issue #23, ADR 0005) becomes the protocol cwd here — the
+ * single derivation point: local-directory sends its path, 无工作区 sends the
+ * `WORKSPACE_NONE_CWD` constant. Everything downstream (ConnectionInfo.cwd,
+ * session/new) works in derived cwd strings.
  */
 export async function connectLiveConnection(
   connectionId: string,
   url: string,
-  cwd: string,
+  workspace: Workspace,
   opts?: LiveConnectOptions,
 ): Promise<void> {
   const trimmedUrl = url.trim();
-  const trimmedCwd = cwd.trim();
-  if (!trimmedUrl || !trimmedCwd) {
-    console.warn(`[panda/acp:${connectionId}] connect ignored: url and cwd are required`);
+  const normalizedWorkspace: Workspace =
+    workspace.kind === 'local-directory'
+      ? { kind: 'local-directory', path: workspace.path.trim() }
+      : workspace;
+  const cwd = workspaceToCwd(normalizedWorkspace);
+  if (!trimmedUrl || !cwd) {
+    console.warn(`[panda/acp:${connectionId}] connect ignored: url and a workspace path are required`);
     return;
   }
   remember(URL_KEY, trimmedUrl);
-  remember(CWD_KEY, trimmedCwd);
+  remember(CWD_KEY, cwd);
   const entry = ensureEntry(connectionId);
   entry.pendingProfile = opts?.profileId
-    ? { id: opts.profileId, url: trimmedUrl, cwd: trimmedCwd }
+    ? { id: opts.profileId, url: trimmedUrl, workspace: normalizedWorkspace }
     : null;
   usePanda.getState().ensureConnection(connectionId);
   const resumeSessionId = opts?.resume
@@ -373,7 +385,7 @@ export async function connectLiveConnection(
   entry.port.setConnection({
     status: 'connecting',
     url: trimmedUrl,
-    cwd: trimmedCwd,
+    cwd,
     error: null,
     agentName: null,
     protocolVersion: null,
@@ -389,7 +401,7 @@ export async function connectLiveConnection(
   abandonStagedSwitch(entry, 'connect replacing the connection');
   await entry.client.connect(
     new WebSocketTransport(trimmedUrl),
-    trimmedCwd,
+    cwd,
     resumeSessionId ? { sessionId: resumeSessionId } : undefined,
   );
 }
@@ -451,9 +463,9 @@ export function foregroundConnection(connectionId: string): void {
 export function previewProfileConnection(profile: AgentProfile, storage: SessionStorage = globalThis.localStorage): void {
   if (usePanda.getState().mode !== 'live') return;
   const url = profile.url.trim();
-  const cwd = profile.cwd.trim();
+  const cwd = workspaceToCwd(profile.workspace).trim();
   if (!url || !cwd) {
-    console.error(`[panda/profiles] selected profile ${profile.id} has an empty url or cwd`);
+    console.error(`[panda/profiles] selected profile ${profile.id} has an empty url or workspace path`);
     return;
   }
   if (usePanda.getState().connections[profile.id]) {

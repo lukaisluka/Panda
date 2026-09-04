@@ -3,10 +3,11 @@ import { Loader2, PlugZap, Plus, RotateCcw } from 'lucide-react';
 import { DEMO_CONNECTION_ID, useActiveConnection, usePanda, type SessionMode } from '../store';
 import { isDirectConnectionId, lastConnectionDefaults } from '../liveConnections';
 import { newProfileId, saveProfiles, type AgentProfile } from '../profiles';
+import { cwdToWorkspace, type Workspace } from '../workspace';
 import type { LiveSessionFacade } from '../useLiveSession';
 
 /** A profile click in the sidebar asks the form to adopt these values. */
-export type FormPrefill = { url: string; cwd: string; nonce: number };
+export type FormPrefill = { url: string; workspace: Workspace; nonce: number };
 
 /**
  * Connect surface (issue #21). Two shapes:
@@ -20,8 +21,10 @@ export type FormPrefill = { url: string; cwd: string; nonce: number };
  *
  * Per-connection lifecycle (断开/移除/切前台) lives on the sidebar's group
  * rows. Panda is a pure protocol client: the form asks where the service
- * listens and which working directory sessions should use — whoever started
- * the ACP service owns the agent process, Panda never spawns one.
+ * listens and which 工作区 sessions should use — a local directory on the
+ * agent's side, or 无工作区 for agents that don't work in one (ADR 0005).
+ * Whoever started the ACP service owns the agent process, Panda never spawns
+ * one.
  */
 export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, onReplayDemo }: {
   mode: SessionMode;
@@ -32,7 +35,7 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
   onReplayDemo(): void;
 }) {
   const [url, setUrl] = useState(() => lastConnectionDefaults().url);
-  const [cwd, setCwd] = useState(() => lastConnectionDefaults().cwd);
+  const [workspace, setWorkspace] = useState<Workspace>(() => lastConnectionDefaults().workspace);
   const [naming, setNaming] = useState(false);
   const [newName, setNewName] = useState('');
 
@@ -55,13 +58,15 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
   useEffect(() => {
     if (prefill) {
       setUrl(prefill.url);
-      setCwd(prefill.cwd);
+      setWorkspace(prefill.workspace);
     }
   }, [prefill]);
   useEffect(() => {
     if (reconnectableId !== null) {
       setUrl(connection.url ?? '');
-      setCwd(connection.cwd ?? '');
+      // The slot remembers the derived cwd it last used; `/` reads back as
+      // 无工作区 (ADR 0005).
+      setWorkspace(cwdToWorkspace(connection.cwd ?? ''));
       setNaming(false);
     }
     // Deliberately keyed on slot identity only: adopting on every url/cwd
@@ -71,9 +76,12 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
   const saveAsProfile = () => {
     const name = newName.trim();
     const trimmedUrl = url.trim();
-    const trimmedCwd = cwd.trim();
-    if (!name || !trimmedUrl || !trimmedCwd) return;
-    const created: AgentProfile = { id: newProfileId(), name, url: trimmedUrl, cwd: trimmedCwd };
+    const normalizedWorkspace: Workspace =
+      workspace.kind === 'local-directory'
+        ? { kind: 'local-directory', path: workspace.path.trim() }
+        : workspace;
+    if (!name || !trimmedUrl || normalizedWorkspace.kind === 'local-directory' && !normalizedWorkspace.path) return;
+    const created: AgentProfile = { id: newProfileId(), name, url: trimmedUrl, workspace: normalizedWorkspace };
     const next = [...profiles, created];
     saveProfiles(next);
     onProfilesChange(next);
@@ -92,6 +100,8 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
   const reconnectLabel = foregroundProfile
     ? `连接 ${foregroundProfile.name}`
     : '重连';
+  // 无工作区 needs no path (ADR 0005); a local directory always does.
+  const pathReady = workspace.kind === 'none' || workspace.path.trim().length > 0;
 
   return (
     <div className="mx-3 mb-3 rounded-xl border border-border bg-raised/50 p-3">
@@ -124,7 +134,7 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
           {reconnectableId !== null && canResume && (
             <button
               className={`${primaryClass} mb-2`}
-              onClick={() => live.reconnectForeground({ resume: true, url, cwd })}
+              onClick={() => live.reconnectForeground({ resume: true, url, workspace })}
               title="优先 resume 保留当前对话；agent 不支持时用 session/load 重建历史"
             >
               <RotateCcw size={12} />
@@ -138,25 +148,40 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
             spellCheck={false}
             className={`${inputClass} font-mono text-[13px]`}
           />
-          <input
-            value={cwd}
-            onChange={(e) => setCwd(e.target.value)}
-            placeholder="/absolute/path/to/project"
-            spellCheck={false}
-            className={`${inputClass} mt-2 font-mono text-[13px]`}
-          />
+          <div className="mt-2 flex gap-2">
+            <select
+              value={workspace.kind}
+              onChange={(e) =>
+                setWorkspace(e.target.value === 'none' ? { kind: 'none' } : { kind: 'local-directory', path: '' })
+              }
+              className={`${inputClass} w-28 shrink-0 text-xs`}
+              title="工作区：新会话在 agent 侧的工作上下文（ADR 0005）"
+            >
+              <option value="local-directory">本机文件夹</option>
+              <option value="none">无工作区</option>
+            </select>
+            {workspace.kind === 'local-directory' && (
+              <input
+                value={workspace.path}
+                onChange={(e) => setWorkspace({ kind: 'local-directory', path: e.target.value })}
+                placeholder="/absolute/path/on/the/agent"
+                spellCheck={false}
+                className={`${inputClass} font-mono text-[13px]`}
+              />
+            )}
+          </div>
           <button
             className={`${primaryClass} mt-2.5`}
-            disabled={!url.trim() || !cwd.trim()}
+            disabled={!url.trim() || !pathReady}
             onClick={() =>
               reconnectableId !== null
-                ? live.reconnectForeground({ url, cwd })
-                : live.connectDirect(url, cwd)
+                ? live.reconnectForeground({ url, workspace })
+                : live.connectDirect(url, workspace)
             }
             title={
               reconnectableId !== null
                 ? foregroundProfile
-                  ? `连接 ${foregroundProfile.name}；修改的地址/目录将在连接成功时写回该配置`
+                  ? `连接 ${foregroundProfile.name}；修改的地址/工作区将在连接成功时写回该配置`
                   : '重新连接此前台直连'
                 : '开始一条临时直连（不保存为配置）'
             }
@@ -167,12 +192,12 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
           {reconnectableId === null && !naming && (
             <button
               className={`${actionClass} mt-2`}
-              disabled={!url.trim() || !cwd.trim()}
+              disabled={!url.trim() || !pathReady}
               onClick={() => {
                 setNaming(true);
                 setNewName('');
               }}
-              title="把当前地址和目录保存为一条配置，之后在侧栏一键连接"
+              title="把当前地址和工作区保存为一条配置，之后在侧栏一键连接"
             >
               <Plus size={12} />
               存为 Agent 配置

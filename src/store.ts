@@ -29,7 +29,9 @@ export type ConnectionInfo = {
   status: ConnectionStatus;
   /** WebSocket endpoint of the ACP service, remembered for reconnects. */
   url: string | null;
-  /** Working directory passed to session/new for this connection. */
+  /** Working directory passed to session/new for this connection — the
+   * workspace's derived cwd (issue #23, ADR 0005); `/` is the 无工作区
+   * placeholder. */
   cwd: string | null;
   /** Display name from the agent's `initialize` response (title ?? name). */
   agentName: string | null;
