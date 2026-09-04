@@ -2,29 +2,56 @@
 
 Panda 的 UI 设计系统文档（single source of truth）。与 [CONTEXT.md](CONTEXT.md) 并列：
 那份管领域语言，这份管视觉与样式约定。底层是
-[Astryx](https://github.com/facebook/astryx)（Meta 开源设计系统）+ matcha 主题；
-迁移工程见 [#32](https://github.com/lukaisluka/Panda/issues/32)。
+[Astryx](https://github.com/facebook/astryx)（Meta 开源设计系统）+ 全部七个
+官方主题（用户可切换）；迁移工程见
+[#32](https://github.com/lukaisluka/Panda/issues/32)。
 
 ## 设计原则
 
 - **消息流是主角**：transcript 拥有最高信息密度（13px/1.55 终端式排版），
   chrome（侧栏、状态栏、composer）保持安静、低对比。
 - **语义 token，永远语义 token**：代码里只允许出现语义颜色
-  （`surface`、`text-secondary`…），不允许裸 hex。改品牌 = 改主题，不是逐处改色。
+  （`surface`、`text-secondary`…），不允许裸 hex。改品牌 = 换主题，不是逐处改色。
 - **Panda 别名是语义入口**：`src/index.css` 的 `:root` 把 Panda token 名
   （`--color-fg`、`--color-muted`…）指到 Astryx 系统 token。共置组件 CSS
-  一律引用别名而非系统 token 本名——换主题时别名层是唯一要动的映射点。
+  一律引用别名而非系统 token 本名——换主题时别名层是唯一要动的映射点
+  （Phase 4 验证过：七主题切换业务 CSS 零改动）。
 - **暗色不是二等公民**：所有颜色经 Astryx 的 `light-dark()` token 自动翻转，
   任何新样式必须在两种模式下检查。
 
-## 主题与模式
+## 主题与模式（Phase 4：全主题可切换）
 
-- 主题包：`@astryxdesign/theme-matcha`（抹茶橄榄绿系）。`<Theme theme={matchaTheme}>`
-  在 `src/main.tsx` 包裹整个应用，负责 `data-astryx-theme` 作用域与 color-scheme。
-- 亮/暗切换是 CSS 原生 `light-dark()`，由 `<Theme>` 的 `mode` 驱动
-  （`'system' | 'light' | 'dark'`，默认 system 跟随 OS）。
-- **禁止**在 CSS 里硬编码 `color-scheme`（历史遗留已移除）——那是 `<Theme>` 的职责，
-  硬编码会把 `light-dark()` 锁死在单一模式。
+**七个官方主题全部打包，零定制、全用默认 token，用户在界面上自由选择**
+（原 Phase 4 计划"拷 matcha 源码按品牌精调"已废弃——matcha 底子本身
+不满意，方向改为给用户选择权）：
+
+| 主题 | 性格 | 亮底 / 暗底 | 正文 / 标题字体 |
+| --- | --- | --- | --- |
+| neutral（**默认**） | 黑白灰工程感 | `#f1f1f1` / `#1b1b1b` | Figtree / Figtree |
+| matcha | 软、复古（Phase 1–3 的旧默认） | `#F0F0E0` / `#12140e` | DM Sans / Playwrite US Trad（手写体） |
+| stone | 冷灰、圆角小一号 | `#f3f3f5` / `#111015` | Figtree / Montserrat |
+| butter | 奶油底电光蓝，撞色大胆 | `#FDFBE4` / `#261A13` | Outfit / Outfit |
+| chocolate | 大地暖棕 terminal 风 | `#FFFCF7` / `#141010` | Albert Sans / Fraunces（衬线） |
+| gothic | **纯暗色**（无亮 token） | — / `#101314` | Fustat / Fustat |
+| y2k | 全直角、复古糖果 | `#CCCFFA` / `#0e0f1a` | Poppins / Poppins |
+
+机制（`src/theme.ts` + `src/main.tsx` 的 `ThemeRoot`）：
+
+- 每个主题包的 `theme.css` 以 `@scope([data-astryx-theme="<id>"])` 自隔离，
+  七个全量 `@import` 进 `index.css` 互不冲突；`<Theme theme={obj}>` 只是
+  React prop，切换 = 换对象重渲染（root `<Theme>` 自动同步 `<html>` 属性）。
+- 选择持久化在 `localStorage('panda.theme')`，注入式 storage + 订阅通知，
+  与 profiles.ts 同一契约：storage 是唯一真源，`ThemeRoot` 与侧栏选择器
+  都从订阅更新；损坏/未知值响亮重置到默认。
+- gothic 声明的是单值 token（无 `light-dark()`），选中时 `<Theme>` 强制
+  `mode='dark'`；其余主题 `mode='system'` 跟随 OS。
+- **几何随主题的程度是既有契约**：Panda 自有 `--space-N` 不动（侧栏 240px、
+  消息列 768px 七主题一致）；走主题 token 的 `--panda-radius-md/lg/xl/full`
+  会变（y2k 全直角、matcha 42px 大圆角）；Astryx 组件内部几何
+  （Button 胶囊等）跟各自主题。
+- 亮/暗切换是 CSS 原生 `light-dark()`。**禁止**在 CSS 里硬编码
+  `color-scheme`——那是 `<Theme>` 的职责，硬编码会把 `light-dark()` 锁死
+  在单一模式。
 
 ## Token 映射（别名层）
 
@@ -46,17 +73,18 @@ Panda 的 UI 设计系统文档（single source of truth）。与 [CONTEXT.md](C
 | `--color-add` | `--color-success` | 成功/新增 |
 | `--color-diff-add` | `--color-success-muted` | diff 新增行底色 |
 | `--color-diff-del` | `--color-error-muted` | diff 删除行底色 |
-| `--font-sans` | `--font-family-body` | 正文（DM Sans 栈，见「字体」） |
-| `--font-mono` | `--font-family-code` | 代码（JetBrains Mono 栈） |
+| `--font-sans` | `--font-family-body` | 正文（随主题：Figtree/DM Sans/…，见「字体」） |
+| `--font-mono` | `--font-family-code` | 代码（JetBrains Mono 栈；neutral 主题例外，系统等宽） |
 
 **不别名的两个名字（同名直解）**：`--color-border` 与 `--color-accent`
 和 Astryx 系统 token 同名。别名层里写 `var(--color-…)` 会自引用成循环，
 而纯 CSS 里直接写 `var(--color-border)` / `var(--color-accent)` 恰好解析到
 系统 `:root` 定义，无需任何中间层——共用 CSS 就这么用。
 
-matcha 主题里 `text-accent ≡ accent` 同值，所以 `bg-accent`（按钮底）与
-`text-accent`（强调文本）天然协调；Phase 4 定制主题时若要拆开两者，
-用 `color.accent` 的 `[light, dark]` 元组配置（会同步派生 `--color-on-accent`）。
+多数主题里 `text-accent ≡ accent` 同值（`--color-accent` 同时供按钮底和
+强调文本）；matcha 的正文主色也是 accent 同值。未来做自定义主题若要拆开
+两者，用 `color.accent` 的 `[light, dark]` 元组配置（会同步派生
+`--color-on-accent`）。
 
 ## 间距契约：Panda 几何不跟主题走
 
@@ -84,8 +112,8 @@ ConnectPanel 里一个**迁移前就存在**的 flex 挤压问题放大成显眼
 
 ## Cascade layer 契约（load-bearing）
 
-Phase 3 起 `src/index.css` 顶部只有三个 Astryx `@import`（reset / astryx /
-theme-matcha），各自的 CSS 自带 `@layer` 声明。**没有全局 layer 顺序声明，
+Phase 3 起 `src/index.css` 顶部是 Astryx 的 `@import`（reset / astryx /
+七个主题），各自的 CSS 自带 `@layer` 声明。**没有全局 layer 顺序声明，
 也没有 Tailwind**。规则：
 
 - Panda 自有 CSS（共置文件 + `index.css`）全部**未分层**——未分层样式
@@ -185,11 +213,25 @@ Astryx 不是全盘替代；以下保持在 `src/index.css` 的纯 CSS 里，颜
 - **focus-visible 轮廓**与 `.focus-outline-none` 退出：键盘可达性兜底。
 - **`.message-scroller`** 的 scrollbar-gutter 媒体查询：虚拟流滚动条对称预留。
 
-## 字体
+## 字体（Phase 4：webfont 全量引入）
 
-matcha 声明 `DM Sans`（正文）与 `JetBrains Mono`（代码）字体栈，但 Astryx
-**不加载 webfont 文件**（built 主题只设 `font-family`）。当前两者都回退到
-系统字体；要不要引入 DM Sans/JetBrains Mono 的 webfont 由 Phase 4 决定。
+每个主题声明自己的字体栈（正文/标题/代码，见主题表），Astryx built 主题
+只设 `font-family` 不加载文件。`src/fonts.css` 用 **fontsource 静态包**
+（`@fontsource/figtree` 等，非 variable 包）按主题分组 `@import`：
+
+- 静态包的 `@font-face` family 名与主题栈精确一致（variable 包注册的是
+  `"Figtree Variable"` 这类带后缀的名字，永远匹配不上主题栈——这是选
+  静态包的原因）。
+- 字重取 Panda 与 Astryx 类型阶实际用的 normal/medium/semibold
+  （400/500/600）；Playwrite US Trad 是单字重设计（400），semibold 由
+  浏览器合成。
+- 打包 67 个 woff2（全子集全字重 ~950KB 进 dist），浏览器按
+  `unicode-range` 惰性下载——实际运行只取各字体的 latin 子集
+  （每字重 ~15–25KB）。
+- neutral 主题**有意不装**等宽 webfont：它的代码栈就是系统等宽
+  （`ui-monospace, SF Mono…`），主题级设计决定，保持原样。
+- 新增主题时：查它的三个 `--font-family-*` 栈，缺的字体补进
+  `fonts.css` 对应分组。
 
 ## 已知的视觉变化（迁移期有意接受）
 
@@ -212,5 +254,8 @@ matcha 声明 `DM Sans`（正文）与 `JetBrains Mono`（代码）字体栈，�
   13 个共置语义 CSS 文件 + 共享原语；`.md-*`/`.panda*` 颜色走系统 token；
   移除 Tailwind、`@tailwindcss/vite` 与桥；别名 token 从 `@theme` 落到
   `:root` 纯 CSS；DESIGN.md 同步（本文件即 post-Tailwind 版）。
-- **Phase 4**：`astryx theme add matcha` 拷出可编辑主题源码，按品牌精调；
-  定稿本文件的 token 参考与主题工作流。
+- **Phase 4（本版，已完成——方向修正）**：原计划"拷 matcha 源码按品牌
+  精调"作废；改为**七个官方主题全量打包 + 侧栏选择器 + localStorage
+  持久化**（默认 neutral），零定制全用默认 token；各主题 webfont 经
+  fontsource 静态包全量引入（`src/fonts.css`）；gothic 强制暗色。
+  `#32` 至此四个阶段全部完成。

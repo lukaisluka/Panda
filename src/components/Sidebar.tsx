@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { IconButton } from '@astryxdesign/core/IconButton';
+import { Selector } from '@astryxdesign/core/Selector';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import {
   Bot,
   MessagesSquare,
+  Palette,
   Plus,
   PlugZap,
   Trash2,
@@ -24,6 +26,7 @@ import {
 import { effectiveCapability, PANDA_HOST_CAPABILITIES } from '../capabilities';
 import type { AgentProfile } from '../profiles';
 import { loadProfiles, saveProfiles, subscribeProfiles } from '../profiles';
+import { isThemeId, loadThemeId, saveThemeId, subscribeTheme, THEMES } from '../theme';
 import { workspaceDisplay, workspaceLabel } from '../workspace';
 import { ConnectPanel, type FormPrefill } from './ConnectPanel';
 import type { LiveSessionFacade } from '../useLiveSession';
@@ -52,6 +55,10 @@ export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }:
   // write-back) — storage is the single source, the subscription keeps this
   // copy from diverging.
   useEffect(() => subscribeProfiles(setProfiles), []);
+  // Theme choice: same single-source contract — main.tsx's <Theme> anchor
+  // re-renders off this subscription when the picker saves (#32 Phase 4).
+  const [themeId, setThemeId] = useState(loadThemeId);
+  useEffect(() => subscribeTheme(setThemeId), []);
 
   const liveMode = mode === 'live';
   const activeConnectionId = usePanda((s) => s.activeConnectionId);
@@ -170,6 +177,21 @@ export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }:
             onMobileClose();
           }}
         />
+        <div className="sidebar-theme-picker">
+          <Palette size={14} className="sidebar-footer-icon" />
+          <div className="sidebar-theme-select">
+            <Selector
+              label="主题"
+              isLabelHidden
+              value={themeId}
+              onChange={(value) => {
+                if (isThemeId(value)) saveThemeId(value);
+              }}
+              options={THEMES.map((choice) => ({ value: choice.id, label: choice.label }))}
+              labelTooltip="主题：Astryx 官方主题（7 个），随时切换，自动记住选择"
+            />
+          </div>
+        </div>
         <div className="sidebar-footer">
           <Bot size={14} className="sidebar-footer-icon" />
           <span className="truncate">
