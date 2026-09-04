@@ -9,7 +9,11 @@ import type { HighlighterCore } from 'shiki/core';
 
 export type TokenSpan = { value: string; color?: string };
 
-const THEME = 'vitesse-light';
+/* Paired vitesse themes: one tokenize pass yields both variants, rendered as
+ * CSS native light-dark(light, dark). The <Theme> root's color-scheme drives
+ * the flip — same mechanism as every Astryx token, no JS mode awareness and
+ * no mode in the cache key (#40). */
+const THEMES = { light: 'vitesse-light', dark: 'vitesse-dark' };
 
 /** Markdown fence tag → shiki language id; unmapped tags render unhighlighted. */
 const LANG_ALIASES: Record<string, string> = {
@@ -88,7 +92,7 @@ function getHighlighter(): Promise<HighlighterCore> {
       import('shiki/engine/javascript'),
     ]);
     return createHighlighterCore({
-      themes: [import('shiki/themes/vitesse-light.mjs')],
+      themes: [import('shiki/themes/vitesse-light.mjs'), import('shiki/themes/vitesse-dark.mjs')],
       langs: [],
       engine: createJavaScriptRegexEngine(),
     });
@@ -131,8 +135,25 @@ async function highlightWithLang(lang: string, code: string): Promise<TokenSpan[
       >[0]);
       loadedLangs.add(lang);
     }
-    const { tokens } = highlighter.codeToTokens(code, { lang, theme: THEME });
-    const lines = tokens.map((line) => line.map((t) => ({ value: t.content, color: t.color })));
+    // The core API types pin `lang` to the bundle's known ids; ours arrive as
+    // runtime strings from the LANG_* tables (the same ids) — one narrowing
+    // cast keeps those tables string-keyed. Returns the bare token array
+    // (unlike codeToTokens, which wraps in { tokens }).
+    type KnownLang = Parameters<HighlighterCore['codeToTokensWithThemes']>[1]['lang'];
+    const tokens = highlighter.codeToTokensWithThemes(code, {
+      lang: lang as KnownLang,
+      themes: THEMES,
+    });
+    const lines = tokens.map((line) =>
+      line.map(({ content, variants }) => {
+        const light = variants.light?.color;
+        const dark = variants.dark?.color;
+        // Both variants normally carry a color; a missing one degrades to the
+        // single remaining value rather than dropping highlight entirely.
+        const color = light && dark ? `light-dark(${light}, ${dark})` : light ?? dark;
+        return { value: content, color };
+      }),
+    );
     if (cache.size >= CACHE_LIMIT) {
       const oldest = cache.keys().next();
       if (!oldest.done && oldest.value !== undefined) cache.delete(oldest.value);
