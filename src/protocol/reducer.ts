@@ -9,7 +9,6 @@
 
 import type {
   AcpContentBlock,
-  AcpPlanEntry,
   AcpSessionLevelKind,
   AcpSessionUpdate,
   Block,
@@ -26,6 +25,7 @@ export function emptySession(): SessionDocument {
     turns: [],
     status: 'idle',
     usage: { used: 0, size: 0, cost: null },
+    plan: null,
     modes: null,
     permissions: {},
     latestNotifications: {},
@@ -90,7 +90,16 @@ export function applyUpdate(
     }
 
     case 'plan':
-      return withLatest(updatePlan(doc, update.entries), 'plan', update.raw);
+      // Session-level latest-wins (docked UI): the update replaces the plan,
+      // an empty entries list withdraws it. Plans never enter the flow.
+      return withLatest(
+        { ...doc, plan: update.entries.length > 0 ? update.entries : null },
+        'plan',
+        update.raw,
+      );
+
+    case 'plan_removed':
+      return withLatest({ ...doc, plan: null }, 'plan_removed', update.raw);
 
     case 'usage_update':
       return withLatest(
@@ -444,18 +453,3 @@ function upsertToolCall(doc: SessionDocument, call: ToolCallState): SessionDocum
 // ---------------------------------------------------------------------------
 // Plan
 // ---------------------------------------------------------------------------
-
-/** Plan is turn-scoped: update the current turn's plan block in place. */
-function updatePlan(doc: SessionDocument, entries: AcpPlanEntry[]): SessionDocument {
-  if (doc.turns.length === 0) {
-    console.warn('[reducer] plan arrived outside of any turn; dropped');
-    return doc;
-  }
-  const turn = currentTurn(doc)!;
-  const planIndex = turn.blocks.findIndex((b) => b.kind === 'plan');
-  const blocks: Block[] =
-    planIndex >= 0
-      ? turn.blocks.map((b, i) => (i === planIndex ? { kind: 'plan', entries } : b))
-      : [...turn.blocks, { kind: 'plan', entries }];
-  return replaceLastTurn(doc, { ...turn, blocks });
-}
