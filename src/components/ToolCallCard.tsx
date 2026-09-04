@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge } from '@astryxdesign/core/Badge';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import {
@@ -67,7 +67,9 @@ function StatusBadge({ status }: { status: ToolCallStatus }) {
 /**
  * The workhorse of the message stream: a collapsed summary row that expands
  * into raw input + results. Arrival order is preserved; cards sit between
- * the text that surrounds them.
+ * the text that surrounds them. Expanding is purely manual — running cards
+ * never pop open on their own (joint-debug decision; the think row streams
+ * its tail, every other kind shows the status badge).
  */
 export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool = false, nextIsTool = false }: {
   call: ToolCallState;
@@ -81,14 +83,6 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
   nextIsTool?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-
-  // Lifecycle choreography: auto-expand while running, collapse when done —
-  // EXCEPT think calls: their live row already streams the tail, and the
-  // full reasoning stays behind a manual expand (joint-debug decision).
-  useEffect(() => {
-    if (call.kind === 'think') return;
-    setOpen(call.status === 'in_progress');
-  }, [call.status, call.kind]);
 
   // Inbound notifications are not schema-validated, so `kind` may be a
   // vendor/extension value outside the TS union (that's how switch_mode got
