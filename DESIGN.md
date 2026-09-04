@@ -19,21 +19,29 @@ Panda 的 UI 设计系统文档（single source of truth）。与 [CONTEXT.md](C
 - **暗色不是二等公民**：所有颜色经 Astryx 的 `light-dark()` token 自动翻转，
   任何新样式必须在两种模式下检查。
 
-## 主题与模式（Phase 4：全主题可切换）
+## 主题与模式（Phase 4：全主题可切换 → joint-debug 后单主题暴露）
 
-**七个官方主题全部打包，零定制、全用默认 token，用户在界面上自由选择**
-（原 Phase 4 计划"拷 matcha 源码按品牌精调"已废弃——matcha 底子本身
-不满意，方向改为给用户选择权）：
+**七个官方主题全部打包，零定制、全用默认 token**（原 Phase 4 计划"拷
+matcha 源码按品牌精调"已废弃——matcha 底子本身不满意，方向改为给用户
+选择权）。
+
+**2026-09 joint-debug 修正**：多主题并行维护成本过高，**只暴露
+chocolate 一个**（`src/theme.ts` 的 `EXPOSED_THEME_IDS`），其余六个保持
+打包但不出现在选择器；localStorage 里存的旧选择（如 neutral）响亮回落
+到 chocolate。选择器在暴露数 ≤1 时整个隐藏。恢复多主题 = 改一个数组。
 
 | 主题 | 性格 | 亮底 / 暗底 | 正文 / 标题字体 |
 | --- | --- | --- | --- |
-| neutral（**默认**） | 黑白灰工程感 | `#f1f1f1` / `#1b1b1b` | Figtree / Figtree |
+| neutral | 黑白灰工程感 | `#f1f1f1` / `#1b1b1b` | Figtree / Figtree |
 | matcha | 软、复古（Phase 1–3 的旧默认） | `#F0F0E0` / `#12140e` | DM Sans / Playwrite US Trad（手写体） |
 | stone | 冷灰、圆角小一号 | `#f3f3f5` / `#111015` | Figtree / Montserrat |
 | butter | 奶油底电光蓝，撞色大胆 | `#FDFBE4` / `#261A13` | Outfit / Outfit |
-| chocolate | 大地暖棕 terminal 风 | `#FFFCF7` / `#141010` | Albert Sans / Fraunces（衬线） |
+| chocolate（**默认 + 唯一暴露**） | 大地暖棕 terminal 风 | `#FFFCF7` / `#141010` | Albert Sans / Fraunces（衬线） |
 | gothic | **纯暗色**（无亮 token） | — / `#101314` | Fustat / Fustat |
 | y2k | 全直角、复古糖果 | `#CCCFFA` / `#0e0f1a` | Poppins / Poppins |
+
+（表中"字体"是主题自带的栈，仅存档——实际渲染字体已被 Panda 钉死，
+见「字体」节。）
 
 机制（`src/theme.ts` + `src/main.tsx` 的 `ThemeRoot`）：
 
@@ -272,4 +280,5 @@ inter`、`@fontsource-variable/jetbrains-mono`），无 CDN 依赖。
   持久化**（默认 neutral），零定制全用默认 token；各主题 webfont 经
   fontsource 静态包全量引入（`src/fonts.css`）；gothic 强制暗色。
   `#32` 至此四个阶段全部完成。
-  （后注：joint-debug 字体接管后 fonts.css 与静态包已移除，见「字体」节。）
+  （后注 ×2：joint-debug 字体接管后 fonts.css 与静态包已移除，见
+  「字体」节；同轮起只暴露 chocolate，见本节开头的修正段。）

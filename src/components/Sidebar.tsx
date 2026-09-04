@@ -26,7 +26,7 @@ import {
 import { effectiveCapability, PANDA_HOST_CAPABILITIES } from '../capabilities';
 import type { AgentProfile } from '../profiles';
 import { loadProfiles, saveProfiles, subscribeProfiles } from '../profiles';
-import { isThemeId, loadThemeId, saveThemeId, subscribeTheme, THEMES } from '../theme';
+import { isThemeId, loadThemeId, saveThemeId, subscribeTheme, THEMES, EXPOSED_THEME_IDS } from '../theme';
 import { workspaceDisplay, workspaceLabel } from '../workspace';
 import { ConnectPanel, type FormPrefill } from './ConnectPanel';
 import type { LiveSessionFacade } from '../useLiveSession';
@@ -177,21 +177,26 @@ export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }:
             onMobileClose();
           }}
         />
-        <div className="sidebar-theme-picker">
-          <Palette size={14} className="sidebar-footer-icon" />
-          <div className="sidebar-theme-select">
-            <Selector
-              label="主题"
-              isLabelHidden
-              value={themeId}
-              onChange={(value) => {
-                if (isThemeId(value)) saveThemeId(value);
-              }}
-              options={THEMES.map((choice) => ({ value: choice.id, label: choice.label }))}
-              labelTooltip="主题：Astryx 官方主题（7 个），随时切换，自动记住选择"
-            />
+        {/* Hidden while a single theme is exposed (joint-debug): a one-option
+         * selector is noise. Reappears automatically when EXPOSED_THEME_IDS
+         * grows past one entry. */}
+        {THEMES.filter((choice) => EXPOSED_THEME_IDS.includes(choice.id)).length > 1 && (
+          <div className="sidebar-theme-picker">
+            <Palette size={14} className="sidebar-footer-icon" />
+            <div className="sidebar-theme-select">
+              <Selector
+                label="主题"
+                isLabelHidden
+                value={themeId}
+                onChange={(value) => {
+                  if (isThemeId(value)) saveThemeId(value);
+                }}
+                options={THEMES.filter((choice) => EXPOSED_THEME_IDS.includes(choice.id)).map((choice) => ({ value: choice.id, label: choice.label }))}
+                labelTooltip="主题：Astryx 官方主题（7 个），随时切换，自动记住选择"
+              />
+            </div>
           </div>
-        </div>
+        )}
         <div className="sidebar-footer">
           <Bot size={14} className="sidebar-footer-icon" />
           <span className="truncate">

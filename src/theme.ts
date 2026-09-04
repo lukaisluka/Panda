@@ -4,6 +4,9 @@
  * per browser, not a build-time brand decision (that was the old Phase 4
  * "fork matcha and customize it" plan, dropped).
  *
+ * Joint-debug (2026-09): only EXPOSED_THEME_IDS are user-selectable; the
+ * rest stay shipped but hidden (see the array below for the rationale).
+ *
  * Built themes carry their CSS in their own `theme.css` (@scope'd under
  * `data-astryx-theme="<id>"`, all seven imported from index.css without
  * clashing); the `DefinedTheme` object passed to <Theme> only anchors the
@@ -37,8 +40,8 @@ export type ThemeChoice = {
   darkOnly: boolean;
 };
 
-/** Display order = the picker's option order. Default is neutral: a no-color
- * engineering baseline; matcha (the pre-Phase-4 default) stays selectable. */
+/** Display order = the picker's option order. The full registry: which of
+ * these are user-selectable is EXPOSED_THEME_IDS below. */
 export const THEMES: readonly ThemeChoice[] = [
   { id: 'neutral', label: 'Neutral', theme: neutralTheme, darkOnly: false },
   { id: 'matcha', label: 'Matcha', theme: matchaTheme, darkOnly: false },
@@ -49,7 +52,14 @@ export const THEMES: readonly ThemeChoice[] = [
   { id: 'y2k', label: 'Y2K', theme: y2kTheme, darkOnly: false },
 ];
 
-export const DEFAULT_THEME_ID: ThemeId = 'neutral';
+/** Joint-debug decision (2026-09): maintaining seven themes in parallel cost
+ * more than it bought — the picker now exposes a single theme and the rest
+ * stay SHIPPED (CSS imports, registry entries, resolveTheme) but hidden.
+ * Re-enabling is editing one array. While this list has one entry the
+ * sidebar hides the picker entirely (Sidebar.tsx). */
+export const EXPOSED_THEME_IDS: readonly ThemeId[] = ['chocolate'];
+
+export const DEFAULT_THEME_ID: ThemeId = 'chocolate';
 
 const THEME_STORAGE_KEY = 'panda.theme';
 
@@ -85,7 +95,10 @@ export function isThemeId(value: unknown): value is ThemeId {
 }
 
 /** Stored id or the default; corrupt/unknown values reset loudly — a silent
- * fallback to defaults would hide storage drift from the console. */
+ * fallback to defaults would hide storage drift from the console. A stored
+ * id that is valid but currently hidden (EXPOSED_THEME_IDS) also falls back
+ * to the default, so pre-hiding choices like 'neutral' land on chocolate
+ * instead of resolving a theme the picker can no longer show. */
 export function loadThemeId(storage: ThemeStorage = defaultStorage()): ThemeId {
   let raw: string | null;
   try {
@@ -95,7 +108,11 @@ export function loadThemeId(storage: ThemeStorage = defaultStorage()): ThemeId {
     return DEFAULT_THEME_ID;
   }
   if (raw === null) return DEFAULT_THEME_ID;
-  if (isThemeId(raw)) return raw;
+  if (isThemeId(raw)) {
+    if (EXPOSED_THEME_IDS.includes(raw)) return raw;
+    console.warn(`[panda/theme] theme "${raw}" is currently hidden — using ${DEFAULT_THEME_ID}`);
+    return DEFAULT_THEME_ID;
+  }
   console.warn(`[panda/theme] unknown theme id "${raw}" — using ${DEFAULT_THEME_ID}`);
   return DEFAULT_THEME_ID;
 }

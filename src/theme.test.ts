@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_THEME_ID,
+  EXPOSED_THEME_IDS,
   isThemeId,
   loadThemeId,
   resolveTheme,
@@ -36,9 +37,26 @@ describe('theme registry', () => {
     expect(THEMES.filter((choice) => choice.darkOnly).map((choice) => choice.id)).toEqual(['gothic']);
   });
 
-  it('defaults to neutral', () => {
-    expect(DEFAULT_THEME_ID).toBe('neutral');
-    expect(loadThemeId(new MemoryStorage())).toBe('neutral');
+  it('defaults to chocolate', () => {
+    expect(DEFAULT_THEME_ID).toBe('chocolate');
+    expect(loadThemeId(new MemoryStorage())).toBe('chocolate');
+  });
+
+  it('exposes exactly the joint-debug subset, default included', () => {
+    expect(EXPOSED_THEME_IDS).toEqual(['chocolate']);
+    expect(EXPOSED_THEME_IDS).toContain(DEFAULT_THEME_ID);
+  });
+
+  it('falls back loudly when the stored theme is valid but hidden', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const storage = new MemoryStorage();
+    // 'neutral' is registered (isThemeId true) but not exposed — a choice
+    // saved before the hiding decision must land on the default, not resolve
+    // a theme the picker can no longer show.
+    storage.setItem('panda.theme', 'neutral');
+    expect(loadThemeId(storage)).toBe(DEFAULT_THEME_ID);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 
   it('resolves every registered id, unknown ids fall back to the default', () => {
@@ -85,10 +103,13 @@ describe('theme persistence', () => {
     const storage = new MemoryStorage();
     const seen: string[] = [];
     const unsubscribe = subscribeTheme((themeId) => seen.push(themeId));
-    saveThemeId('y2k', storage);
+    // Exposed themes only: notify re-reads via loadThemeId, which normalizes
+    // hidden ids back to the default — round-tripping a hidden theme would
+    // echo chocolate, not the saved value.
+    saveThemeId('chocolate', storage);
     unsubscribe();
     saveThemeId('matcha', storage);
-    expect(seen).toEqual(['y2k']);
+    expect(seen).toEqual(['chocolate']);
   });
 });
 
