@@ -18,6 +18,7 @@ import {
   resolveLiveElicitation,
   resolveLivePermission,
   sendLive,
+  setLiveConfigOption,
   setLiveMode,
 } from './liveConnections';
 import type { AgentProfile } from './profiles';
@@ -97,6 +98,7 @@ export function useLiveSession() {
       openElicitationUrl: (id: string) => openLiveElicitationUrl(id),
       cancel: cancelLiveTurn,
       setMode: (modeId: string) => setLiveMode(modeId),
+      setConfigOption: (configId: string, value: string | boolean) => setLiveConfigOption(configId, value),
       newSession: (cwd: string) => newLiveSession(cwd),
       deleteSession: (connectionId: string, sessionId: string) => deleteLiveSession(connectionId, sessionId),
     }),

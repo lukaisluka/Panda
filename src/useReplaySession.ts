@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { DEMO_CONNECTION_ID, connectionStorePort, usePanda, type ConnectionStorePort } from './store';
 import { ReplayDriver } from './replay/ReplayDriver';
-import { DEMO_MODES, followUpScenario, longScenario, mainScenario } from './replay/fixtures';
-import type { AcpContentBlock, ElicitationResponse, PermissionOptionKind } from './protocol/types';
+import { DEMO_CONFIG_OPTIONS, DEMO_MODES, followUpScenario, longScenario, mainScenario } from './replay/fixtures';
+import type { AcpConfigOption, AcpContentBlock, ElicitationResponse, PermissionOptionKind } from './protocol/types';
 
 /** `?demo=long` streams an 80-turn session instead — the virtualization calibration sample. */
 const demoScenario = () =>
@@ -37,6 +37,15 @@ export function useReplaySession() {
   }
   const driver = driverRef.current;
 
+  // The demo's mutable copy of the agent-side config state: set_config_option
+  // responses are simulated by rewriting the current values here and folding
+  // the whole list back (the live path folds the RPC response's list).
+  const configRef = useRef<AcpConfigOption[]>(structuredClone(DEMO_CONFIG_OPTIONS));
+  const resetConfig = () => {
+    configRef.current = structuredClone(DEMO_CONFIG_OPTIONS);
+    port.update({ sessionUpdate: 'config_options_initialized', options: configRef.current });
+  };
+
   const mode = usePanda((s) => s.mode);
 
   useEffect(() => {
@@ -56,6 +65,7 @@ export function useReplaySession() {
     // The pseudo session/new result: modes arrive exactly where the live
     // driver puts them (after the session is adopted, before any update).
     port.update({ sessionUpdate: 'modes_initialized', modes: DEMO_MODES });
+    resetConfig();
     driver.play(demoScenario());
     return () => driver.cancel();
   }, [driver, mode, port]);
@@ -107,6 +117,29 @@ export function useReplaySession() {
     [port],
   );
 
+  /**
+   * The demo's instant `session/set_config_option`: the response's full
+   * updated list IS the confirmation — same shape the live path folds from
+   * the resolved RPC.
+   */
+  const setConfigOption = useCallback(
+    (configId: string, value: string | boolean) => {
+      const next = configRef.current.map((option) => {
+        if (option.id !== configId) return option;
+        if (option.type === 'select' && typeof value === 'string') {
+          return { ...option, currentValue: value };
+        }
+        if (option.type === 'boolean' && typeof value === 'boolean') {
+          return { ...option, currentValue: value };
+        }
+        return option;
+      });
+      configRef.current = next;
+      port.update({ sessionUpdate: 'config_options_update', options: next });
+    },
+    [port],
+  );
+
   /** Restarts the scripted scenario; from live mode it first switches back to demo. */
   const replayDemo = useCallback(() => {
     if (usePanda.getState().mode !== 'demo') {
@@ -115,8 +148,9 @@ export function useReplaySession() {
     }
     port.resetDocument();
     port.update({ sessionUpdate: 'modes_initialized', modes: DEMO_MODES });
+    resetConfig();
     driver.play(demoScenario());
   }, [driver, port]);
 
-  return { send, resolvePermission, resolveElicitation, openElicitationUrl, setMode, replayDemo };
+  return { send, resolvePermission, resolveElicitation, openElicitationUrl, setMode, setConfigOption, replayDemo };
 }

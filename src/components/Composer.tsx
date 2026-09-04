@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ArrowUp, Paperclip, Square, X } from 'lucide-react';
+import { ArrowUp, Paperclip, SlidersHorizontal, Square, X } from 'lucide-react';
 import { IconButton } from '@astryxdesign/core/IconButton';
 import {
   buildPromptContent,
@@ -7,18 +7,24 @@ import {
   fileToAttachment,
   type ImageAttachment,
 } from '../attachments';
-import type { AcpAvailableCommand, AcpContentBlock, AcpSessionModeState } from '../protocol/types';
+import type {
+  AcpAvailableCommand,
+  AcpConfigOption,
+  AcpContentBlock,
+  AcpSessionModeState,
+} from '../protocol/types';
 import {
   commandCompletion,
   commandKeyAction,
   matchCommands,
   wrapIndex,
 } from '../commands';
+import { ConfigPanelCard } from './ConfigPanel';
 import { ContentColumn } from './ContentColumn';
 import { ModePicker } from './ModePicker';
 import './Composer.css';
 
-export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onStop, modes, onSetMode, commands }: {
+export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onStop, modes, onSetMode, commands, configOptions, onSetConfigOption }: {
   onSend: (content: AcpContentBlock[]) => void;
   disabled: boolean;
   hint?: string;
@@ -31,12 +37,16 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
   onSetMode: (modeId: string) => void;
   /** Agent-advertised slash commands; drives the `/` autocomplete panel. */
   commands: AcpAvailableCommand[];
+  /** Agent-advertised session config options; null/[] hides the settings entry. */
+  configOptions: AcpConfigOption[] | null;
+  onSetConfigOption: (configId: string, value: string | boolean) => void;
 }) {
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [commandIndex, setCommandIndex] = useState(0);
   const [commandsDismissed, setCommandsDismissed] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptContent = buildPromptContent(attachments, value);
   const canSend = promptContent.length > 0 && !disabled;
@@ -45,6 +55,7 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
   // Panel visibility derives from the text (open only while typing the
   // command name); Escape suppresses it until the input changes again.
   const commandItems = commandsDismissed || disabled ? null : matchCommands(commands, value);
+  const hasConfigOptions = configOptions !== null && configOptions.length > 0;
 
   const completeCommand = (command: AcpAvailableCommand) => {
     // The trailing space starts the argument; the panel closes itself
@@ -112,6 +123,9 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
         <div
           className={`composer-card ${disabled ? 'composer-card--disabled' : ''}`}
         >
+          {configOpen && hasConfigOptions && (
+            <ConfigPanelCard options={configOptions} disabled={disabled} onSetOption={onSetConfigOption} />
+          )}
           {commandItems && (
             <div className="composer-commands" role="listbox" aria-label="斜杠命令">
               {commandItems.map((command, index) => (
@@ -220,6 +234,17 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
                 clickAction={() => fileInputRef.current?.click()}
               />
               {modes && <ModePicker modes={modes} onSetMode={onSetMode} />}
+              {hasConfigOptions && (
+                <IconButton
+                  variant={configOpen ? 'secondary' : 'ghost'}
+                  size="sm"
+                  icon={<SlidersHorizontal size={16} />}
+                  label="会话设置"
+                  isDisabled={disabled}
+                  tooltip={disabled ? '当前不可调整设置' : '会话设置'}
+                  clickAction={() => setConfigOpen((v) => !v)}
+                />
+              )}
             </div>
             {stopping ? (
               <IconButton

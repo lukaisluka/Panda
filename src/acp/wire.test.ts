@@ -6,6 +6,7 @@ import {
   parseSessionNotification,
   removeSdkStrictSessionUpdateRouter,
   toAcpUpdates,
+  toConfigOptions,
   toAvailableCommands,
   toElicitationFormRequest,
   toElicitationUrlRequest,
@@ -124,7 +125,6 @@ describe('toAcpUpdates raw preservation', () => {
 
   it('records recognized session-level kinds as session_state with the raw notification', () => {
     for (const update of [
-      { sessionUpdate: 'config_option_update', configOptions: [] },
       { sessionUpdate: 'session_info_update', title: 't' },
       { sessionUpdate: 'compaction_update' },
     ] as object[]) {
@@ -503,6 +503,98 @@ describe('toAvailableCommands (slash-command whitelisting)', () => {
     const bad = note({ sessionUpdate: 'available_commands_update', availableCommands: 7 });
     expect(toAcpUpdates(bad)).toEqual([{ sessionUpdate: 'unsupported', raw: bad }]);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('available_commands_update'));
+    warnSpy.mockRestore();
+  });
+});
+
+describe('toConfigOptions (session config whitelisting)', () => {
+  const flatSelect = {
+    id: 'model',
+    name: 'Model',
+    description: '使用的模型',
+    category: 'model',
+    type: 'select',
+    currentValue: 'glm-4.7',
+    options: [
+      { value: 'glm-4.7', name: 'GLM-4.7', description: '默认' },
+      { value: 'glm-4.7-air', name: 'GLM-4.7-Air' },
+    ],
+  };
+  const groupedSelect = {
+    id: 'notify',
+    name: '通知',
+    type: 'select',
+    currentValue: 'im',
+    options: [
+      { group: 'g1', name: '即时通讯', options: [{ value: 'im', name: 'Slack' }] },
+      { group: 'g2', name: '邮件', options: [{ value: 'mail', name: '邮件' }] },
+    ],
+  };
+  const bool = { id: 'verbose', name: '思考过程', type: 'boolean', currentValue: true };
+
+  it('maps flat selects, grouped selects (flattened with group labels), and booleans', () => {
+    expect(toConfigOptions([flatSelect, groupedSelect, bool])).toEqual([
+      {
+        type: 'select',
+        id: 'model',
+        name: 'Model',
+        description: '使用的模型',
+        category: 'model',
+        currentValue: 'glm-4.7',
+        choices: [
+          { value: 'glm-4.7', name: 'GLM-4.7', description: '默认', group: null },
+          { value: 'glm-4.7-air', name: 'GLM-4.7-Air', description: null, group: null },
+        ],
+      },
+      {
+        type: 'select',
+        id: 'notify',
+        name: '通知',
+        description: null,
+        category: null,
+        currentValue: 'im',
+        choices: [
+          { value: 'im', name: 'Slack', description: null, group: '即时通讯' },
+          { value: 'mail', name: '邮件', description: null, group: '邮件' },
+        ],
+      },
+      { type: 'boolean', id: 'verbose', name: '思考过程', description: null, category: null, currentValue: true },
+    ]);
+  });
+
+  it('rejects structural violations: non-array list, bad entry shape, bad currentValue', () => {
+    expect(toConfigOptions(undefined)).toBe(null); // handled as "none" by callers
+    expect(toConfigOptions('x')).toBe(null);
+    expect(toConfigOptions(['x'])).toBe(null);
+    expect(toConfigOptions([{ name: 'no id' }])).toBe(null);
+    expect(toConfigOptions([{ id: 'x', name: 'n', type: 'select', currentValue: 7, options: [] }])).toBe(null);
+    expect(toConfigOptions([{ id: 'x', name: 'n', type: 'boolean', currentValue: 'yes' }])).toBe(null);
+    expect(toConfigOptions([{ id: 'x', name: 'n', type: 'select', currentValue: 'v', options: 'bad' }])).toBe(null);
+  });
+
+  it('skips alone an entry with an unrecognized type (spec: ignore that option), keeping the rest', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(toConfigOptions([{ id: 'x', name: 'n', type: 'future', currentValue: 1 }, bool])).toEqual([
+      { type: 'boolean', id: 'verbose', name: '思考过程', description: null, category: null, currentValue: true },
+    ]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("option x has unknown type future"));
+    expect(toConfigOptions([{ id: 'x', name: 'n', type: 'future', currentValue: 1 }])).toEqual([]);
+    warnSpy.mockRestore();
+  });
+
+  it('routes a well-formed config_option_update to config_options_update, malformed to unsupported + warn', () => {
+    const good = note({
+      sessionUpdate: 'config_option_update',
+      configOptions: [bool],
+    });
+    expect(toAcpUpdates(good)).toEqual([
+      { sessionUpdate: 'config_options_update', options: [{ type: 'boolean', id: 'verbose', name: '思考过程', description: null, category: null, currentValue: true }], raw: good },
+    ]);
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const bad = note({ sessionUpdate: 'config_option_update', configOptions: { nope: true } });
+    expect(toAcpUpdates(bad)).toEqual([{ sessionUpdate: 'unsupported', raw: bad }]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('config_option_update'));
     warnSpy.mockRestore();
   });
 });

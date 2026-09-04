@@ -192,6 +192,46 @@ export type AcpAvailableCommand = {
   inputHint: string | null;
 };
 
+/**
+ * One selectable value of a config `select` option. Wire options come flat
+ * or grouped (`SessionConfigSelectOptions`); grouping is flattened into
+ * `group` labels here — the UI rebuilds `<optgroup>`s from them. `group` is
+ * the group's display name (its wire id is routing metadata Panda never
+ * needs: writes address values, not groups).
+ */
+export type AcpConfigChoice = {
+  value: string;
+  name: string;
+  description: string | null;
+  group: string | null;
+};
+
+/**
+ * A session config option advertised by the agent (wire `SessionConfigOption`)
+ * — whitelisted into the two control shapes the UI renders: `select` (single
+ * dropdown) and `boolean` (toggle). `currentValue` is the agent's truth;
+ * writes go through `session/set_config_option`, whose response carries the
+ * full updated list (confirmation-driven, same pattern as set_mode).
+ */
+export type AcpConfigOption =
+  | {
+      type: 'select';
+      id: string;
+      name: string;
+      description: string | null;
+      category: string | null;
+      currentValue: string;
+      choices: AcpConfigChoice[];
+    }
+  | {
+      type: 'boolean';
+      id: string;
+      name: string;
+      description: string | null;
+      category: string | null;
+      currentValue: boolean;
+    };
+
 export type AcpToolCallContent =
   | { type: 'content'; content: AcpContentBlock }
   | { type: 'diff'; path: string; oldText: string | null; newText: string }
@@ -301,8 +341,21 @@ export type AcpSessionUpdate =
    */
   | { sessionUpdate: 'commands_update'; commands: AcpAvailableCommand[]; raw?: SessionNotification }
   /**
+   * The agent's config options arrived with the session (session/new ·
+   * session/load result `configOptions`). Not a wire notification — the
+   * drivers translate the RPC result into this event, exactly like
+   * modes_initialized. null = the agent advertises none.
+   */
+  | { sessionUpdate: 'config_options_initialized'; options: AcpConfigOption[] | null }
+  /**
+   * The config option list changed: an `available config_option_update`
+   * notification (full replacement) or the confirmed result of
+   * `session/set_config_option` (its response carries the updated list).
+   */
+  | { sessionUpdate: 'config_options_update'; options: AcpConfigOption[]; raw?: SessionNotification }
+  /**
    * A known session-level update kind Panda recognizes but does not render
-   * in the message flow (config, compaction, …). Recorded
+   * in the message flow (compaction, …). Recorded
    * as the latest raw notification of its kind — nothing is dropped.
    */
   | { sessionUpdate: 'session_state'; kind: AcpSessionLevelKind; raw: SessionNotification }
@@ -344,13 +397,13 @@ export type AcpSessionUpdate =
  * the wire mapping and the `latestNotifications` key type together.
  * `plan` / `plan_removed` / `usage_update` / `mode` are session-level too
  * (reducer records their latest alongside their dedicated events) but keep
- * dedicated wire cases. `available_commands` went further — a dedicated
- * wire case *and* a dedicated document field (`availableCommands`), so it is
- * not part of this fallback channel at all.
+ * dedicated wire cases. `available_commands` and `config_options` went
+ * further — dedicated wire cases *and* dedicated document fields
+ * (`availableCommands` / `configOptions`), so neither is part of this
+ * fallback channel.
  */
 export const SESSION_STATE_KINDS = [
   'plan_update',
-  'config_option_update',
   'session_info_update',
   'compaction_update',
   'compaction_summary_chunk',
@@ -460,6 +513,13 @@ export type SessionDocument = {
    * composer's `/` autocomplete reads from this; `[]` hides the panel.
    */
   availableCommands: AcpAvailableCommand[];
+  /**
+   * Agent-advertised session config options (new/load result, then
+   * config_option_update notifications and set_config_option responses —
+   * all full-replacement). The composer's settings panel reads from this;
+   * null/[] hides the entry point.
+   */
+  configOptions: AcpConfigOption[] | null;
   /**
    * Latest raw notification per session-level kind (plan/usage/mode/config/
    * session_info/…). Bounded by the kind set — history per kind is

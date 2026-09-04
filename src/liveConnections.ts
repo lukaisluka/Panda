@@ -2,6 +2,7 @@ import type { RequestPermissionRequest } from '@agentclientprotocol/sdk';
 import { LiveAcpClient } from './acp/LiveAcpClient';
 import { WebSocketTransport } from './acp/transport/WebSocketTransport';
 import type {
+  AcpConfigOption,
   AcpContentBlock,
   AcpSessionModeState,
   AcpSessionUpdate,
@@ -257,6 +258,8 @@ function wireHandlers(entry: LiveConnection) {
     onSessionId: (sessionId: string, cwd: string) => port.adoptSession(sessionId, cwd),
     onSessionModes: (modes: AcpSessionModeState | null) =>
       port.update({ sessionUpdate: 'modes_initialized', modes }),
+    onSessionConfigOptions: (options: AcpConfigOption[] | null) =>
+      port.update({ sessionUpdate: 'config_options_initialized', options }),
     // An unexpected disconnect keeps the session id so the group can offer
     // "reconnect and resume"; a clean user disconnect clears it. Either way
     // a failed connect must not write its edits back into the profile.
@@ -580,6 +583,16 @@ export function cancelLiveTurn(): void {
 export function setLiveMode(modeId: string): void {
   const entry = foregroundEntry('setMode');
   if (entry) void entry.client.setMode(modeId);
+}
+
+/**
+ * Writes one session config option on the foreground connection
+ * (`session/set_config_option`). Like setLiveMode, confirmation-driven — the
+ * document moves only when the resolved response's list comes back.
+ */
+export function setLiveConfigOption(configId: string, value: string | boolean): void {
+  const entry = foregroundEntry('setConfigOption');
+  if (entry) void entry.client.setConfigOption(configId, value);
 }
 
 export async function newLiveSession(cwd: string): Promise<void> {

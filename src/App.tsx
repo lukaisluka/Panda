@@ -14,6 +14,7 @@ import {
   usePanda,
 } from './store';
 import { useStatusHint } from './projector/hooks';
+import { modeStateFromConfigOptions } from './protocol/modes';
 import { useReplaySession } from './useReplaySession';
 import { useLiveSession } from './useLiveSession';
 import './App.css';
@@ -39,6 +40,12 @@ export default function App() {
   const resolveElicitation = liveActive ? live.resolveElicitation : demo.resolveElicitation;
   const openElicitationUrl = liveActive ? live.openElicitationUrl : demo.openElicitationUrl;
   const setMode = liveActive ? live.setMode : demo.setMode;
+  const setConfigOption = liveActive ? live.setConfigOption : demo.setConfigOption;
+  // protocol/v1 session-config-options: a client with config options SHOULD
+  // use them exclusively and ignore `modes` — when the agent models its mode
+  // selector as a config option, the picker derives from it and writes go
+  // through set_config_option (one full-list response refreshes both views).
+  const derivedModes = modeStateFromConfigOptions(doc.configOptions);
 
   // A session switch in flight is busy too: the composer must not send into a
   // session that has not settled yet, and the sidebar locks other switches.
@@ -101,9 +108,11 @@ export default function App() {
           canAttachImages={!liveActive || effectiveCaps.image.available}
           canStop={liveActive && connected && doc.status === 'running'}
           onStop={live.cancel}
-          modes={doc.modes}
-          onSetMode={setMode}
+          modes={derivedModes ?? doc.modes}
+          onSetMode={derivedModes ? (modeId: string) => setConfigOption('mode', modeId) : setMode}
           commands={doc.availableCommands}
+          configOptions={doc.configOptions}
+          onSetConfigOption={setConfigOption}
         />
       </main>
     </div>

@@ -254,11 +254,11 @@ describe('reducer session-level latest notifications', () => {
     const r1 = rawNote('config-1');
     const r2 = rawNote('config-2');
     const doc = fold([
-      { sessionUpdate: 'session_state', kind: 'config_option_update', raw: r1 },
-      { sessionUpdate: 'session_state', kind: 'config_option_update', raw: r2 },
+      { sessionUpdate: 'session_state', kind: 'session_info_update', raw: r1 },
+      { sessionUpdate: 'session_state', kind: 'session_info_update', raw: r2 },
       { sessionUpdate: 'session_state', kind: 'compaction_update', raw: r1 },
     ]);
-    expect(doc.latestNotifications.config_option_update).toBe(r2);
+    expect(doc.latestNotifications.session_info_update).toBe(r2);
     expect(doc.latestNotifications.compaction_update).toBe(r1);
     expect(doc.turns).toHaveLength(0); // session_state never opens a turn
   });
@@ -798,6 +798,30 @@ describe('reducer slash commands (available_commands_update)', () => {
 
   it('commands_update never opens a turn', () => {
     const doc = fold([{ sessionUpdate: 'commands_update', commands: list(['status']) }]);
+    expect(doc.turns).toHaveLength(0);
+  });
+});
+
+describe('reducer session config options', () => {
+  const opts = (currentValue: boolean) =>
+    [{ type: 'boolean' as const, id: 'verbose', name: '思考过程', description: null, category: null, currentValue }];
+
+  it('initialized null means none; an array replaces wholesale; updates replace too', () => {
+    const none = fold([{ sessionUpdate: 'config_options_initialized', options: null }]);
+    expect(none.configOptions).toBe(null);
+
+    const some = applyUpdate(none, { sessionUpdate: 'config_options_initialized', options: opts(true) });
+    expect(some.configOptions).toEqual(opts(true));
+
+    const updated = applyUpdate(some, { sessionUpdate: 'config_options_update', options: opts(false) });
+    expect(updated.configOptions).toEqual(opts(false));
+  });
+
+  it('neither event opens a turn', () => {
+    const doc = fold([
+      { sessionUpdate: 'config_options_initialized', options: opts(true) },
+      { sessionUpdate: 'config_options_update', options: opts(false) },
+    ]);
     expect(doc.turns).toHaveLength(0);
   });
 });

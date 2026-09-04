@@ -16,6 +16,7 @@ import {
 } from '@agentclientprotocol/sdk';
 import type { AcpTransport } from './transport/AcpTransport';
 import type {
+  AcpConfigOption,
   AcpContentBlock,
   AcpSessionModeState,
   AcpSessionUpdate,
@@ -29,6 +30,7 @@ import {
   parseSessionNotification,
   removeSdkStrictSessionUpdateRouter,
   toAcpUpdates,
+  toConfigOptions,
   toElicitationFormRequest,
   toElicitationUrlRequest,
   toPermissionRequest,
@@ -86,6 +88,13 @@ export type LiveClientHandlers = {
    * carries no modes, so the document keeps whatever it already had.
    */
   onSessionModes(modes: AcpSessionModeState | null): void;
+  /**
+   * Session config options from a session/new · session/load result (null =
+   * the agent advertises none; a malformed list is warned and treated as
+   * none). Like modes, not emitted on resume — v1's ResumeSessionResponse
+   * carries no configOptions.
+   */
+  onSessionConfigOptions(options: AcpConfigOption[] | null): void;
   /** null reason = clean disconnect; a string = failure shown to the user. */
   onDisconnected(reason: string | null): void;
   onCapabilities(caps: AgentCaps): void;
@@ -151,6 +160,22 @@ type PendingOutbound = {
 
 /** Keep in sync with package.json. */
 const CLIENT_INFO = { name: 'panda', title: 'Panda', version: '0.1.0' } as const;
+
+/**
+ * A new/load/set_config_option result's `configOptions` → UI model. Absent
+ * (undefined/null) means "the agent advertises none" (null); present but
+ * malformed is a protocol violation on the agent — warn loudly and treat as
+ * none rather than rendering settings that don't match the agent.
+ */
+function sessionConfigOptions(list: unknown, source: string): AcpConfigOption[] | null {
+  if (list === undefined || list === null) return null;
+  const options = toConfigOptions(list);
+  if (options === null) {
+    console.warn(`[panda/acp] ${source} returned a malformed configOptions list — treated as none`);
+    return null;
+  }
+  return options;
+}
 
 /**
  * Human-readable message for any thrown value — the SDK rejects pending
@@ -322,8 +347,12 @@ export class LiveAcpClient {
       const init: InitializeResponse = await connection.agent.request(methods.agent.initialize, {
         protocolVersion: PROTOCOL_VERSION,
         // Both elicitation modes are implemented — advertising per-mode keeps
-        // spec-compliant agents from sending what Panda cannot render.
-        clientCapabilities: { elicitation: { form: {}, url: {} } },
+        // spec-compliant agents from sending what Panda cannot render. The
+        // same goes for boolean config options (select is always allowed).
+        clientCapabilities: {
+          elicitation: { form: {}, url: {} },
+          session: { configOptions: { boolean: {} } },
+        },
         clientInfo: CLIENT_INFO,
       });
       if (!isCurrent()) {
@@ -540,6 +569,46 @@ export class LiveAcpClient {
     }
   }
 
+  /**
+   * `session/set_config_option` (protocol/v1 session-config-options).
+   * Confirmation-driven like set_mode: the document only moves when the RPC
+   * resolves — the response carries the full updated option list, which is
+   * folded as one `config_options_update` (a later agent notification lands
+   * on the same event idempotently). Failure is logged, never swallowed:
+   * the panel stays on the old values, which is the honest state.
+   */
+  async setConfigOption(configId: string, value: string | boolean): Promise<void> {
+    const connection = this.connection;
+    const sessionId = this.sessionId;
+    if (!connection || !sessionId) {
+      console.warn('[panda/acp] set_config_option ignored: not connected');
+      return;
+    }
+    const generation = this.connectionGeneration;
+    // The wire request discriminates boolean writes by an explicit
+    // `type: "boolean"` (select writes carry no type).
+    const params = typeof value === 'boolean' ? { sessionId, configId, value, type: 'boolean' } : { sessionId, configId, value };
+    try {
+      const result = await connection.agent.request(methods.agent.session.setConfigOption, params);
+      if (generation !== this.connectionGeneration) {
+        // Superseded mid-request: the newer era owns the session state, a
+        // late config_options_update would write into its document.
+        return;
+      }
+      const options = sessionConfigOptions((result as { configOptions?: unknown }).configOptions, 'session/set_config_option');
+      if (options !== null) {
+        this.handlers.onUpdate({ sessionUpdate: 'config_options_update', options });
+        console.info(`[panda/acp] config option set: ${configId} = ${String(value)}`);
+      }
+    } catch (err) {
+      if (generation !== this.connectionGeneration) {
+        console.info('[panda/acp] superseded set_config_option failed after replacement — failure discarded');
+        return;
+      }
+      console.error(`[panda/acp] set_config_option(${configId}) failed`, err);
+    }
+  }
+
   /** Sends one ordered set of user content blocks and owns the turn until it resolves. */
   async send(content: AcpContentBlock[]): Promise<void> {
     if (content.length === 0) return;
@@ -727,6 +796,7 @@ export class LiveAcpClient {
     this.sessionId = session.sessionId;
     this.handlers.onSessionId(session.sessionId, cwd);
     this.handlers.onSessionModes(toSessionModeState(session.modes));
+    this.handlers.onSessionConfigOptions(sessionConfigOptions(session.configOptions, 'session/new'));
   }
 
   /**
@@ -774,6 +844,7 @@ export class LiveAcpClient {
       // The load's modes land before commit: the staged document is the one
       // the UI will adopt, and onReplayStart already reset its modes to null.
       this.handlers.onSessionModes(toSessionModeState(loaded.modes));
+      this.handlers.onSessionConfigOptions(sessionConfigOptions(loaded.configOptions, 'session/load'));
       this.handlers.onSessionSwitchCommit(generation);
     } catch (err) {
       if (generation !== this.connectionGeneration) {
