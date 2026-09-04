@@ -27,7 +27,7 @@ export function ThoughtBlock({ block }: { block: ThoughtBlockModel }) {
         />
       </button>
       {open && (
-        <div className="md-body md-body--sm disclosure-body disclosure-body--thought">
+        <div className="md-body disclosure-body disclosure-body--thought">
           {block.parts.map((part, i) =>
             part.type === 'image' ? (
               <MessageImage key={i} image={part} />

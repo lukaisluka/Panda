@@ -48,19 +48,20 @@
 
 .tool-card-title {
   min-width: 0;
-  /* ZCode-style tool row: body (sans) face, one step under body size, quiet
-   * color — the name reads as chrome, not content. Sans, not mono: the
+  /* ZCode-style tool row: body (sans) face, quiet color — the name reads
+   * as chrome, not content. One size for the whole content area
+   * (joint-debug): hierarchy by grayscale only. Sans, not mono: the
    * reference client renders tool names like permission prompts (Inter),
    * mono is for the payload inside the expanded rail. */
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
   color: var(--panda-chrome-text);
 }
 
 .tool-card-stats {
   flex-shrink: 0;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 14px;
 }
 .tool-stats-add { color: var(--color-add); }
 .tool-stats-del { color: var(--color-danger); }
@@ -68,7 +69,7 @@
 .tool-card-path {
   min-width: 0;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 14px;
   color: var(--color-faint);
 }
 
@@ -109,7 +110,7 @@
 
 .tool-input-summary {
   padding: 6px 12px; /* px-3 py-1.5 */
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--color-faint);
   cursor: pointer;
@@ -127,7 +128,7 @@
   overflow-x: auto;
   padding: 0 12px 10px; /* px-3 pb-2.5 */
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.5;
   color: var(--color-muted);
 }
@@ -145,6 +146,6 @@
   align-items: center;
   gap: 8px;
   padding: 2px 4px; /* px-1 py-0.5 */
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-faint);
 }

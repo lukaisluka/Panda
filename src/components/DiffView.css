@@ -18,13 +18,13 @@
 
 .diff-header-path {
   font-family: var(--font-mono);
-  font-size: 12px; /* text-xs */
+  font-size: 14px;
   color: var(--color-muted);
 }
 
 .diff-header-lines {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .diff-lines-add { color: var(--color-add); }
@@ -38,7 +38,7 @@
   width: 100%;
   border-collapse: collapse;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.5;
 }
 

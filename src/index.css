@@ -11,6 +11,10 @@
  * notch thinner and narrower than the reference. Self-hosted variable font,
  * no CDN dependency. */
 @import "@fontsource-variable/inter";
+/* Mono face (joint-debug): paired with Inter, and pinned for the same
+ * ownership reason — neutral's system mono (SF Mono) visibly differed from
+ * the reference client's code glyphs. */
+@import "@fontsource-variable/jetbrains-mono";
 /* All seven official themes (#32 Phase 4): each theme.css is @scope'd under
  * its own data-astryx-theme attribute, so they coexist and only the one
  * <Theme> anchors is live. Selection is a runtime user choice (src/theme.ts). */
@@ -57,13 +61,16 @@
  * Inter's — tall x-height, straight-stem l, straight-tail y — which
  * -apple-system (SF Pro) does not reproduce, and theme webfonts (Figtree
  * etc.) thinned the text further. Inter has no CJK coverage, so mixed
- * scripts fall through to the system stack for Han. Declared on :root AND
- * [data-astryx-theme] (both Astryx anchors re-inject theme tokens), and
- * unlayered so every theme layer loses. Astryx components keep consuming
- * --font-family-*, now fed from --panda-font-body.
+ * scripts fall through to the system stack for Han.
  *
- * NOT owned yet: the code/mono face (--font-family-code) stays with the
- * themes — markdown code rendering keeps its per-theme mono for now.
+ * JetBrains Mono (self-hosted variable) for every code surface — inline
+ * code, fenced blocks, diffs, tool payloads. The classic Inter pairing,
+ * and it replaces both theme monos (JetBrains Mono on matcha as a webfont,
+ * SF Mono via neutral's system stack) so code renders identically across
+ * themes. Both declared on :root AND [data-astryx-theme] (both Astryx
+ * anchors re-inject theme tokens), and unlayered so every theme layer
+ * loses. Astryx components keep consuming --font-family-*, now fed from
+ * --panda-font-body / --panda-font-code.
  * ------------------------------------------------------------------------- */
 :root,
 [data-astryx-theme] {
@@ -72,6 +79,10 @@
     sans-serif;
   --font-family-body: var(--panda-font-body);
   --font-family-heading: var(--panda-font-body);
+
+  --panda-font-code: 'JetBrains Mono Variable', ui-monospace, 'SF Mono',
+    'Cascadia Code', Menlo, Consolas, monospace;
+  --font-family-code: var(--panda-font-code);
 }
 
 /* Pin the type scale across all seven themes (joint-debug finding, #32
@@ -226,37 +237,21 @@ body {
  * wrapping every element in components.
  * ------------------------------------------------------------------------- */
 .md-body {
-  /* 14px / 1.6 — terminal-client density (ZCode-style). Secondary surfaces
-   * (tool calls, thoughts) step down to 12px via --sm and tighten leading
-   * to 1.45; block gaps (cards at 24px) must stay larger than this line
-   * height so block boundaries read stronger than line breaks. */
+  /* 14px / 1.6 — terminal-client density (ZCode-style). One size for the
+   * whole content area (joint-debug): hierarchy is carried by weight and
+   * grayscale only — secondary surfaces (tool bodies, thoughts) use the
+   * same size with muted color. Block gaps (cards at 14px↔text) stay
+   * under a line of body text so block boundaries read stronger than
+   * line breaks. */
   font-size: 14px;
   line-height: 1.6;
 }
-/* Secondary markdown surfaces (thought bodies, tool results) sit one step
- * below primary messages in the type scale. This must be its own class:
- * .md-body is unlayered CSS, which beats Tailwind's layered utilities — a
- * utility like text-[13px] on the same element would never apply. */
-.md-body--sm {
-  font-size: 12px;
-  /* Cards are compact surfaces: tighter leading than the primary body. */
-  line-height: 1.45;
-}
-/* Nesting rule (joint-debug): an expanded detail level never renders
- * larger than its host surface. Secondary bodies always sit inside a
- * 12px card, so their markdown heading steps (1.3em/1.2em/…) are
- * flattened to host size — hierarchy inside cards is carried by weight
- * and color alone. Doubled class beats the .md-body h1…h6 steps below
- * without relying on source order. */
-.md-body.md-body--sm h1, .md-body.md-body--sm h2, .md-body.md-body--sm h3,
-.md-body.md-body--sm h4, .md-body.md-body--sm h5, .md-body.md-body--sm h6 { font-size: 1em; }
 .md-body > :first-child { margin-top: 0; }
 .md-body > :last-child { margin-bottom: 0; }
 /* p must re-inherit the container size: theme reset layers declare
  * :where(p) { font-size: var(--font-size-base) } and an element's own
  * declaration always beats inheritance — without this, paragraphs ran one
- * step larger than lists in the same message (and .md-body--sm surfaces
- * leaked full-size paragraphs into 12px tool bodies). */
+ * step larger than lists in the same message. */
 .md-body p { margin: 0.5em 0; font-size: inherit; line-height: inherit; }
 .md-body strong { font-weight: 600; color: var(--color-fg); }
 .md-body em { color: var(--color-muted); }
@@ -265,16 +260,15 @@ body {
 .md-body li { margin: 0.2em 0; }
 .md-body li::marker { color: var(--color-faint); }
 
+/* Headings stay at body size (joint-debug): one size per content area,
+ * hierarchy via weight (600) and margins alone. */
 .md-body h1, .md-body h2, .md-body h3,
 .md-body h4, .md-body h5, .md-body h6 {
   margin: 1em 0 0.4em;
   font-weight: 600;
+  font-size: 1em;
   line-height: 1.3;
 }
-.md-body h1 { font-size: 1.3em; }
-.md-body h2 { font-size: 1.2em; }
-.md-body h3 { font-size: 1.1em; }
-.md-body h4, .md-body h5, .md-body h6 { font-size: 1em; }
 
 .md-body blockquote {
   margin: 0.5em 0;
@@ -301,7 +295,6 @@ body {
   margin: 0.6em 0;
   overflow-x: auto;
   border-collapse: collapse;
-  font-size: 0.95em;
 }
 .md-body th, .md-body td {
   border: 1px solid var(--color-border);
@@ -331,7 +324,7 @@ body {
   padding: 10px 12px;
   overflow-x: auto;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.6;
 }
 .md-body > pre code {
@@ -360,7 +353,7 @@ body {
 }
 .md-codeblock-lang {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.5;
   color: var(--color-faint);
 }
@@ -383,6 +376,6 @@ body {
   padding: 10px 12px;
   overflow-x: auto;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.6;
 }

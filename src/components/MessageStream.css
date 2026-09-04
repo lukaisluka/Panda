@@ -4,6 +4,11 @@
   position: relative;
   min-height: 0;
   flex: 1;
+  /* One size for the whole content area (joint-debug): the stream root is
+   * the inheritance base, so container layers (columns, bubbles, cards)
+   * that declare no size of their own all start at 14px instead of the
+   * 16px browser default. Hierarchy below is grayscale + weight only. */
+  font-size: 14px;
 }
 
 .stream-scroller {

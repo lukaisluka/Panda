@@ -147,7 +147,7 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
             }
             if (item.type === 'content' && item.content.type === 'text') {
               return (
-                <div key={i} className="md-body md-body--sm tool-text-box">
+                <div key={i} className="md-body tool-text-box">
                   <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{item.content.text}</ReactMarkdown>
                 </div>
               );
