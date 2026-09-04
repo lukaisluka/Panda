@@ -63,12 +63,6 @@ function StatusBadge({ status }: { status: ToolCallStatus }) {
   }
 }
 
-const CARD_EDGE: Partial<Record<ToolCallStatus, string>> = {
-  pending: 'tool-card-frame--pending',
-  in_progress: 'tool-card-frame--running',
-  failed: 'tool-card-frame--failed',
-};
-
 /**
  * The workhorse of the message stream: a collapsed summary row that expands
  * into raw input + results. Arrival order is preserved; cards sit between
@@ -99,7 +93,7 @@ export function ToolCallCard({ call, permission, onResolvePermission }: {
 
   return (
     <div className="tool-card">
-      <div className={`tool-card-frame ${CARD_EDGE[call.status] ?? ''}`}>
+      <div className="tool-card-frame">
         <button onClick={() => setOpen((o) => !o)} className="tool-card-toggle">
           <Icon size={14} className="tool-card-icon" />
           <span className="truncate tool-card-title">{call.title}</span>

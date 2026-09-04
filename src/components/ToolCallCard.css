@@ -2,26 +2,18 @@
 
 .tool-card {
   /* 24px: block gaps between cards (and cards ↔ text) must exceed the
-   * primary line height (13 × 1.65 ≈ 21.5px) so block boundaries read
+   * primary line height (14 × 1.6 = 22.4px) so block boundaries read
    * stronger than line breaks. Adjacent-block margin collapsing takes
    * the max, so card ↔ 6px text gaps land here too. */
   margin-block: 24px;
 }
 
+/* ZCode-style: no card box. The tool call is a lightweight mono row that
+ * sits directly on the page surface; state lives in the trailing badge,
+ * expansion in the indented details rail. Radius only shapes the row
+ * hover wash. */
 .tool-card-frame {
-  border: 1px solid var(--color-border);
   border-radius: var(--panda-radius-lg);
-  background: var(--color-surface);
-  transition: var(--panda-colors-transition);
-}
-.tool-card-frame--pending {
-  border-left: 2px solid color-mix(in oklab, var(--color-warn) 60%, transparent);
-}
-.tool-card-frame--running {
-  border-left: 2px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
-}
-.tool-card-frame--failed {
-  border-left: 2px solid color-mix(in oklab, var(--color-danger) 60%, transparent);
 }
 
 .tool-card-toggle {
@@ -29,7 +21,7 @@
   width: 100%;
   align-items: center;
   gap: 10px; /* gap-2.5 */
-  padding: 8px 12px; /* px-3 py-2 */
+  padding: 6px 8px;
   text-align: left;
   transition: var(--panda-colors-transition);
 }
@@ -44,8 +36,11 @@
 
 .tool-card-title {
   min-width: 0;
-  font-size: 12px; /* text-xs */
-  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+  /* ZCode-style tool row: mono face, one step under body size, quiet
+   * color — the name reads as chrome, not content. */
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-muted);
 }
 
 .tool-card-stats {
