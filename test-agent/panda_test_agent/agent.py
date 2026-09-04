@@ -11,7 +11,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import aiosqlite
-from acp.schema import SessionInfoUpdate, SessionMode, SessionModeState, TextContentBlock
+from acp.schema import (
+    ClientCapabilities,
+    Implementation,
+    InitializeResponse,
+    SessionInfoUpdate,
+    SessionMode,
+    SessionModeState,
+    TextContentBlock,
+)
 from deepagents import create_deep_agent
 from deepagents.backends import CompositeBackend, LocalShellBackend, StateBackend
 from langchain.agents.middleware import TodoListMiddleware
@@ -19,7 +27,8 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from deepagents_acp.server import AgentServerACP, AgentSessionContext
 
-from panda_test_agent.models import FAKE_MODEL_ID, build_model_registry
+from panda_test_agent import __version__
+from panda_test_agent.models import build_model_registry
 from panda_test_agent.session_titles import title_from_first_user_text
 
 if TYPE_CHECKING:
@@ -77,6 +86,29 @@ class PandaTestAgentServer(AgentServerACP):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._session_titles: dict[str, str] = {}
+
+    async def initialize(
+        self,
+        protocol_version: int,
+        client_capabilities: ClientCapabilities | None = None,
+        client_info: Implementation | None = None,
+        **kwargs: Any,
+    ) -> InitializeResponse:
+        """补上上游(deepagents-acp 0.0.11)缺失的 agentInfo。
+
+        上游的 initialize 只回 protocolVersion 和 agentCapabilities,不设置
+        agent_info;协议注明该字段未来会转为必填,现在补齐,Panda 的连接栏
+        才能显示真实 agent 名而不是 'unknown agent'。
+        """
+        response = await super().initialize(
+            protocol_version, client_capabilities, client_info, **kwargs
+        )
+        response.agent_info = Implementation(
+            name="panda-test-agent",
+            title="Panda 测试 Agent",
+            version=__version__,
+        )
+        return response
 
     def _session_config(self, session_id: str) -> dict[str, Any]:
         config = super()._session_config(session_id)
@@ -154,10 +186,16 @@ async def _make_checkpointer(state_dir: Path) -> AsyncSqliteSaver:
 async def create_acp_agent(sandbox_dir: Path, state_dir: Path) -> PandaTestAgentServer:
     """构建 ACP agent:模型清单来自注册表,文件/命令都落在 sandbox_dir。"""
     models_list, registry = build_model_registry()
+    # 注册表第一项即"新会话默认模型"——PANDA_TEST_AGENT_DEFAULT_MODEL 生效时是
+    # 指定的真实模型。deepagents-acp 0.0.11 的 load_session 会在恢复持久化选项
+    # 之前就用 factory 预构建 agent(此刻 context.model 为 None),且恢复值恰好
+    # 等于默认值时不会再重建;factory 的回退若不是注册表默认,恢复后的会话就会
+    # 静默换脑子(如换回剧本模型),正是本 agent 明确禁止的行为。
+    default_model_id = models_list[0]["value"]
     checkpointer = await _make_checkpointer(state_dir)
 
     def build_agent(context: AgentSessionContext) -> CompiledStateGraph:  # type: ignore[type-arg]
-        model_id = context.model or FAKE_MODEL_ID
+        model_id = context.model or default_model_id
         model: BaseChatModel = registry.get(model_id)  # type: ignore[assignment]
         if model is None:
             # 不静默回退到剧本模型:客户端选了一个未注册的模型是配置错误,

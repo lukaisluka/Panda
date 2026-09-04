@@ -42,6 +42,36 @@
   --font-sans: var(--font-family-body);
   --font-mono: var(--font-family-code);
 
+  /* Pin the type scale across all seven themes (joint-debug finding, #32
+   * follow-up): themes ship their own full --font-size-* ladders and split
+   * into two density presets — comfortable (matcha/gothic/y2k, base 1rem) vs
+   * compact (neutral/stone/butter/chocolate, base 0.875rem). Letting the
+   * ladder switch rescaled message text 14↔16px on theme switch while
+   * Panda's card components stayed pinned at px — half-following looked
+   * like a bug. Same rationale and mechanism as --space-* below: values are
+   * core defaults, and unlayered declarations beat every theme layer.
+   * Declared on :root AND on [data-astryx-theme] because Astryx anchors
+   * themes on two elements (html for color-scheme, App's <Theme> div for
+   * the component tree) and each anchor re-injects the theme ladder — a
+   * :root-only pin never reaches past the inner div's own declaration.
+   * Font families and weights still follow the theme; only sizes pinned. */
+
+:root,
+[data-astryx-theme] {
+  --font-size-4xs: 0.375rem;
+  --font-size-3xs: 0.4375rem;
+  --font-size-2xs: 0.5rem;
+  --font-size-xs: 0.625rem;
+  --font-size-sm: 0.75rem;
+  --font-size-base: 0.875rem;
+  --font-size-lg: 1.0625rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.8125rem;
+  --font-size-4xl: 2.1875rem;
+  --font-size-5xl: 2.625rem;
+}
+
   /* Panda geometry stayed on a 4px step when Tailwind left (#32 Phase 1
    * pinned --spacing for the same reason: matcha's --spacing-1 is 6px and
    * a straight swap rescales the whole layout 1.5x). Component CSS uses
