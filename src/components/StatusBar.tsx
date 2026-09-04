@@ -1,4 +1,6 @@
-import { CircleDot, Loader2, ShieldAlert } from 'lucide-react';
+import { CircleDot, ShieldAlert } from 'lucide-react';
+import { Spinner } from '@astryxdesign/core/Spinner';
+import { StatusDot } from '@astryxdesign/core/StatusDot';
 import type { SessionDocument } from '../protocol/types';
 import type { ConnectionInfo, SessionMode } from '../store';
 import { ContentColumn } from './ContentColumn';
@@ -25,7 +27,7 @@ export function StatusBar({ doc, connection, mode, switching }: {
               {connection.status === 'connected' ? (
                 switching ? (
                   <>
-                    <Loader2 size={12} className="animate-spin text-accent" />
+                    <Spinner size="sm" />
                     <span className="text-faint">切换会话中…</span>
                   </>
                 ) : connection.error ? (
@@ -36,7 +38,7 @@ export function StatusBar({ doc, connection, mode, switching }: {
                   </span>
                 ) : (
                   <>
-                    <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                    <StatusDot variant="success" label="已连接" />
                     <span className="max-w-40 truncate text-faint" title={connection.url ?? undefined}>
                       {connection.agentName}
                     </span>
@@ -44,7 +46,7 @@ export function StatusBar({ doc, connection, mode, switching }: {
                 )
               ) : connection.status === 'connecting' ? (
                 <>
-                  <Loader2 size={12} className="animate-spin text-accent" />
+                  <Spinner size="sm" />
                   <span className="text-faint">连接中…</span>
                 </>
               ) : connection.status === 'error' ? (
@@ -60,7 +62,7 @@ export function StatusBar({ doc, connection, mode, switching }: {
           <span className="flex items-center gap-2">
             {status === 'running' ? (
               <>
-                <Loader2 size={13} className="animate-spin text-accent" />
+                <Spinner size="sm" />
                 <span className="text-muted">Working…</span>
               </>
             ) : status === 'requires_action' ? (

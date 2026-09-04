@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Loader2, PlugZap, Plus, RotateCcw } from 'lucide-react';
+import { PlugZap, Plus, RotateCcw } from 'lucide-react';
+import { Button } from '@astryxdesign/core/Button';
+import { Selector } from '@astryxdesign/core/Selector';
+import { Spinner } from '@astryxdesign/core/Spinner';
+import { StatusDot } from '@astryxdesign/core/StatusDot';
+import { TextInput } from '@astryxdesign/core/TextInput';
 import { DEMO_CONNECTION_ID, useActiveConnection, usePanda, type SessionMode } from '../store';
 import { isDirectConnectionId, lastConnectionDefaults } from '../liveConnections';
 import { newProfileId, saveProfiles, type AgentProfile } from '../profiles';
@@ -89,13 +94,6 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
     setNewName('');
   };
 
-  const inputClass =
-    'w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-fg outline-none placeholder:text-faint focus:border-accent/40';
-  const actionClass =
-    'flex items-center justify-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted transition-colors hover:border-accent/50 hover:text-accent';
-  const primaryClass =
-    'flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-2.5 py-1.5 text-xs font-medium text-bg transition-colors hover:brightness-110 disabled:opacity-40';
-
   const canResume = connection.status === 'error' && connection.sessionId !== null;
   const reconnectLabel = foregroundProfile
     ? `连接 ${foregroundProfile.name}`
@@ -112,7 +110,7 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
       {connection.status === 'connected' ? (
         <div className="flex items-center justify-between">
           <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+            <StatusDot variant="success" label="已连接" />
             <span className="truncate">{connection.agentName}</span>
           </span>
           <span className="shrink-0 font-mono text-[11px] text-faint">
@@ -121,7 +119,7 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
         </div>
       ) : connection.status === 'connecting' ? (
         <div className="flex items-center gap-2 py-1 text-xs text-muted">
-          <Loader2 size={13} className="animate-spin text-accent" />
+          <Spinner size="sm" />
           连接中…
         </div>
       ) : (
@@ -132,101 +130,124 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
             </p>
           )}
           {reconnectableId !== null && canResume && (
-            <button
-              className={`${primaryClass} mb-2`}
-              onClick={() => live.reconnectForeground({ resume: true, url, workspace })}
-              title="优先 resume 保留当前对话；agent 不支持时用 session/load 重建历史"
-            >
-              <RotateCcw size={12} />
-              重连并恢复会话
-            </button>
+            <Button
+              className="mb-2"
+              variant="primary"
+              size="sm"
+              width="100%"
+              label="重连并恢复会话"
+              icon={<RotateCcw size={12} />}
+              clickAction={() => live.reconnectForeground({ resume: true, url, workspace })}
+              tooltip="优先 resume 保留当前对话；agent 不支持时用 session/load 重建历史"
+            />
           )}
-          <input
+          <TextInput
+            className="font-mono text-[13px]"
+            label="端点地址"
+            isLabelHidden
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={setUrl}
             placeholder="ws://host:port/acp"
-            spellCheck={false}
-            className={`${inputClass} font-mono text-[13px]`}
           />
           <div className="mt-2 flex gap-2">
-            <select
-              value={workspace.kind}
-              onChange={(e) =>
-                setWorkspace(e.target.value === 'none' ? { kind: 'none' } : { kind: 'local-directory', path: '' })
-              }
-              className={`${inputClass} w-28 shrink-0 text-xs`}
-              title="工作区：新会话在 agent 侧的工作上下文（ADR 0005）"
-            >
-              <option value="local-directory">本机文件夹</option>
-              <option value="none">无工作区</option>
-            </select>
-            {workspace.kind === 'local-directory' && (
-              <input
-                value={workspace.path}
-                onChange={(e) => setWorkspace({ kind: 'local-directory', path: e.target.value })}
-                placeholder="/absolute/path/on/the/agent"
-                spellCheck={false}
-                className={`${inputClass} font-mono text-[13px]`}
+            {/* Astryx Selector owns its own width/geometry — the Phase-1
+                "white capsule" squash (w-28 losing to w-full in generated
+                CSS order) dies here structurally, not by class ordering. */}
+            <div className="w-28 shrink-0">
+              <Selector
+                label="工作区"
+                isLabelHidden
+                value={workspace.kind}
+                onChange={(kind) =>
+                  setWorkspace(kind === 'none' ? { kind: 'none' } : { kind: 'local-directory', path: '' })
+                }
+                options={[
+                  { value: 'local-directory', label: '本机文件夹' },
+                  { value: 'none', label: '无工作区' },
+                ]}
+                labelTooltip="工作区：新会话在 agent 侧的工作上下文（ADR 0005）"
               />
+            </div>
+            {workspace.kind === 'local-directory' && (
+              <div className="min-w-0 flex-1">
+                <TextInput
+                  className="font-mono text-[13px]"
+                  label="工作区路径"
+                  isLabelHidden
+                  width="100%"
+                  value={workspace.path}
+                  onChange={(path) => setWorkspace({ kind: 'local-directory', path })}
+                  placeholder="/absolute/path/on/the/agent"
+                />
+              </div>
             )}
           </div>
-          <button
-            className={`${primaryClass} mt-2.5`}
-            disabled={!url.trim() || !pathReady}
-            onClick={() =>
+          <Button
+            className="mt-2.5"
+            variant="primary"
+            size="sm"
+            width="100%"
+            label={reconnectableId !== null ? (canResume ? '新会话连接' : reconnectLabel) : '连接'}
+            icon={<PlugZap size={12} />}
+            isDisabled={!url.trim() || !pathReady}
+            clickAction={() =>
               reconnectableId !== null
                 ? live.reconnectForeground({ url, workspace })
                 : live.connectDirect(url, workspace)
             }
-            title={
+            tooltip={
               reconnectableId !== null
                 ? foregroundProfile
                   ? `连接 ${foregroundProfile.name}；修改的地址/工作区将在连接成功时写回该配置`
                   : '重新连接此前台直连'
                 : '开始一条临时直连（不保存为配置）'
             }
-          >
-            <PlugZap size={12} />
-            {reconnectableId !== null ? (canResume ? '新会话连接' : reconnectLabel) : '连接'}
-          </button>
+          />
           {reconnectableId === null && !naming && (
-            <button
-              className={`${actionClass} mt-2`}
-              disabled={!url.trim() || !pathReady}
-              onClick={() => {
+            <Button
+              className="mt-2"
+              variant="secondary"
+              size="sm"
+              width="100%"
+              label="存为 Agent 配置"
+              icon={<Plus size={12} />}
+              isDisabled={!url.trim() || !pathReady}
+              clickAction={() => {
                 setNaming(true);
                 setNewName('');
               }}
-              title="把当前地址和工作区保存为一条配置，之后在侧栏一键连接"
-            >
-              <Plus size={12} />
-              存为 Agent 配置
-            </button>
+              tooltip="把当前地址和工作区保存为一条配置，之后在侧栏一键连接"
+            />
           )}
           {reconnectableId === null && naming && (
             <div className="mt-2 flex gap-2">
-              <input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="配置名称，如「Mock Agent」"
-                autoFocus
-                spellCheck={false}
-                className={inputClass}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') saveAsProfile();
-                  if (e.key === 'Escape') setNaming(false);
-                }}
+              <div className="min-w-0 flex-1">
+                <TextInput
+                  label="配置名称"
+                  isLabelHidden
+                  value={newName}
+                  onChange={setNewName}
+                  placeholder="配置名称，如「Mock Agent」"
+                  hasAutoFocus
+                  onEnter={saveAsProfile}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setNaming(false);
+                  }}
+                />
+              </div>
+              <Button
+                variant="primary"
+                size="sm"
+                label="保存"
+                isDisabled={!newName.trim()}
+                clickAction={saveAsProfile}
               />
-              <button
-                className={`${primaryClass} w-auto shrink-0 px-3`}
-                disabled={!newName.trim()}
-                onClick={saveAsProfile}
-              >
-                保存
-              </button>
-              <button className={`${actionClass} shrink-0`} onClick={() => setNaming(false)}>
-                取消
-              </button>
+              <Button
+                variant="ghost"
+                size="sm"
+                label="取消"
+                clickAction={() => setNaming(false)}
+              />
             </div>
           )}
           {reconnectableId === null && profiles.length > 0 && !naming && (
@@ -237,13 +258,15 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
         </>
       )}
 
-      <button
-        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] text-faint transition-colors hover:text-muted"
-        onClick={onReplayDemo}
-      >
-        <RotateCcw size={11} />
-        {mode === 'demo' ? '重放 demo' : '回到 demo 回放'}
-      </button>
+      <Button
+        className="mt-2"
+        variant="ghost"
+        size="sm"
+        width="100%"
+        label={mode === 'demo' ? '重放 demo' : '回到 demo 回放'}
+        icon={<RotateCcw size={11} />}
+        clickAction={onReplayDemo}
+      />
     </div>
   );
 }

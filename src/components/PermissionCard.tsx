@@ -1,4 +1,5 @@
 import { ShieldAlert, ShieldBan } from 'lucide-react';
+import { Button } from '@astryxdesign/core/Button';
 import type {
   DeniedPermissionResponse,
   PermissionOptionKind,
@@ -25,17 +26,13 @@ export function PermissionCard({ request, onResolve }: {
       <p className="mt-2 text-xs text-fg/90">{request.title}</p>
       <div className="mt-3 flex flex-wrap gap-2">
         {request.options.map((option) => (
-          <button
+          <Button
             key={option.id}
-            onClick={() => onResolve(option.kind)}
-            className={
-              option.kind.startsWith('reject')
-                ? 'rounded-lg border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:border-danger/50 hover:text-danger'
-                : 'rounded-lg bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/25'
-            }
-          >
-            {option.name}
-          </button>
+            size="sm"
+            variant={option.kind.startsWith('reject') ? 'secondary' : 'primary'}
+            label={option.name}
+            clickAction={() => onResolve(option.kind)}
+          />
         ))}
       </div>
     </div>

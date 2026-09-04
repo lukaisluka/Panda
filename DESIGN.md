@@ -96,6 +96,49 @@ ConnectPanel 里一个**迁移前就存在**的 flex 挤压问题放大成显眼
   爬到了 astryx-base 之上（症状：按钮丢 padding、输入框卡片丢边框，
   且全页一致地静默失效）。
 
+## 组件约定（Phase 2）
+
+Phase 2 起交互原语一律用 Astryx 组件，不再手写按钮/输入框 utility 串。
+
+**已迁移表面与组件**：
+
+| 表面 | 组件 |
+| --- | --- |
+| ConnectPanel | `TextInput`（端点/路径/命名）、`Selector`（工作区）、`Button`、`Spinner`、`StatusDot` |
+| Composer | `IconButton`（附件 ghost / 发送 primary / 停止 destructive） |
+| ToolCallCard | `Badge`（等待批准 warning / 执行中 neutral）、`Spinner`；披露行保持定制（见下） |
+| PermissionCard | `Button`（允许 primary / 拒绝 secondary） |
+| Sidebar | `StatusDot`（success/error/neutral + `isPulsing`）、`IconButton`（悬浮操作） |
+| StatusBar | `Spinner`、`StatusDot`；上下文用量条保持定制（见下） |
+
+**API 约定**：
+
+- `label` 必填（无障碍名）；紧凑面板里配 `isLabelHidden`，不要省略 label。
+- 提示文本用组件的 `tooltip` / `labelTooltip` prop——BaseProps 有意不透传
+  原生 `title`（`spellCheck` 同理，URL/路径字段失去 spellCheck=false 是已知代价）。
+- 事件用 `clickAction` / `onChange(value, e)`（值优先签名），不是原生
+  `onClick` / `onChange(event)`。
+- 组件把状态反射到 `data-variant` / `data-size`，测试与探针优先用它。
+- 尺寸：matcha 主题下 `size="sm"` 的 Button 渲染为 36px 胶囊——这是主题级
+  设计决定，全局一致即接受；不要用 utility 去改组件内部几何。
+
+**有意保持定制的部分**（迁移到组件会跟设计打架）：
+
+- **Composer 输入区**：圆角卡片本身就是输入框（focus-within 边框是焦点
+  暗示），`TextArea` 自带边框/label 会形成双框。原生 textarea + 定制外壳保留。
+- **ToolCallCard 披露行**：摘要行（图标+标题+diff 统计+状态徽章+chevron
+  编排）就是触发器；`Collapsible` 自带 trigger 样式与自动 chevron 会叠加。
+  受控 open 状态与自动展开/收起编排保持自有实现。
+- **DiffView 表格**：双行号 + shiki token + 词级高亮是内容型组件，无对应
+  Astryx 原语。
+- **StatusBar 上下文用量条**：4px 发丝线指示器；`ProgressBar` 是 16px 表单
+  级组件（带 label 语义），不是同一物种。
+- **附件缩略图**：错误态 + 悬浮移除的定制 tile。
+
+**Phase 1 遗留修复**：ConnectPanel 工作区选择器换成 `Selector` 后，
+`w-28` 被 `w-full` 压制导致路径输入框只有 ~22px 的老 bug 结构性消失
+（Selector 自管几何，外层只给固定宽度包装 div）。
+
 ## 保留的定制 CSS（有意为之）
 
 Astryx 不是全盘替代；以下保持在 `src/index.css` 的纯 CSS 里，颜色一律走 token：
