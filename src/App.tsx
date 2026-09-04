@@ -103,6 +103,7 @@ export default function App() {
           onStop={live.cancel}
           modes={doc.modes}
           onSetMode={setMode}
+          commands={doc.availableCommands}
         />
       </main>
     </div>

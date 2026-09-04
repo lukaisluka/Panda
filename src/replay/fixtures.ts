@@ -1,4 +1,5 @@
 import type {
+  AcpAvailableCommand,
   AcpContentBlock,
   AcpSessionModeState,
   AcpSessionUpdate,
@@ -31,6 +32,18 @@ export const DEMO_MODES: AcpSessionModeState = {
     { id: 'accept_everything', name: 'Accept everything', description: '全自动,不请求任何权限' },
   ],
 };
+
+/**
+ * The demo agent's slash commands — what the composer's `/` autocomplete
+ * offers in replay. Mirrors the narrative: /status reports working-tree
+ * state, /tag cuts a release tag, /ci pushes and starts CI (the url-mode
+ * authorization beat hands the same job to the agent).
+ */
+const DEMO_COMMANDS: AcpAvailableCommand[] = [
+  { name: 'status', description: '查看当前分支与改动状态', inputHint: null },
+  { name: 'tag', description: '给当前分支打发布 tag', inputHint: 'tag 版本号,如 v1.3.0' },
+  { name: 'ci', description: '推送分支并触发 CI', inputHint: '留空使用默认 workflow' },
+];
 
 const text = (t: string): AcpContentBlock => ({ type: 'text', text: t });
 
@@ -457,6 +470,20 @@ function elicitBranch(response: ElicitationResponse): ReplayStep[] {
 
 export function mainScenario(): ReplayStep[] {
   return [
+    // Slash commands arrive before any turn: the agent advertises its list
+    // up front, so typing `/` in the composer autocompletes from step one.
+    updateStep({ sessionUpdate: 'commands_update', commands: DEMO_COMMANDS }, 300),
+    // End-to-end command run: the user types /status and the command goes
+    // over as a plain text prompt — the agent recognizes the prefix itself.
+    updateStep({ sessionUpdate: 'user_message', content: [text('/status')] }, 400),
+    statusStep('running', 200),
+    ...streamText(
+      'agent_message_chunk',
+      'msg-status',
+      '分支 `auth-refactor` 干净——没有未提交改动，上次 CI 全绿（3 passed）。要动手的话直接说。',
+      { firstMs: 400, chunk: 6, gapMs: 30 },
+    ),
+    statusStep('idle', 250),
     updateStep(
       {
         sessionUpdate: 'user_message',

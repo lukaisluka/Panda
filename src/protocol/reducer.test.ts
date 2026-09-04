@@ -775,3 +775,29 @@ describe('reducer elicitation lifecycle (url mode)', () => {
     warnSpy.mockRestore();
   });
 });
+
+describe('reducer slash commands (available_commands_update)', () => {
+  const list = (names: string[]) =>
+    names.map((name) => ({ name, description: `${name} 描述`, inputHint: null }));
+
+  it('records the list and replaces it wholesale on the next update', () => {
+    const first = fold([{ sessionUpdate: 'commands_update', commands: list(['status', 'tag']) }]);
+    expect(first.availableCommands).toEqual(list(['status', 'tag']));
+
+    const replaced = applyUpdate(first, {
+      sessionUpdate: 'commands_update',
+      commands: list(['ci']),
+    });
+    expect(replaced.availableCommands).toEqual(list(['ci']));
+  });
+
+  it('an empty update clears the list (full-replacement semantics)', () => {
+    const doc = fold([{ sessionUpdate: 'commands_update', commands: list(['status']) }]);
+    expect(applyUpdate(doc, { sessionUpdate: 'commands_update', commands: [] }).availableCommands).toEqual([]);
+  });
+
+  it('commands_update never opens a turn', () => {
+    const doc = fold([{ sessionUpdate: 'commands_update', commands: list(['status']) }]);
+    expect(doc.turns).toHaveLength(0);
+  });
+});
