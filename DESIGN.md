@@ -240,9 +240,11 @@ Astryx 不是全盘替代；以下保持在 `src/index.css` 的纯 CSS 里，颜
   组件化时一并解决。
 - 暗色模式首次存在：所有面在两种模式下过一遍是 Phase 1 验收项。
 - diff 底色从固定淡绿/淡红变为 `success-muted`/`error-muted`（带透明度）。
-- **已知欠账**：shiki 高亮固定 `vitesse-light` 单主题（`src/highlight/
-  highlighter.ts`），暗色模式下代码块 token 对比度偏低——Phase 3 之前就
-  如此，双主题（`light-dark()` 切换或 dual-theme 输出）是独立跟进项。
+- **shiki 双主题（#40 已修）**：高亮一次产出 vitesse-light/dark 两套
+  token 色，`TokenSpan.color` 直接是 CSS 原生 `light-dark(a, b)` 字符串，
+  由 `<Theme>` 的 color-scheme 驱动翻转——与全部 Astryx token 同一机制，
+  无 JS 模式感知、缓存 key 不含模式；CodeBlock/DiffView 渲染处
+  `style={{ color }}` 零改动。
 
 ## 迁移地图（#32）
 
