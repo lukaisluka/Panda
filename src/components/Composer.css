@@ -92,13 +92,20 @@
   gap: 8px;
 }
 
-/* Bottom row inside the card: the mode picker sits bottom-left (ZCode-style
- * input footer). Rendered only when the session has mode state — a
- * picker-less agent keeps the card at its one-row height. */
+/* The card's bottom row (ZCode-style input footer): attachments + mode
+ * picker bottom-left, send/stop bottom-right. Always rendered — the send
+ * button lives here; a picker-less agent simply shows no pill. */
 .composer-footer {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding-top: 8px;
+}
+
+.composer-footer-lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .composer-file-input {

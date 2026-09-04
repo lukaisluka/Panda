@@ -125,21 +125,6 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
                 e.target.value = '';
               }}
             />
-            <IconButton
-              variant="ghost"
-              size="sm"
-              icon={<Paperclip size={16} />}
-              label="添加图片"
-              isDisabled={attachmentDisabled}
-              tooltip={
-                !canAttachImages
-                  ? '当前 agent 未声明图片输入能力'
-                  : disabled
-                    ? '当前不可添加图片'
-                    : '添加图片'
-              }
-              clickAction={() => fileInputRef.current?.click()}
-            />
             <textarea
               rows={1}
               value={value}
@@ -150,6 +135,26 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
               onPaste={handlePaste}
               className="focus-outline-none composer-input"
             />
+          </div>
+          <div className="composer-footer">
+            <div className="composer-footer-lead">
+              <IconButton
+                variant="ghost"
+                size="sm"
+                icon={<Paperclip size={16} />}
+                label="添加图片"
+                isDisabled={attachmentDisabled}
+                tooltip={
+                  !canAttachImages
+                    ? '当前 agent 未声明图片输入能力'
+                    : disabled
+                      ? '当前不可添加图片'
+                      : '添加图片'
+                }
+                clickAction={() => fileInputRef.current?.click()}
+              />
+              {modes && <ModePicker modes={modes} onSetMode={onSetMode} />}
+            </div>
             {stopping ? (
               <IconButton
                 variant="destructive"
@@ -169,11 +174,6 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
               />
             )}
           </div>
-          {modes && (
-            <div className="composer-footer">
-              <ModePicker modes={modes} onSetMode={onSetMode} />
-            </div>
-          )}
         </div>
         {attachmentError ? (
           <p className="composer-hint composer-hint--danger">{attachmentError}</p>
