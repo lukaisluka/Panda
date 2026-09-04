@@ -1,12 +1,29 @@
-import { StrictMode } from 'react';
+import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Theme } from '@astryxdesign/core/theme';
-import { matchaTheme } from '@astryxdesign/theme-matcha/built';
 import './index.css';
+import './fonts.css';
 import App from './App';
 import { AstryxSmoke } from './dev/AstryxSmoke';
+import { loadThemeId, resolveTheme, subscribeTheme } from './theme';
 
 const root = createRoot(document.getElementById('root')!);
+
+/** Runtime theme switch (#32 Phase 4): storage is the single source of truth
+ * (same contract as profiles.ts) — the sidebar picker saves, this anchor and
+ * the picker both re-render off the subscription. Built theme CSS ships in
+ * index.css for all seven; <Theme> only anchors data-astryx-theme and the
+ * color-scheme mode (gothic has no light tokens — forced dark). */
+function ThemeRoot() {
+  const [themeId, setThemeId] = useState(loadThemeId);
+  useEffect(() => subscribeTheme(setThemeId), []);
+  const choice = resolveTheme(themeId);
+  return (
+    <Theme theme={choice.theme} mode={choice.darkOnly ? 'dark' : 'system'}>
+      <App />
+    </Theme>
+  );
+}
 
 // Dev-only foundation check (#32): open with #/astryx-smoke to verify the
 // cascade layers survived a change; the page self-checks and prints PASS/FAIL.
@@ -19,11 +36,7 @@ if (import.meta.env.DEV && window.location.hash.replace(/^#\/?/, '') === 'astryx
 } else {
   root.render(
     <StrictMode>
-      {/* Built theme: styles come from theme.css, <Theme> only anchors the
-          data-astryx-theme scope and owns the color-scheme / light-dark mode. */}
-      <Theme theme={matchaTheme}>
-        <App />
-      </Theme>
+      <ThemeRoot />
     </StrictMode>,
   );
 }

@@ -5,7 +5,16 @@
  * relied on). */
 @import "@astryxdesign/core/reset.css";
 @import "@astryxdesign/core/astryx.css";
+/* All seven official themes (#32 Phase 4): each theme.css is @scope'd under
+ * its own data-astryx-theme attribute, so they coexist and only the one
+ * <Theme> anchors is live. Selection is a runtime user choice (src/theme.ts). */
+@import "@astryxdesign/theme-neutral/theme.css";
 @import "@astryxdesign/theme-matcha/theme.css";
+@import "@astryxdesign/theme-stone/theme.css";
+@import "@astryxdesign/theme-butter/theme.css";
+@import "@astryxdesign/theme-chocolate/theme.css";
+@import "@astryxdesign/theme-gothic/theme.css";
+@import "@astryxdesign/theme-y2k/theme.css";
 
 /* Panda token aliases onto Astryx system tokens (#32 Phase 1). Values resolve
  * at runtime, so the matcha theme and light/dark switching flow through every

@@ -1,0 +1,51 @@
+/* Webfonts for the seven Astryx themes (#32 Phase 4). Each theme's theme.css
+ * declares its own font-family stacks; these @fontsource @imports ship the
+ * real files so no selected theme falls back to the system font.
+ *
+ * Static (non-variable) packages on purpose: their @font-face family names
+ * match the theme stacks exactly ("Figtree" — the variable packages register
+ * "Figtree Variable" and would never match). Browsers only fetch the
+ * unicode-range subsets they actually render (latin in practice); weights
+ * follow what Panda's CSS and the Astryx type scale use — normal, medium,
+ * semibold (Playwrite US Trad is a single-weight design; semibold
+ * synthesizes). neutral deliberately ships no mono font: its code stack is
+ * the system monospace, a theme-level design choice we keep. */
+
+/* matcha — DM Sans body, Playwrite US Trad headings */
+@import "@fontsource/dm-sans/400.css";
+@import "@fontsource/dm-sans/500.css";
+@import "@fontsource/dm-sans/600.css";
+@import "@fontsource/playwrite-us-trad/400.css";
+
+/* neutral + stone — Figtree body (stone pairs it with Montserrat headings) */
+@import "@fontsource/figtree/400.css";
+@import "@fontsource/figtree/500.css";
+@import "@fontsource/figtree/600.css";
+@import "@fontsource/montserrat/400.css";
+@import "@fontsource/montserrat/600.css";
+
+/* butter — Outfit body/headings */
+@import "@fontsource/outfit/400.css";
+@import "@fontsource/outfit/500.css";
+@import "@fontsource/outfit/600.css";
+
+/* chocolate — Albert Sans body, Fraunces headings */
+@import "@fontsource/albert-sans/400.css";
+@import "@fontsource/albert-sans/500.css";
+@import "@fontsource/albert-sans/600.css";
+@import "@fontsource/fraunces/400.css";
+@import "@fontsource/fraunces/600.css";
+
+/* gothic — Fustat body/headings */
+@import "@fontsource/fustat/400.css";
+@import "@fontsource/fustat/500.css";
+@import "@fontsource/fustat/600.css";
+
+/* y2k — Poppins body/headings */
+@import "@fontsource/poppins/400.css";
+@import "@fontsource/poppins/500.css";
+@import "@fontsource/poppins/600.css";
+
+/* code — JetBrains Mono for every theme that names it (all but neutral) */
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/600.css";

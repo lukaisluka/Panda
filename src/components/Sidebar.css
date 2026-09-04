@@ -259,6 +259,22 @@
   margin-top: auto;
 }
 
+/* Theme picker (#32 Phase 4): sits between the connect panel and the footer
+ * line. The wrapper div stretches the Selector to the row's remaining width
+ * (same pattern as the connect panel's fixed-width kind selector). */
+.sidebar-theme-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--color-border);
+  padding: 10px 14px;
+}
+
+.sidebar-theme-select {
+  flex: 1;
+  min-width: 0;
+}
+
 .sidebar-footer {
   display: flex;
   align-items: center;

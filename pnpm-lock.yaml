@@ -14,9 +14,57 @@ importers:
       '@astryxdesign/core':
         specifier: 0.5.2
         version: 0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@astryxdesign/theme-butter':
+        specifier: ^0.5.2
+        version: 0.5.2(@astryxdesign/core@0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+      '@astryxdesign/theme-chocolate':
+        specifier: ^0.5.2
+        version: 0.5.2(@astryxdesign/core@0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+      '@astryxdesign/theme-gothic':
+        specifier: ^0.5.2
+        version: 0.5.2(@astryxdesign/core@0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
       '@astryxdesign/theme-matcha':
         specifier: 0.5.2
         version: 0.5.2(@astryxdesign/core@0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+      '@astryxdesign/theme-neutral':
+        specifier: ^0.5.2
+        version: 0.5.2(@astryxdesign/core@0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+      '@astryxdesign/theme-stone':
+        specifier: ^0.5.2
+        version: 0.5.2(@astryxdesign/core@0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+      '@astryxdesign/theme-y2k':
+        specifier: ^0.5.2
+        version: 0.5.2(@astryxdesign/core@0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+      '@fontsource/albert-sans':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/dm-sans':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/figtree':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/fraunces':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/fustat':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/jetbrains-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/montserrat':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/outfit':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/playwrite-us-trad':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/poppins':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@stylexjs/stylex':
         specifier: 0.19.0
         version: 0.19.0
@@ -87,11 +135,77 @@ packages:
       react: '>=19.0.0'
       react-dom: '>=19.0.0'
 
+  '@astryxdesign/theme-butter@0.5.2':
+    resolution: {integrity: sha512-S8jKawbszihTiU1WRlo0KE4PSNANJM0/PFnHW2VhUaXj3SPMqo/I/CaFVIQ2dHqboLxGqoFKh/VcZpYnUFpmmw==}
+    peerDependencies:
+      '@astryxdesign/core': 0.5.2
+      react: '>=19'
+
+  '@astryxdesign/theme-chocolate@0.5.2':
+    resolution: {integrity: sha512-pnXddJBcNDN8rIxwNs9/Dnhk/hj7NNlRi6c25rWVhP6YwTg3hvcl/WPgyD724s9ApM6VPA7elpBurbVGgHRcEQ==}
+    peerDependencies:
+      '@astryxdesign/core': 0.5.2
+      react: '>=19'
+
+  '@astryxdesign/theme-gothic@0.5.2':
+    resolution: {integrity: sha512-ORgQey0OlIgVZP9N+iwqGzoGr+FvbbqD+YsRbmzadlXTqkQKN/ZoozTW2GeS+xdLEryOrici+d7hHkVSMhd+tg==}
+    peerDependencies:
+      '@astryxdesign/core': 0.5.2
+      react: '>=19'
+
   '@astryxdesign/theme-matcha@0.5.2':
     resolution: {integrity: sha512-pWZoAeUt4gmSTjd8v4+pMQQaxWXjavudIQ9LyP7BqFJRklObAloeil4sG6ZAvlV9hCfy8TcjUSPgefCcYsrc1g==}
     peerDependencies:
       '@astryxdesign/core': 0.5.2
       react: '>=19'
+
+  '@astryxdesign/theme-neutral@0.5.2':
+    resolution: {integrity: sha512-eVCN+x6OdnQk5Zw3ksAgrIKhDiTzu+0oFi689jyf0TPzFrz50f5VT3OB4SHeGgShp4dzFDWPgz6GUFQda6kTHw==}
+    peerDependencies:
+      '@astryxdesign/core': 0.5.2
+      react: '>=19'
+
+  '@astryxdesign/theme-stone@0.5.2':
+    resolution: {integrity: sha512-qijUFvSmRNpXK0RVWpspCuRqYz/1vJyI8WPP6miHoVoShKXzi7B+hGr92DuUCFDcWxwzxAsY03IzLFEyIcpHyQ==}
+    peerDependencies:
+      '@astryxdesign/core': 0.5.2
+      react: '>=19'
+
+  '@astryxdesign/theme-y2k@0.5.2':
+    resolution: {integrity: sha512-FF4Vsgq6DpqdDulKk/Zr5+5a+zAs3WM8e8+PnLWqRBtaG+0C4AtdUogEqSJSf0w77fGlVMJDWvA56/kC69Q7LQ==}
+    peerDependencies:
+      '@astryxdesign/core': 0.5.2
+      react: '>=19'
+
+  '@fontsource/albert-sans@5.3.0':
+    resolution: {integrity: sha512-sxMOb01R+xYfFjc708tKJOElC7qhXyjvF3hWojhX1c+AzoFO18dnbh1hPEkblwvYsY+7Chrs08y80K72omSg7Q==}
+
+  '@fontsource/dm-sans@5.3.0':
+    resolution: {integrity: sha512-lYJtMXXO28q1z+yz+z8XKd0s4hXaa9QdkETzkyD760sidCv5heI86weYA0sx0Nc4pAMAQTUuyf4gO44cYKKS9g==}
+
+  '@fontsource/figtree@5.3.0':
+    resolution: {integrity: sha512-/iTcTXL1eRBGhvD7NN9dnKzXzWqDLVZVEUFI9xIxAC1G/hXU8tCyYeXCAuPOuvSYPInFUP7H6KLGgygmDfy1SA==}
+
+  '@fontsource/fraunces@5.3.0':
+    resolution: {integrity: sha512-LEHTOBiZufQzAvnAe2rZ8ZknbDS28Q9kzwb0L+gZJEmjLGr8hhZ/5NuHXwDuHBWhVXYoiGGXmrb0H6Ko/RrHTg==}
+
+  '@fontsource/fustat@5.3.0':
+    resolution: {integrity: sha512-eCnknmwDOyWWOW7d26TCKnMNIeNjV40cAEbH/Mxjitvvoz9cg3W3C5amc7iamJEWa6iFRYNCGT5BRkA54q1bhA==}
+
+  '@fontsource/jetbrains-mono@5.3.0':
+    resolution: {integrity: sha512-fqDfB5I9f1p1TV486aUgB9t8zP84P0O1FtQR5Ol9vjwPy+S+EIGlVYm1cvj2W5shcZMTg2nZFdVMoH5wFu8a1A==}
+
+  '@fontsource/montserrat@5.3.0':
+    resolution: {integrity: sha512-iQPDtZOnmM5ih4JBGaMSXisRap0ixb9bAUw2hDtY7EjVfaqiiNlKtVuJl9XclxUwtwMMHNcWXfQR6zI9x05+Tg==}
+
+  '@fontsource/outfit@5.3.0':
+    resolution: {integrity: sha512-0AVHzTTVJSxWDOxPKSfMeHhZeBFDU3cmgrcOb76ZEyhGo0+xgyG3GsLF3h9+X8w0IX7G4jzjJgFQEBiWdX6VgA==}
+
+  '@fontsource/playwrite-us-trad@5.3.0':
+    resolution: {integrity: sha512-wB79WztyA884OfCGO/Bx0qJoLcZkHh6CYAMVFkrx4UuPUxQBkMKPwGOeu3K3NpF4GpxSikL1H6HacZozphWpNQ==}
+
+  '@fontsource/poppins@5.3.0':
+    resolution: {integrity: sha512-cms1nM7U6SN8epIV1WMVOV8VsA645aSm3wHfzIQnkk188U341ThbJGSl2Sv54V29gnDbT2arMPfLzvVIIVCceQ==}
 
   '@formatjs/fast-memoize@3.1.7':
     resolution: {integrity: sha512-zXfhLpvA6T7+efdt9JLbBwZ00tT7NsBMDVnDu8rpHeNNv8KfRZAMo2gkG0k9lK/Nzc//3kJ9pImsfuJxk3KhUA==}
@@ -1131,11 +1245,67 @@ snapshots:
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
 
+  '@astryxdesign/theme-butter@0.5.2(@astryxdesign/core@0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)':
+    dependencies:
+      '@astryxdesign/core': 0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      lucide-react: 1.37.0(react@19.2.8)
+      react: 19.2.8
+
+  '@astryxdesign/theme-chocolate@0.5.2(@astryxdesign/core@0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)':
+    dependencies:
+      '@astryxdesign/core': 0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      lucide-react: 1.37.0(react@19.2.8)
+      react: 19.2.8
+
+  '@astryxdesign/theme-gothic@0.5.2(@astryxdesign/core@0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)':
+    dependencies:
+      '@astryxdesign/core': 0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      lucide-react: 1.37.0(react@19.2.8)
+      react: 19.2.8
+
   '@astryxdesign/theme-matcha@0.5.2(@astryxdesign/core@0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@astryxdesign/core': 0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       lucide-react: 1.37.0(react@19.2.8)
       react: 19.2.8
+
+  '@astryxdesign/theme-neutral@0.5.2(@astryxdesign/core@0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)':
+    dependencies:
+      '@astryxdesign/core': 0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      lucide-react: 1.37.0(react@19.2.8)
+      react: 19.2.8
+
+  '@astryxdesign/theme-stone@0.5.2(@astryxdesign/core@0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)':
+    dependencies:
+      '@astryxdesign/core': 0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      lucide-react: 1.37.0(react@19.2.8)
+      react: 19.2.8
+
+  '@astryxdesign/theme-y2k@0.5.2(@astryxdesign/core@0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)':
+    dependencies:
+      '@astryxdesign/core': 0.5.2(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      lucide-react: 1.37.0(react@19.2.8)
+      react: 19.2.8
+
+  '@fontsource/albert-sans@5.3.0': {}
+
+  '@fontsource/dm-sans@5.3.0': {}
+
+  '@fontsource/figtree@5.3.0': {}
+
+  '@fontsource/fraunces@5.3.0': {}
+
+  '@fontsource/fustat@5.3.0': {}
+
+  '@fontsource/jetbrains-mono@5.3.0': {}
+
+  '@fontsource/montserrat@5.3.0': {}
+
+  '@fontsource/outfit@5.3.0': {}
+
+  '@fontsource/playwrite-us-trad@5.3.0': {}
+
+  '@fontsource/poppins@5.3.0': {}
 
   '@formatjs/fast-memoize@3.1.7': {}
 
