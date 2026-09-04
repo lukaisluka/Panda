@@ -6,6 +6,11 @@ import type {
   SessionDocument,
   SessionStatus,
 } from './protocol/types';
+import {
+  PANDA_HOST_CAPABILITIES,
+  effectiveCapabilities,
+  type AgentCapabilityDeclarations,
+} from './capabilities';
 
 /**
  * Store keyed by (connectionId, sessionId) — ADR 0002's prerequisite for
@@ -45,14 +50,13 @@ export type SessionEntry = {
   updatedAt: string | null;
 };
 
-/** What the current agent advertised at initialize (v1 capability gates). */
-export type AgentCapabilityInfo = {
-  image: boolean;
-  loadSession: boolean;
-  list: boolean;
-  resume: boolean;
-  delete: boolean;
-};
+/**
+ * What the current agent advertised at initialize (v1 capability gates).
+ * An alias of the composition module's declarations type (issue #22): one
+ * canonical shape, so the five keys cannot drift between store and
+ * decision point.
+ */
+export type AgentCapabilityInfo = AgentCapabilityDeclarations;
 
 export type SessionMode = 'demo' | 'live';
 
@@ -640,6 +644,15 @@ export const useActiveConnection = () => usePanda((s) => activeConnectionState(s
 export const useActiveSessions = () => usePanda((s) => activeConnectionState(s).sessions);
 
 export const useActiveCapabilities = () => usePanda((s) => activeConnectionState(s).capabilities);
+
+/**
+ * Effective capabilities of the foreground connection (issue #22): the
+ * single decision point, composed per foreground slot. Verdicts are
+ * interned, so useShallow keeps this hook from re-rendering on unrelated
+ * store churn — it only fires when a verdict actually flips.
+ */
+export const useActiveEffectiveCapabilities = () =>
+  usePanda(useShallow((s) => effectiveCapabilities(activeConnectionState(s).capabilities, PANDA_HOST_CAPABILITIES)));
 
 /** The in-flight transactional switch on the active connection, or null. */
 export const useActiveSwitching = () => usePanda((s) => activeConnectionState(s).switching);

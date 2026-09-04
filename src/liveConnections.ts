@@ -182,17 +182,31 @@ export function __setPermissionPolicy(policy: PermissionPolicy | null): void {
 
 /**
  * Binds the policy's connection context (issue #22): the policy sees WHICH
- * connection and endpoint a permission belongs to. The url is read at
- * request time — it is only known once connect() has stored it.
+ * connection and endpoint a permission belongs to, read at request time —
+ * it is only known once connect() has stored it. The trace log here is the
+ * judgment's observability line: connection, request, verdict (the client's
+ * own log only knows the mechanics, not the connection).
  */
 function bindPolicyToConnection(
   connectionId: string,
 ): (request: RequestPermissionRequest) => PermissionDecision {
-  return (request) =>
-    activePermissionPolicy(request, {
-      connectionId,
-      url: usePanda.getState().connections[connectionId]?.connection.url ?? null,
-    });
+  return (request) => {
+    const slot = usePanda.getState().connections[connectionId];
+    const url = slot?.connection.url ?? null;
+    if (!url) {
+      // Permissions only arrive while a session lives, so the slot and its
+      // url must exist by then; missing means bookkeeping drifted — loud,
+      // or a policy misjudgment becomes undiagnosable.
+      console.warn(
+        `[panda/acp:${connectionId}] policy consult without a stored endpoint url — context degraded to null`,
+      );
+    }
+    const verdict = activePermissionPolicy(request, { connectionId, url });
+    console.info(
+      `[panda/acp:${connectionId}] permission ${request.toolCall.toolCallId} policy verdict: ${verdict}`,
+    );
+    return verdict;
+  };
 }
 
 /** Test seams: per-id overrides and a fallback for ids created after setup. */

@@ -26,27 +26,27 @@ describe('alwaysAskPolicy (issue #22)', () => {
 
 describe('denyResolution', () => {
   it('优先选 reject_once', () => {
-    const { wire, ui } = denyResolution(fullOffer.map((o) => ({ ...o })));
+    const { wire, record } = denyResolution(fullOffer.map((o) => ({ ...o })));
     expect(wire).toEqual({ outcome: { outcome: 'selected', optionId: 'reject-once' } });
-    expect(ui).toEqual({ outcome: 'denied-by-policy', kind: 'reject_once' });
+    expect(record).toEqual({ outcome: 'denied-by-policy', kind: 'reject_once' });
   });
 
   it('没有 reject_once 时退到 reject_always', () => {
-    const { wire, ui } = denyResolution([
+    const { wire, record } = denyResolution([
       { optionId: 'allow-once', kind: 'allow_once' },
       { optionId: 'reject-always', kind: 'reject_always' },
     ]);
     expect(wire).toEqual({ outcome: { outcome: 'selected', optionId: 'reject-always' } });
-    expect(ui).toEqual({ outcome: 'denied-by-policy', kind: 'reject_always' });
+    expect(record).toEqual({ outcome: 'denied-by-policy', kind: 'reject_always' });
   });
 
   it('agent 未提供任何拒绝选项 → cancelled——绝不选 allow 选项', () => {
-    const { wire, ui } = denyResolution([
+    const { wire, record } = denyResolution([
       { optionId: 'allow-once', kind: 'allow_once' },
       { optionId: 'allow-always', kind: 'allow_always' },
     ]);
     expect(wire).toEqual({ outcome: { outcome: 'cancelled' } });
-    expect(ui).toEqual({ outcome: 'denied-by-policy', kind: null });
+    expect(record).toEqual({ outcome: 'denied-by-policy', kind: null });
   });
 });
 

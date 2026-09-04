@@ -29,7 +29,7 @@ import type {
 import { markdownComponents } from './CodeBlock';
 import { DiffView } from './DiffView';
 import { MessageImage } from './MessageImage';
-import { DeniedPermissionCard, PermissionCard, type AttachedPermission } from './PermissionCard';
+import { AttachedPermissionCard, type AttachedPermission } from './PermissionCard';
 import { diffStats } from './diff-utils';
 
 const KIND_ICON: Record<AcpToolKind, LucideIcon> = {
@@ -166,11 +166,8 @@ export function ToolCallCard({ call, permission, onResolvePermission }: {
         </div>
       )}
 
-      {permission?.state === 'pending' && (
-        <PermissionCard request={permission.request} onResolve={onResolvePermission} />
-      )}
-      {permission?.state === 'denied' && (
-        <DeniedPermissionCard request={permission.request} response={permission.response} />
+      {permission && (
+        <AttachedPermissionCard permission={permission} onResolve={onResolvePermission} />
       )}
     </div>
   );

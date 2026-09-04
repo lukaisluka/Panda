@@ -71,6 +71,18 @@ export type EffectiveCapability = {
 };
 
 /**
+ * Interned verdicts: every judgment returns one of these shared instances.
+ * That makes composed maps shallow-stable, which the store's useShallow
+ * selector for effective capabilities depends on — never mutate a verdict.
+ */
+const VERDICTS: { available: EffectiveCapability } & Record<EffectiveCapabilityReason, EffectiveCapability> = {
+  available: { available: true, reason: null },
+  'unsupported-by-agent': { available: false, reason: 'unsupported-by-agent' },
+  'unavailable-on-host': { available: false, reason: 'unavailable-on-host' },
+  'blocked-by-policy': { available: false, reason: 'blocked-by-policy' },
+};
+
+/**
  * Capability-level policy (issue #22): the third dimension of the
  * composition, reserved. The MVP passes nothing (the default admits every
  * capability); a future capability-level policy supplies per-key verdicts
@@ -96,13 +108,13 @@ export function effectiveCapability(
   host: HostCapabilities,
   composition: CapabilityComposition = {},
 ): EffectiveCapability {
-  if (!agent[key]) return { available: false, reason: 'unsupported-by-agent' };
+  if (!agent[key]) return VERDICTS['unsupported-by-agent'];
   const shard = (composition.hostShards ?? CAPABILITY_HOST_SHARDS)[key];
-  if (shard !== null && !host[shard]) return { available: false, reason: 'unavailable-on-host' };
+  if (shard !== null && !host[shard]) return VERDICTS['unavailable-on-host'];
   if (composition.capabilityPolicy && !composition.capabilityPolicy(key)) {
-    return { available: false, reason: 'blocked-by-policy' };
+    return VERDICTS['blocked-by-policy'];
   }
-  return { available: true, reason: null };
+  return VERDICTS.available;
 }
 
 /** Every capability's verdict in one call — for whole-slot UI gating. */

@@ -492,6 +492,7 @@ describe('LiveAcpClient', () => {
       await askPermission(ctx, harnessRef.h!);
       return { stopReason: 'end_turn' };
     };
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
     const h = await setup({ onPrompt, clientPolicy: () => 'deny' });
     harnessRef.h = h;
 
@@ -514,6 +515,10 @@ describe('LiveAcpClient', () => {
         response: { outcome: 'denied-by-policy', kind: 'reject_once' },
       },
     ]);
+    // The denial itself is traceable (issue #22 trace-log requirement).
+    // Restore only after asserting — mockRestore also wipes the call history.
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('denied by host policy'));
+    infoSpy.mockRestore();
     // Nothing waits on the user: the turn never enters requires_action.
     expect(h.statuses).not.toContain('requires_action');
     h.closeAll();

@@ -6,14 +6,13 @@ import { StatusBar } from './components/StatusBar';
 import { Composer } from './components/Composer';
 import type { AttachedPermission } from './components/PermissionCard';
 import {
-  useActiveCapabilities,
   useActiveConnection,
   useActiveDoc,
+  useActiveEffectiveCapabilities,
   useActiveSessions,
   useActiveSwitching,
   usePanda,
 } from './store';
-import { effectiveCapability, PANDA_HOST_CAPABILITIES } from './capabilities';
 import { useReplaySession } from './useReplaySession';
 import { useLiveSession } from './useLiveSession';
 
@@ -23,7 +22,9 @@ export default function App() {
   const doc = useActiveDoc();
   const connection = useActiveConnection();
   const sessions = useActiveSessions();
-  const capabilities = useActiveCapabilities();
+  // The foreground connection's effective capabilities (issue #22) — the
+  // single decision point, never the raw agent declaration.
+  const effectiveCaps = useActiveEffectiveCapabilities();
   const switching = useActiveSwitching();
 
   const demo = useReplaySession();
@@ -131,10 +132,7 @@ export default function App() {
           onSend={send}
           disabled={composerDisabled}
           hint={hint}
-          canAttachImages={
-            !liveActive ||
-            effectiveCapability('image', capabilities, PANDA_HOST_CAPABILITIES).available
-          }
+          canAttachImages={!liveActive || effectiveCaps.image.available}
           canStop={liveActive && connected && doc.status === 'running'}
           onStop={live.cancel}
         />

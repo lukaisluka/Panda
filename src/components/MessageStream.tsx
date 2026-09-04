@@ -22,7 +22,7 @@ import { ThoughtBlock } from './ThoughtBlock';
 import { ToolCallCard } from './ToolCallCard';
 import { UserMessage } from './UserMessage';
 import { ContentColumn } from './ContentColumn';
-import { DeniedPermissionCard, PermissionCard, type AttachedPermission } from './PermissionCard';
+import { AttachedPermissionCard, type AttachedPermission } from './PermissionCard';
 import { UnsupportedBlock } from './UnsupportedBlock';
 
 /**
@@ -215,17 +215,10 @@ export function MessageStream({ doc, permissions, onResolvePermission }: {
           if (item.kind === 'permission') {
             return (
               <ContentColumn>
-                {item.permission.state === 'pending' ? (
-                  <PermissionCard
-                    request={item.permission.request}
-                    onResolve={(kind) => onResolvePermission(item.permission.request.toolCallId, kind)}
-                  />
-                ) : (
-                  <DeniedPermissionCard
-                    request={item.permission.request}
-                    response={item.permission.response}
-                  />
-                )}
+                <AttachedPermissionCard
+                  permission={item.permission}
+                  onResolve={(kind) => onResolvePermission(item.permission.request.toolCallId, kind)}
+                />
               </ContentColumn>
             );
           }

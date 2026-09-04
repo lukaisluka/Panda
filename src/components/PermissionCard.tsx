@@ -74,3 +74,19 @@ export function DeniedPermissionCard({ request, response }: {
     </div>
   );
 }
+
+/**
+ * An attached permission in either state (issue #22): pending waits for the
+ * user's answer, denied is the policy's terminal record. The one render
+ * point both attachment sites (tool-call card, standalone card) share.
+ */
+export function AttachedPermissionCard({ permission, onResolve }: {
+  permission: AttachedPermission;
+  onResolve: (kind: PermissionOptionKind) => void;
+}) {
+  return permission.state === 'pending' ? (
+    <PermissionCard request={permission.request} onResolve={onResolve} />
+  ) : (
+    <DeniedPermissionCard request={permission.request} response={permission.response} />
+  );
+}

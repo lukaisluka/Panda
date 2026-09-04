@@ -26,8 +26,8 @@ import {
   toAcpUpdates,
   toPermissionRequest,
 } from './wire';
-import { PANDA_HOST_CAPABILITIES, effectiveCapability, type CapabilityKey } from '../capabilities';
-import { denyResolution, type PermissionDecision } from '../policy';
+import { PANDA_HOST_CAPABILITIES, effectiveCapability, type AgentCapabilityDeclarations, type CapabilityKey, type EffectiveCapability } from '../capabilities';
+import { alwaysAskPolicy, denyResolution, UNKNOWN_POLICY_CONTEXT, type PermissionDecision } from '../policy';
 
 /**
  * Live ACP client (Phase 1+2): speaks v1 ACP over an injected `AcpTransport`
@@ -55,14 +55,10 @@ import { denyResolution, type PermissionDecision } from '../policy';
  * `connection.sessionId` / `activeSessionId` only move on commit.
  */
 
-/** Capability gates as advertised by the agent at initialize (v1). */
-export type AgentCaps = {
-  image: boolean;
-  loadSession: boolean;
-  list: boolean;
-  resume: boolean;
-  delete: boolean;
-};
+/** Capability gates as advertised by the agent at initialize (v1) — an alias
+ * of the composition module's declarations type (issue #22), so the five
+ * keys cannot drift between the client and the decision point. */
+export type AgentCaps = AgentCapabilityDeclarations;
 
 export type SessionSummary = {
   sessionId: string;
@@ -207,10 +203,10 @@ export class LiveAcpClient {
 
   constructor(handlers: LiveClientHandlers, options: LiveClientOptions = {}) {
     this.handlers = handlers;
-    // Mirrors alwaysAskPolicy (policy.ts) for this context-bound seam: the
-    // connection layer binds (connectionId, url) into injected policies, so
-    // the default needs no context at all.
-    this.policy = options.policy ?? (() => 'ask');
+    // Single-sourced default (policy.ts): the context-bound seam carries no
+    // connection identity, so the unknown context stands in — alwaysAskPolicy
+    // ignores it, and real policies arrive pre-bound by the connection layer.
+    this.policy = options.policy ?? ((request) => alwaysAskPolicy(request, UNKNOWN_POLICY_CONTEXT));
   }
 
   /**
@@ -482,12 +478,18 @@ export class LiveAcpClient {
       return;
     }
     // The execution path consumes the effective-capability decision point
-    // (issue #22), never the raw agent declaration.
-    if (
-      !this.can('image') &&
-      content.some((block) => block.type === 'image')
-    ) {
-      throw new Error('agent 未声明 promptCapabilities.image，拒绝发送图片');
+    // (issue #22), never the raw agent declaration; the message names the
+    // verdict's own reason, so it stays truthful if image ever gains a host
+    // shard or a capability policy.
+    const image = this.capability('image');
+    if (!image.available && content.some((block) => block.type === 'image')) {
+      const cause =
+        image.reason === 'unavailable-on-host'
+          ? '宿主不支持该能力'
+          : image.reason === 'blocked-by-policy'
+            ? '策略已禁止该能力'
+            : 'agent 未声明 promptCapabilities.image';
+      throw new Error(`${cause}，拒绝发送图片`);
     }
     const generation = this.connectionGeneration;
     // The reducer is the only path that opens a user turn — echo locally as
@@ -585,8 +587,12 @@ export class LiveAcpClient {
    * decision in this client — protocol method choice included — goes
    * through the single decision point, never the raw declaration.
    */
+  private capability(key: CapabilityKey): EffectiveCapability {
+    return effectiveCapability(key, this.capabilities, PANDA_HOST_CAPABILITIES);
+  }
+
   private can(key: CapabilityKey): boolean {
-    return effectiveCapability(key, this.capabilities, PANDA_HOST_CAPABILITIES).available;
+    return this.capability(key).available;
   }
 
   private async establishSession(connection: ClientConnection, cwd: string, generation: number): Promise<void> {
@@ -838,9 +844,9 @@ export class LiveAcpClient {
     // (traceable, explicitly marked 非用户决定) but no waiter registers and
     // the turn never enters requires_action: nothing waits on the user.
     if (this.policy(params) === 'deny') {
-      const { wire, ui } = denyResolution(params.options);
+      const { wire, record } = denyResolution(params.options);
       console.info(
-        `[panda/acp] permission ${key} denied by host policy — answered ${ui.kind ?? 'cancelled'}`,
+        `[panda/acp] permission ${key} denied by host policy — answered ${record.kind ?? 'cancelled'}`,
       );
       this.handlers.onUpdate({
         sessionUpdate: 'permission_requested',
@@ -849,7 +855,7 @@ export class LiveAcpClient {
       this.handlers.onUpdate({
         sessionUpdate: 'permission_resolved',
         toolCallId: params.toolCall.toolCallId,
-        response: ui,
+        response: record,
       });
       return Promise.resolve(wire);
     }

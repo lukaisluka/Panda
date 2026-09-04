@@ -70,6 +70,15 @@ describe('effectiveCapability (issue #22)', () => {
   it('现有五项能力均无宿主分片依赖', () => {
     expect(Object.values(CAPABILITY_HOST_SHARDS)).toEqual([null, null, null, null, null]);
   });
+
+  it('判定对象 intern：同 verdict 恒等——useShallow 选择器的稳定性契约', () => {
+    expect(effectiveCapability('image', declareAll, allShards)).toBe(
+      effectiveCapability('loadSession', declareAll, allShards),
+    );
+    expect(effectiveCapability('image', declareNone, allShards)).toBe(
+      effectiveCapability('loadSession', declareNone, allShards),
+    );
+  });
 });
 
 describe('effectiveCapabilities', () => {

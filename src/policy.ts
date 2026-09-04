@@ -35,15 +35,25 @@ export type PermissionPolicy = (
 export const alwaysAskPolicy: PermissionPolicy = () => 'ask';
 
 /**
+ * Context for policy calls made outside the connection layer (the client's
+ * default ask policy ignores it; an injected real policy always arrives
+ * pre-bound with a true context by the connection manager).
+ */
+export const UNKNOWN_POLICY_CONTEXT: PermissionPolicyContext = {
+  connectionId: '(unknown)',
+  url: null,
+};
+
+/**
  * Resolves a policy `deny` against the agent's offered options:
  * `reject_once` first, then `reject_always`; an agent offering neither
  * (malformed or hostile) is answered `cancelled` — a deny never selects an
- * allow option. Returns the wire outcome plus the document-facing response:
+ * allow option. Returns the wire outcome plus the document-facing record:
  * `denied-by-policy` carrying the reject kind used, or null when cancelled.
  */
 export function denyResolution(
   options: ReadonlyArray<{ optionId: string; kind: PermissionOptionKind }>,
-): { wire: RequestPermissionResponse; ui: Extract<PermissionResponse, { outcome: 'denied-by-policy' }> } {
+): { wire: RequestPermissionResponse; record: Extract<PermissionResponse, { outcome: 'denied-by-policy' }> } {
   const option =
     options.find((candidate) => candidate.kind === 'reject_once') ??
     options.find((candidate) => candidate.kind === 'reject_always') ??
@@ -51,11 +61,11 @@ export function denyResolution(
   if (!option) {
     return {
       wire: { outcome: { outcome: 'cancelled' } },
-      ui: { outcome: 'denied-by-policy', kind: null },
+      record: { outcome: 'denied-by-policy', kind: null },
     };
   }
   return {
     wire: { outcome: { outcome: 'selected', optionId: option.optionId } },
-    ui: { outcome: 'denied-by-policy', kind: option.kind },
+    record: { outcome: 'denied-by-policy', kind: option.kind },
   };
 }
