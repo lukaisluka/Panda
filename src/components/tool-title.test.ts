@@ -29,4 +29,16 @@ describe('settledToolTitle', () => {
     expect(settledToolTitle('Editing src/a.ts', 'in_progress')).toBe('Editing src/a.ts');
     expect(settledToolTitle('Thinking…', 'pending')).toBe('Thinking…');
   });
+
+  it('gives empty-title think calls their kind default', () => {
+    expect(settledToolTitle('', 'in_progress', 'think')).toBe('Thinking…');
+    expect(settledToolTitle('', 'pending', 'think')).toBe('Thinking…');
+    expect(settledToolTitle('', 'completed', 'think')).toBe('Thought');
+    expect(settledToolTitle('', 'failed', 'think')).toBe('Thought');
+  });
+
+  it('leaves empty titles of other kinds empty', () => {
+    expect(settledToolTitle('', 'completed', 'read')).toBe('');
+    expect(settledToolTitle('', 'in_progress')).toBe('');
+  });
 });

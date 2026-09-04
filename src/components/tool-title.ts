@@ -42,7 +42,21 @@ function matchCase(source: string, replacement: string): string {
 }
 
 /** Returns the display title for a tool call in the given status. */
-export function settledToolTitle(title: string, status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled'): string {
+export function settledToolTitle(
+  title: string,
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled',
+  kind?: string,
+): string {
+  if (!title) {
+    // deepagents' think tool streams an EMPTY title — without a fallback the
+    // card renders icon-only. Only think gets a kind default: its two labels
+    // are unambiguous, while every other kind's phrasing is the agent's to
+    // choose.
+    if (kind === 'think') {
+      return status === 'completed' || status === 'failed' ? 'Thought' : 'Thinking…';
+    }
+    return title;
+  }
   if (status !== 'completed' && status !== 'failed') return title;
   const stripped = stripEllipsis(title);
   const [first, ...rest] = stripped.split(' ');

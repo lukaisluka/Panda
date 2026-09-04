@@ -93,8 +93,9 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
   const Icon = KIND_ICON[call.kind] ?? Wrench;
   const path = call.locations[0]?.path;
   // Progressive → settled verb once the call ends ("Editing x" → "Edit x");
-  // protocol title is untouched — this is display-only.
-  const displayTitle = settledToolTitle(call.title, call.status);
+  // empty think titles get their kind default ("Thinking…"/"Thought").
+  // Protocol title is untouched — this is display-only.
+  const displayTitle = settledToolTitle(call.title, call.status, call.kind);
   const diffPart = call.content.find((c): c is Extract<typeof c, { type: 'diff' }> => c.type === 'diff');
   const stats = useMemo(
     () => (diffPart ? diffStats(diffPart.oldText, diffPart.newText) : null),
