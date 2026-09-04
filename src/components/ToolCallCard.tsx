@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Badge } from '@astryxdesign/core/Badge';
+import { Spinner } from '@astryxdesign/core/Spinner';
 import {
   ArrowRightLeft,
   Brain,
@@ -8,7 +10,6 @@ import {
   FilePen,
   FileText,
   Globe,
-  Loader2,
   Repeat,
   Search,
   ShieldAlert,
@@ -49,17 +50,9 @@ const KIND_ICON: Record<AcpToolKind, LucideIcon> = {
 function StatusBadge({ status }: { status: ToolCallStatus }) {
   switch (status) {
     case 'pending':
-      return (
-        <span className="flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-warn">
-          <ShieldAlert size={12} /> 等待批准
-        </span>
-      );
+      return <Badge variant="warning" icon={<ShieldAlert size={12} />} label="等待批准" />;
     case 'in_progress':
-      return (
-        <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted">
-          <Loader2 size={12} className="animate-spin text-accent" /> 执行中
-        </span>
-      );
+      return <Badge variant="neutral" icon={<Spinner size="sm" />} label="执行中" />;
     case 'completed':
       return <Check size={14} className="shrink-0 text-accent" />;
     case 'failed':
@@ -161,7 +154,7 @@ export function ToolCallCard({ call, permission, onResolvePermission }: {
           })}
           {call.status === 'in_progress' && call.content.length === 0 && (
             <div className="flex items-center gap-2 px-1 py-0.5 text-xs text-faint">
-              <Loader2 size={12} className="animate-spin" /> 等待输出…
+              <Spinner size="sm" /> 等待输出…
             </div>
           )}
         </div>

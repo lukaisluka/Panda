@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { ArrowUp, Paperclip, Square, X } from 'lucide-react';
+import { IconButton } from '@astryxdesign/core/IconButton';
 import {
   buildPromptContent,
   classifyAttachments,
@@ -125,22 +126,21 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
                 e.target.value = '';
               }}
             />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={attachmentDisabled}
-              title={
+            <IconButton
+              variant="ghost"
+              size="sm"
+              icon={<Paperclip size={16} />}
+              label="添加图片"
+              isDisabled={attachmentDisabled}
+              tooltip={
                 !canAttachImages
                   ? '当前 agent 未声明图片输入能力'
                   : disabled
                     ? '当前不可添加图片'
                     : '添加图片'
               }
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-faint transition-colors enabled:hover:bg-raised enabled:hover:text-muted disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="添加图片"
-            >
-              <Paperclip size={16} />
-            </button>
+              clickAction={() => fileInputRef.current?.click()}
+            />
             <textarea
               rows={1}
               value={value}
@@ -152,26 +152,22 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
               className="focus-outline-none max-h-40 flex-1 resize-none bg-transparent py-1.5 text-[13px] leading-[1.55] outline-none placeholder:text-faint"
             />
             {stopping ? (
-              <button
-                onClick={onStop}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-danger text-bg transition-colors hover:brightness-110"
-                aria-label="停止"
-              >
-                <Square size={11} strokeWidth={3} />
-              </button>
+              <IconButton
+                variant="destructive"
+                size="sm"
+                icon={<Square size={11} strokeWidth={3} />}
+                label="停止"
+                clickAction={() => onStop?.()}
+              />
             ) : (
-              <button
-                onClick={submit}
-                disabled={!canSend}
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
-                  canSend
-                    ? 'bg-accent text-bg hover:brightness-110'
-                    : 'bg-raised text-faint'
-                }`}
-                aria-label="发送"
-              >
-                <ArrowUp size={16} strokeWidth={2.5} />
-              </button>
+              <IconButton
+                variant="primary"
+                size="sm"
+                icon={<ArrowUp size={16} strokeWidth={2.5} />}
+                label="发送"
+                isDisabled={!canSend}
+                clickAction={submit}
+              />
             )}
           </div>
         </div>

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { IconButton } from '@astryxdesign/core/IconButton';
+import { Spinner } from '@astryxdesign/core/Spinner';
+import { StatusDot } from '@astryxdesign/core/StatusDot';
 import {
   Bot,
-  Loader2,
   MessagesSquare,
   Plus,
   PlugZap,
@@ -86,38 +88,39 @@ export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }:
       <div className="flex items-center gap-2.5 px-5 py-5 text-[15px] font-semibold tracking-tight">
         <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-raised text-base">🐼</span>
         Panda
-        <button
-          type="button"
-          className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-raised hover:text-fg md:hidden"
-          aria-label="关闭导航"
-          onClick={onMobileClose}
-        >
-          <X size={16} />
-        </button>
+        <span className="ml-auto md:hidden">
+          <IconButton
+            variant="ghost"
+            size="sm"
+            icon={<X size={16} />}
+            label="关闭导航"
+            clickAction={onMobileClose}
+          />
+        </span>
       </div>
 
       <div className="flex items-center justify-between px-5 pb-2">
         <span className="text-[11px] font-medium uppercase tracking-wider text-faint">
           Sessions
         </span>
-        <button
-          onClick={() => {
-            if (foregroundCwd) live.newSession(foregroundCwd);
-            onMobileClose();
-          }}
-          disabled={!liveMode || !foregroundConnected || !foregroundCwd || foregroundBusy}
-          className="flex h-5 w-5 items-center justify-center rounded text-faint transition-colors enabled:hover:bg-raised enabled:hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
-          aria-label="新建会话"
-          title={
+        <IconButton
+          variant="ghost"
+          size="sm"
+          icon={<Plus size={13} />}
+          label="新建会话"
+          isDisabled={!liveMode || !foregroundConnected || !foregroundCwd || foregroundBusy}
+          tooltip={
             liveMode && foregroundConnected && foregroundCwd && !foregroundBusy
               ? '在前台连接新建会话（session/new）'
               : foregroundBusy
                 ? '等待当前回合或切换完成'
                 : '连接 agent 后可新建会话'
           }
-        >
-          <Plus size={13} />
-        </button>
+          clickAction={() => {
+            if (foregroundCwd) live.newSession(foregroundCwd);
+            onMobileClose();
+          }}
+        />
       </div>
       <div className="px-3">
         {!liveMode && (
@@ -185,20 +188,20 @@ export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }:
   );
 }
 
-/** Status dot + spinner per connection status; running overlays a pulse. */
-function StatusDot({ status, running }: { status: ConnectionStatus; running: boolean }) {
+/** Astryx StatusDot per connection status; running overlays a pulse. */
+function SlotStatusDot({ status, running }: { status: ConnectionStatus; running: boolean }) {
   if (status === 'connecting') {
-    return <Loader2 size={12} className="shrink-0 animate-spin text-accent" />;
+    return <Spinner size="sm" />;
   }
-  const color =
-    status === 'connected'
-      ? running
-        ? 'bg-accent animate-pulse'
-        : 'bg-accent/70'
-      : status === 'error'
-        ? 'bg-danger'
-        : 'bg-faint';
-  return <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${color}`} />;
+  if (status === 'error') {
+    return <StatusDot variant="error" label="连接错误" />;
+  }
+  if (status === 'connected') {
+    return running
+      ? <StatusDot variant="accent" isPulsing label="运行中" />
+      : <StatusDot variant="success" label="已连接" />;
+  }
+  return <StatusDot variant="neutral" label="未连接" />;
 }
 
 /** One connection's group: header (status, indicators, hover actions) + sessions. */
@@ -242,7 +245,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
             isActiveConnection ? 'text-fg' : 'text-fg/70 hover:bg-raised/60 hover:text-fg/90'
           } ${connected ? '' : 'opacity-75'}`}
         >
-          <StatusDot status={status} running={running} />
+          <SlotStatusDot status={status} running={running} />
           <span className="truncate font-medium">{title}</span>
           {slot.connection.agentName && (
             <span className="truncate text-[11px] text-faint">{slot.connection.agentName}</span>
@@ -252,39 +255,34 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
                 the foreground slot's issues are in plain sight (permission
                 card, error text in the connect panel). */}
             {attention && !isActiveConnection && (
-              <span
-                className="h-1.5 w-1.5 rounded-full bg-danger"
-                title="需要关注：未读完成 / 权限待处理 / 连接错误"
-              />
+              <StatusDot variant="error" label="需要关注" tooltip="需要关注：未读完成 / 权限待处理 / 连接错误" />
             )}
           </span>
         </button>
         <div className="absolute right-1 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 group-hover:flex">
           {(connected || status === 'connecting') && (
-            <button
-              type="button"
-              onClick={() => live.disconnect(connectionId)}
-              className="flex h-6 w-6 items-center justify-center rounded text-faint transition-colors hover:text-fg"
-              aria-label="断开连接"
-              title="断开（保留会话槽，可重连）"
-            >
-              <Unplug size={12} />
-            </button>
+            <IconButton
+              variant="ghost"
+              size="sm"
+              icon={<Unplug size={12} />}
+              label="断开连接"
+              tooltip="断开（保留会话槽，可重连）"
+              clickAction={() => live.disconnect(connectionId)}
+            />
           )}
-          <button
-            type="button"
-            onClick={() => {
+          <IconButton
+            variant="ghost"
+            size="sm"
+            icon={<Trash2 size={12} />}
+            label="移除连接"
+            tooltip="移除（断开并清除该连接的本地会话文档）"
+            clickAction={() => {
               const label = profile?.name ?? slot.connection.url ?? connectionId;
               if (window.confirm(`移除连接「${label}」？其本地会话记录将被清除（按端点记忆的会话列表保留）。`)) {
                 live.remove(connectionId);
               }
             }}
-            className="flex h-6 w-6 items-center justify-center rounded text-faint transition-colors hover:text-danger"
-            aria-label="移除连接"
-            title="移除（断开并清除该连接的本地会话文档）"
-          >
-            <Trash2 size={12} />
-          </button>
+          />
         </div>
       </div>
       {ordered.length > 0 && (
@@ -337,14 +335,16 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
                   <span className="truncate">{label}</span>
                 </button>
                 {canDelete.available && connected && !foregroundSession && !busy && (
-                  <button
-                    onClick={() => live.deleteSession(connectionId, entry.sessionId)}
-                    className="absolute right-1.5 top-1/2 hidden h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-faint transition-colors hover:text-danger group-hover/s:flex"
-                    aria-label="删除会话"
-                    title="删除会话（session/delete）"
-                  >
-                    <Trash2 size={12} />
-                  </button>
+                  <span className="absolute right-1 top-1/2 hidden -translate-y-1/2 group-hover/s:block">
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      icon={<Trash2 size={12} />}
+                      label="删除会话"
+                      tooltip="删除会话（session/delete）"
+                      clickAction={() => live.deleteSession(connectionId, entry.sessionId)}
+                    />
+                  </span>
                 )}
               </div>
             );
@@ -378,27 +378,25 @@ function DormantProfileRow({ profile, live, onPreview, onDelete, onMobileClose }
         <span className="truncate">{profile.name}</span>
       </button>
       <div className="absolute right-1 top-1/2 hidden -translate-y-1/2 items-center gap-0.5 group-hover:flex">
-        <button
-          type="button"
-          onClick={() => {
+        <IconButton
+          variant="ghost"
+          size="sm"
+          icon={<PlugZap size={12} />}
+          label="连接此配置"
+          tooltip={`连接 ${profile.name}（${profile.url}）`}
+          clickAction={() => {
             live.connectProfile(profile);
             onMobileClose();
           }}
-          className="flex h-6 w-6 items-center justify-center rounded text-faint transition-colors hover:text-accent"
-          aria-label="连接此配置"
-          title={`连接 ${profile.name}（${profile.url}）`}
-        >
-          <PlugZap size={12} />
-        </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="flex h-6 w-6 items-center justify-center rounded text-faint transition-colors hover:text-danger"
-          aria-label="删除配置"
-          title="删除这条配置（不影响该端点已记忆的会话）"
-        >
-          <Trash2 size={12} />
-        </button>
+        />
+        <IconButton
+          variant="ghost"
+          size="sm"
+          icon={<Trash2 size={12} />}
+          label="删除配置"
+          tooltip="删除这条配置（不影响该端点已记忆的会话）"
+          clickAction={onDelete}
+        />
       </div>
     </div>
   );
