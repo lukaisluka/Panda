@@ -18,6 +18,13 @@ Label strings are identical to role names. See `docs/agents/triage-labels.md`.
 Single-context: `CONTEXT.md` and `docs/adr/` at the repo root, created
 lazily by `/domain-modeling`. See `docs/agents/domain.md`.
 
+### UI design system
+
+`DESIGN.md` at the repo root is the SSOT for UI tokens, themes, and the
+Astryx/Tailwind coexistence contracts (cascade layers, spacing pin). The
+UI runs on Astryx (matcha theme) behind the official Tailwind bridge —
+migration tracked in #32; dev-only self-check at `#/astryx-smoke`.
+
 ### Test ACP agent
 
 `test-agent/` is an isolated Python 3.11+ project managed by `uv`. It runs the
