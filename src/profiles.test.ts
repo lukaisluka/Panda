@@ -8,6 +8,7 @@ import {
   type AgentProfile,
   type ProfileStorage,
 } from './profiles';
+import type { Workspace } from './workspace';
 
 /** In-memory localStorage fake — tests run in node, where localStorage is absent. */
 class MemoryStorage implements ProfileStorage {
@@ -34,9 +35,14 @@ const profile = (overrides: Partial<AgentProfile> = {}): AgentProfile => ({
   id: newProfileId(),
   name: 'Mock Agent',
   url: 'ws://localhost:8765/acp',
-  cwd: '/tmp/project',
+  workspace: { kind: 'local-directory', path: '/tmp/project' },
   ...overrides,
 });
+
+const workspaces = {
+  local: (): Workspace => ({ kind: 'local-directory', path: '/tmp/project' }),
+  none: (): Workspace => ({ kind: 'none' }),
+};
 
 describe('loadProfiles', () => {
   it('returns [] from empty storage', () => {
@@ -65,8 +71,18 @@ describe('loadProfiles', () => {
   it('drops malformed entries and keeps valid ones', () => {
     const storage = new MemoryStorage();
     const good = profile();
-    storage.setRaw(JSON.stringify([good, { id: 'no-url', name: '坏条目', cwd: '/x' }, 'string']));
-    expect(loadProfiles(storage)).toEqual([good]);
+    const noneKind = profile({ workspace: workspaces.none() });
+    storage.setRaw(
+      JSON.stringify([
+        good,
+        noneKind,
+        { id: 'no-url', name: '坏条目', workspace: workspaces.local() }, // missing url
+        { ...good, id: 'bad-kind', workspace: { kind: 'remote-repository' } }, // unshipped kind
+        { ...good, id: 'empty-path', workspace: { kind: 'local-directory', path: '' } }, // pathless local
+        'string',
+      ]),
+    );
+    expect(loadProfiles(storage)).toEqual([good, noneKind]);
   });
 
   it('survives a storage backend that throws on read', () => {
@@ -95,9 +111,9 @@ describe('updateProfileFields', () => {
     const a = profile();
     const b = profile({ name: 'B' });
     saveProfiles([a, b], storage);
-    const updated = updateProfileFields(a.id, { url: 'ws://new:1/acp', cwd: '/new/cwd' }, storage);
+    const updated = updateProfileFields(a.id, { url: 'ws://new:1/acp', workspace: workspaces.none() }, storage);
     expect(updated).toEqual([
-      { ...a, url: 'ws://new:1/acp', cwd: '/new/cwd' },
+      { ...a, url: 'ws://new:1/acp', workspace: workspaces.none() },
       b,
     ]);
     expect(loadProfiles(storage)).toEqual(updated);
@@ -107,7 +123,7 @@ describe('updateProfileFields', () => {
     const storage = new MemoryStorage();
     const a = profile();
     saveProfiles([a], storage);
-    expect(updateProfileFields('missing', { url: 'ws://x/acp', cwd: '/x' }, storage)).toEqual([a]);
+    expect(updateProfileFields('missing', { url: 'ws://x/acp', workspace: workspaces.none() }, storage)).toEqual([a]);
   });
 });
 
@@ -121,11 +137,11 @@ describe('subscribeProfiles', () => {
 
     const a = profile();
     saveProfiles([a], storage);
-    updateProfileFields(a.id, { url: 'ws://new:1/acp', cwd: '/new' }, storage);
+    updateProfileFields(a.id, { url: 'ws://new:1/acp', workspace: workspaces.none() }, storage);
 
     unsubscribe();
     saveProfiles([profile()], storage);
 
-    expect(seen).toEqual([[a], [{ ...a, url: 'ws://new:1/acp', cwd: '/new' }]]);
+    expect(seen).toEqual([[a], [{ ...a, url: 'ws://new:1/acp', workspace: workspaces.none() }]]);
   });
 });

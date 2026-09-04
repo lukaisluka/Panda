@@ -8,15 +8,18 @@ import {
   deleteLiveSession,
   disconnectLiveConnection,
   foregroundConnection,
+  lastConnectionDefaults,
   newDirectConnectionId,
+  newLiveSession,
   openLiveSession,
   persistSessionsSnapshot,
   previewProfileConnection,
   removeLiveConnection,
   type SessionStorage,
 } from './liveConnections';
-import { usePanda } from './store';
-import type { AgentProfile } from './profiles';
+import { connectionStorePort, usePanda } from './store';
+import { loadProfiles, saveProfiles, type AgentProfile } from './profiles';
+import { WORKSPACE_NONE_CWD, type Workspace } from './workspace';
 
 /**
  * Manager-level scenarios for issue #21: parallel connections, 断连隔离,
@@ -36,11 +39,11 @@ class MemoryStorage implements SessionStorage {
   }
 }
 
-const profile = (id: string, url = `ws://${id}/acp`): AgentProfile => ({
+const profile = (id: string, url = `ws://${id}/acp`, workspace: Workspace = { kind: 'local-directory', path: `/${id}` }): AgentProfile => ({
   id,
   name: id,
   url,
-  cwd: `/${id}`,
+  workspace,
 });
 
 type StubbedClient = { handlers: LiveClientHandlers; client: LiveAcpClient };
@@ -71,7 +74,7 @@ function installStubClients(): StubbedClient[] {
 
 /** Connects a profile and drives it to "connected with one session". */
 async function connectedStub(id: string, stubs: StubbedClient[], sessionId: string): Promise<void> {
-  await connectLiveConnection(id, `ws://${id}/acp`, `/${id}`);
+  await connectLiveConnection(id, `ws://${id}/acp`, { kind: 'local-directory', path: `/${id}` });
   const stub = stubs.at(-1)!;
   stub.handlers.onSessionId(sessionId, `/${id}`);
   stub.handlers.onConnected({ agentName: `${id}-agent`, protocolVersion: 1 });
@@ -94,6 +97,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('parallel connections (issue #21)', () => {
@@ -377,5 +381,84 @@ describe('per-endpoint session persistence (issue #21)', () => {
       sessionId: string;
     }>;
     expect(after.map((entry) => entry.sessionId)).toEqual(['s-keep']);
+  });
+});
+
+describe('工作区 (issue #23, ADR 0005)', () => {
+  /** Node has no localStorage: the form/remember paths need a stubbed one. */
+  function stubLocalStorage(): Map<string, string> {
+    const entries = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => entries.get(key) ?? null,
+      setItem: (key: string, value: string) => entries.set(key, value),
+      removeItem: (key: string) => entries.delete(key),
+    });
+    return entries;
+  }
+
+  it('无工作区 connects with the placeholder cwd and remembers it back as none', async () => {
+    const entries = stubLocalStorage();
+    const stubs = installStubClients();
+
+    await connectLiveConnection('agent-n', 'ws://agent-n/acp', { kind: 'none' });
+    const stub = stubs[0]!;
+
+    // The single derivation point: none → WORKSPACE_NONE_CWD on the wire.
+    expect(stub.client.connect).toHaveBeenCalledWith(
+      expect.anything(),
+      WORKSPACE_NONE_CWD,
+      undefined,
+    );
+    expect(usePanda.getState().connections['agent-n']!.connection.cwd).toBe(WORKSPACE_NONE_CWD);
+    // The remembered default reads back as 无工作区 (`/` ≡ none, ADR 0005).
+    expect(entries.get('panda.acp.cwd')).toBe(WORKSPACE_NONE_CWD);
+    expect(lastConnectionDefaults()).toEqual({ url: 'ws://agent-n/acp', workspace: { kind: 'none' } });
+
+    stub.handlers.onSessionId('s-n', WORKSPACE_NONE_CWD);
+    stub.handlers.onConnected({ agentName: 'n-agent', protocolVersion: 1 });
+    await newLiveSession(WORKSPACE_NONE_CWD);
+    expect(stub.client.newSession).toHaveBeenCalledWith(WORKSPACE_NONE_CWD);
+  });
+
+  it('resuming a 无工作区 session sends the agent-reported cwd verbatim', async () => {
+    const stubs = installStubClients();
+    await connectedStub('agent-n', stubs, 's-a');
+    // A session the agent reports with the placeholder cwd (created by Panda
+    // under 无工作区) must resume with exactly that string — deepagents-acp
+    // enforces byte-equality on session/load.
+    connectionStorePort('agent-n').mergeSessions([
+      { sessionId: 's-none', cwd: WORKSPACE_NONE_CWD, title: null, updatedAt: null },
+      { sessionId: 's-foreign', cwd: '/real/foreign', title: null, updatedAt: null },
+    ]);
+
+    openLiveSession('agent-n', 's-none', WORKSPACE_NONE_CWD);
+    expect(stubs[0]!.client.loadSession).toHaveBeenCalledWith('s-none', WORKSPACE_NONE_CWD);
+
+    openLiveSession('agent-n', 's-foreign', '/real/foreign');
+    expect(stubs[0]!.client.loadSession).toHaveBeenCalledWith('s-foreign', '/real/foreign');
+  });
+
+  it('a local-directory workspace without a path is rejected before connecting', async () => {
+    const stubs = installStubClients();
+
+    await connectLiveConnection('agent-e', 'ws://agent-e/acp', { kind: 'local-directory', path: '   ' });
+
+    expect(stubs).toHaveLength(0);
+    expect(usePanda.getState().connections['agent-e']).toBeUndefined();
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('workspace path are required'));
+  });
+
+  it('profile connect-time write-back preserves the workspace kind', async () => {
+    const entries = stubLocalStorage();
+    const p = profile('p', 'ws://p/acp', { kind: 'none' });
+    saveProfiles([p]);
+    const stubs = installStubClients();
+
+    await connectLiveConnection('p', 'ws://p/acp', { kind: 'none' }, { profileId: 'p' });
+    stubs[0]!.handlers.onConnected({ agentName: 'p-agent', protocolVersion: 1 });
+
+    const persisted = loadProfiles();
+    expect(persisted).toEqual([p]);
+    expect(entries.get('panda.profiles')).toContain('"kind":"none"');
   });
 });

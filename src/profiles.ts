@@ -1,13 +1,15 @@
 /**
- * Agent 配置（issue #2, ADR 0001): saved connection presets — name + endpoint +
- * default working directory, persisted to localStorage per browser. One active
- * connection at a time; switching profiles switches the connection target.
- * Sessions stay keyed by endpoint (panda.sessions:<url>) and are NOT touched
- * by profile CRUD — deleting a profile never deletes remembered sessions.
+ * Agent 配置（issue #2, ADR 0001; issue #23, ADR 0005): saved connection
+ * presets — name + endpoint + default workspace, persisted to localStorage
+ * per browser. One active connection at a time; switching profiles switches
+ * the connection target. Sessions stay keyed by endpoint
+ * (panda.sessions:<url>) and are NOT touched by profile CRUD — deleting a
+ * profile never deletes remembered sessions.
  *
  * The storage backend is injected: the browser passes nothing (localStorage is
  * the default), unit tests pass an in-memory fake — node has no localStorage.
  */
+import { isWorkspace, type Workspace } from './workspace';
 
 /** One saved connection preset. `name` is user-chosen — never the protocol's
  * agent-reported name (agentName at initialize; see CONTEXT.md). */
@@ -17,9 +19,10 @@ export type AgentProfile = {
   /** WebSocket endpoint of the ACP service — a field of the profile, never a
    * synonym for the profile itself. */
   url: string;
-  /** Default working directory = the one the last successful connect used;
-   * connect-time edits are written back here (issue #2 spec). */
-  cwd: string;
+  /** Default 工作区 (ADR 0005): what new sessions with this agent use — a
+   * local directory, or none; connect-time edits are written back here
+   * (issue #2 spec). */
+  workspace: Workspace;
 };
 
 /** localStorage-shaped backend; injectable for tests. */
@@ -58,12 +61,12 @@ function defaultStorage(): ProfileStorage {
 
 function isProfile(value: unknown): value is AgentProfile {
   if (typeof value !== 'object' || value === null) return false;
-  const { id, name, url, cwd } = value as Record<string, unknown>;
+  const { id, name, url, workspace } = value as Record<string, unknown>;
   return (
     typeof id === 'string' && id.length > 0 &&
     typeof name === 'string' && name.length > 0 &&
     typeof url === 'string' && url.length > 0 &&
-    typeof cwd === 'string' && cwd.length > 0
+    isWorkspace(workspace)
   );
 }
 
@@ -107,11 +110,12 @@ export function saveProfiles(profiles: AgentProfile[], storage: ProfileStorage =
   notifyProfiles(storage);
 }
 
-/** Updates one profile's url/cwd (connect-time edit write-back) and persists.
- * Returns the new list; unknown ids leave the list unchanged (warned). */
+/** Updates one profile's url/workspace (connect-time edit write-back) and
+ * persists. Returns the new list; unknown ids leave the list unchanged
+ * (warned). */
 export function updateProfileFields(
   id: string,
-  fields: Pick<AgentProfile, 'url' | 'cwd'>,
+  fields: Pick<AgentProfile, 'url' | 'workspace'>,
   storage: ProfileStorage = defaultStorage(),
 ): AgentProfile[] {
   const profiles = loadProfiles(storage);

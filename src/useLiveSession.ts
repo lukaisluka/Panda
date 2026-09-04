@@ -18,15 +18,16 @@ import {
   sendLive,
 } from './liveConnections';
 import type { AgentProfile } from './profiles';
+import { cwdToWorkspace, type Workspace } from './workspace';
 import type { AcpContentBlock, PermissionOptionKind } from './protocol/types';
 
 /** Options for reconnecting the foreground slot. */
 export type ReconnectOptions = {
   /** Resume the slot's retained session (transcript kept) instead of a fresh one. */
   resume?: boolean;
-  /** Form-edited endpoint values; omitted/empty ones fall back to the slot's. */
+  /** Form-edited endpoint values; omitted ones fall back to the slot's. */
   url?: string;
-  cwd?: string;
+  workspace?: Workspace;
 };
 
 /**
@@ -54,12 +55,12 @@ export function useLiveSession() {
   return useMemo(
     () => ({
       /** 临时直连: a fresh anonymous slot that dies with its disconnect. */
-      connectDirect: (url: string, cwd: string) => connectLiveConnection(newDirectConnectionId(), url, cwd),
-      /** Connects an Agent 配置's slot with its stored url/cwd. */
+      connectDirect: (url: string, workspace: Workspace) => connectLiveConnection(newDirectConnectionId(), url, workspace),
+      /** Connects an Agent 配置's slot with its stored url/workspace. */
       connectProfile: (profile: AgentProfile) =>
-        connectLiveConnection(profile.id, profile.url, profile.cwd, { profileId: profile.id }),
+        connectLiveConnection(profile.id, profile.url, profile.workspace, { profileId: profile.id }),
       /**
-       * Reconnects the foreground slot. Form-edited url/cwd override the
+       * Reconnects the foreground slot. Form-edited url/workspace override the
        * slot's remembered values and — for a profile slot — are written back
        * to the 配置 on a successful connect (配置编辑静默生效于下次连接).
        */
@@ -72,13 +73,15 @@ export function useLiveSession() {
         }
         const slot = state.connections[connectionId];
         const url = opts?.url?.trim() || slot?.connection.url;
-        const cwd = opts?.cwd?.trim() || slot?.connection.cwd;
-        if (!url || !cwd) {
-          console.warn(`[panda/acp] reconnect ignored: slot "${connectionId}" has no remembered url/cwd`);
+        // The slot remembers the derived cwd it last used; `/` reads back as
+        // 无工作区 (ADR 0005's accepted equivalence).
+        const workspace = opts?.workspace ?? (slot?.connection.cwd != null ? cwdToWorkspace(slot.connection.cwd) : null);
+        if (!url || !workspace) {
+          console.warn(`[panda/acp] reconnect ignored: slot "${connectionId}" has no remembered url/workspace`);
           return;
         }
         const profileId = isDirectConnectionId(connectionId) ? null : connectionId;
-        void connectLiveConnection(connectionId, url, cwd, { resume: opts?.resume, profileId });
+        void connectLiveConnection(connectionId, url, workspace, { resume: opts?.resume, profileId });
       },
       disconnect: disconnectLiveConnection,
       remove: removeLiveConnection,

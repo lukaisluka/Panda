@@ -22,10 +22,9 @@ import {
 import { effectiveCapability, PANDA_HOST_CAPABILITIES } from '../capabilities';
 import type { AgentProfile } from '../profiles';
 import { loadProfiles, saveProfiles, subscribeProfiles } from '../profiles';
+import { workspaceDisplay, workspaceLabel } from '../workspace';
 import { ConnectPanel, type FormPrefill } from './ConnectPanel';
 import type { LiveSessionFacade } from '../useLiveSession';
-
-const basename = (cwd: string) => cwd.split('/').filter(Boolean).at(-1) ?? cwd;
 
 /**
  * Grouped sidebar (issue #21, ADR 0002): every connection slot is a group
@@ -75,7 +74,7 @@ export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }:
     // Live mode: the manager seeds a disconnected slot with the endpoint's
     // remembered sessions and foregrounds it; demo mode only prefills.
     live.previewProfile(profile);
-    setPrefill({ url: profile.url, cwd: profile.cwd, nonce: Date.now() });
+    setPrefill({ url: profile.url, workspace: profile.workspace, nonce: Date.now() });
   };
 
   return (
@@ -304,7 +303,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
             );
             const canDelete = effectiveCapability('delete', slot.capabilities, PANDA_HOST_CAPABILITIES);
             const canSwitch = connected ? loadSession.available && !busy : hasDoc;
-            const label = entry.title ?? `${basename(entry.cwd)} · ${entry.sessionId.slice(-6)}`;
+            const label = entry.title ?? `${workspaceLabel(entry.cwd)} · ${entry.sessionId.slice(-6)}`;
             return (
               <div key={entry.sessionId} className="group/s relative">
                 <button
@@ -372,7 +371,7 @@ function DormantProfileRow({ profile, live, onPreview, onDelete, onMobileClose }
           onPreview(profile);
           onMobileClose();
         }}
-        title={`${profile.url} · ${profile.cwd}`}
+        title={`${profile.url} · ${workspaceDisplay(profile.workspace)}`}
         className="flex w-full items-center gap-1.5 rounded-lg px-3 py-2 text-left text-[13px] text-fg/50 transition-colors hover:bg-raised/60 hover:text-fg/80"
       >
         <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-faint" />
