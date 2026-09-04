@@ -1,5 +1,7 @@
 import type {
   AcpSessionUpdate,
+  ElicitationRequest,
+  ElicitationResponse,
   PermissionOptionKind,
   PermissionRequest,
   SessionStatus,
@@ -16,16 +18,19 @@ export type DriverHandlers = {
  * client would use. This is the Phase 0 stand-in for the protocol layer: the
  * reducer and the UI cannot tell a replay from a live agent.
  *
- * Permission steps pause the timeline until the user decides — mirroring the
- * real `session/request_permission` RPC where the agent thread blocks on the
- * client's answer. The request and its resolution flow into the document as
- * `permission_requested` / `permission_resolved` events (issue #18), exactly
- * like the live client's translation of the RPC.
+ * Permission and elicitation steps pause the timeline until the user
+ * decides — mirroring the real `session/request_permission` /
+ * `elicitation/create` RPCs where the agent thread blocks on the client's
+ * answer. The request and its resolution flow into the document as
+ * `permission_requested` / `permission_resolved` and
+ * `elicitation_requested` / `elicitation_resolved` events (issues #18),
+ * exactly like the live client's translation of the RPCs.
  */
 export class ReplayDriver {
   private queue: ReplayStep[] = [];
   private timer: ReturnType<typeof setTimeout> | null = null;
   private waitingPermission: { request: PermissionRequest; onResolve: (decision: PermissionOptionKind) => ReplayStep[] } | null = null;
+  private waitingElicitation: { request: ElicitationRequest; onResolve: (response: ElicitationResponse) => ReplayStep[] } | null = null;
   private stopped = false;
 
   constructor(private readonly handlers: DriverHandlers) {}
@@ -47,6 +52,14 @@ export class ReplayDriver {
       });
     }
     this.waitingPermission = null;
+    if (this.waitingElicitation) {
+      this.handlers.onUpdate({
+        sessionUpdate: 'elicitation_resolved',
+        elicitationId: this.waitingElicitation.request.id,
+        response: { outcome: 'cancelled' },
+      });
+    }
+    this.waitingElicitation = null;
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;
@@ -54,7 +67,7 @@ export class ReplayDriver {
   }
 
   get isPlaying(): boolean {
-    return this.queue.length > 0 || this.waitingPermission !== null;
+    return this.queue.length > 0 || this.waitingPermission !== null || this.waitingElicitation !== null;
   }
 
   resolvePermission(decision: PermissionOptionKind): void {
@@ -67,6 +80,20 @@ export class ReplayDriver {
       response: { outcome: 'selected', kind: decision },
     });
     const followUps = pending.onResolve(decision);
+    this.queue = [...followUps, ...this.queue];
+    this.tick();
+  }
+
+  resolveElicitation(response: ElicitationResponse): void {
+    const pending = this.waitingElicitation;
+    if (!pending) return;
+    this.waitingElicitation = null;
+    this.handlers.onUpdate({
+      sessionUpdate: 'elicitation_resolved',
+      elicitationId: pending.request.id,
+      response,
+    });
+    const followUps = pending.onResolve(response);
     this.queue = [...followUps, ...this.queue];
     this.tick();
   }
@@ -92,6 +119,14 @@ export class ReplayDriver {
           this.waitingPermission = { request: step.request, onResolve: step.onResolve };
           this.handlers.onUpdate({
             sessionUpdate: 'permission_requested',
+            request: step.request,
+          });
+          break;
+        case 'elicitation':
+          this.handlers.onStatus('requires_action');
+          this.waitingElicitation = { request: step.request, onResolve: step.onResolve };
+          this.handlers.onUpdate({
+            sessionUpdate: 'elicitation_requested',
             request: step.request,
           });
           break;

@@ -19,6 +19,9 @@
 import type {
   Block,
   DeniedPermissionResponse,
+  ElicitationRequest,
+  ElicitationResponse,
+  ElicitationState,
   PermissionRequest,
   PermissionState,
   SessionDocument,
@@ -47,7 +50,22 @@ export type StandalonePermissionItem = {
   permission: AttachedPermission;
 };
 
-export type FlatItem = BlockFlatItem | StandalonePermissionItem;
+/**
+ * An elicitation as the flow renders it: always an independent trailing
+ * card (never attached to a tool call — a form stands on its own). Pending
+ * is the form; settled keeps a one-line terminal record.
+ */
+export type AttachedElicitation =
+  | { state: 'pending'; request: ElicitationRequest }
+  | { state: 'settled'; request: ElicitationRequest; response: ElicitationResponse };
+
+export type StandaloneElicitationItem = {
+  key: string;
+  kind: 'elicitation';
+  elicitation: AttachedElicitation;
+};
+
+export type FlatItem = BlockFlatItem | StandalonePermissionItem | StandaloneElicitationItem;
 
 // Identity-stable wrappers. All WeakMaps: keys are session-owned objects, so
 // caches are scoped per session graph and collected with it. The base variant
@@ -64,6 +82,9 @@ const variantItemCache = new WeakMap<
   { streaming: boolean; permission: AttachedPermission | null; item: BlockFlatItem }
 >();
 const standaloneItemCache = new WeakMap<AttachedPermission, StandalonePermissionItem>();
+const attachedElicitationCache = new WeakMap<ElicitationState, AttachedElicitation>();
+const attachedElicitationListCache = new WeakMap<Record<string, ElicitationState>, AttachedElicitation[]>();
+const standaloneElicitationItemCache = new WeakMap<AttachedElicitation, StandaloneElicitationItem>();
 
 export function projectMessageStream(doc: SessionDocument): FlatItem[] {
   const cached = docItemsCache.get(doc);
@@ -120,9 +141,31 @@ export function projectMessageStream(doc: SessionDocument): FlatItem[] {
   for (const permission of standalone) {
     items.push(standaloneItem(permission));
   }
+  // Elicitations always trail the flow as independent cards, record order.
+  for (const elicitation of attachedElicitations(doc.elicitations)) {
+    items.push(standaloneElicitationItem(elicitation));
+  }
 
   docItemsCache.set(doc, items);
   return items;
+}
+
+/** Every elicitation record — pending forms and settled results both render. */
+function attachedElicitations(record: Record<string, ElicitationState>): AttachedElicitation[] {
+  const cached = attachedElicitationListCache.get(record);
+  if (cached) return cached;
+  const list = Object.values(record).map((state) => {
+    const wrapper = attachedElicitationCache.get(state);
+    if (wrapper) return wrapper;
+    const next: AttachedElicitation =
+      state.status === 'pending'
+        ? { state: 'pending', request: state.request }
+        : { state: 'settled', request: state.request, response: state.response! };
+    attachedElicitationCache.set(state, next);
+    return next;
+  });
+  attachedElicitationListCache.set(record, list);
+  return list;
 }
 
 /** Pending requests and policy-denied records — the renderable permission set. */
@@ -187,6 +230,18 @@ function standaloneItem(permission: AttachedPermission): StandalonePermissionIte
     permission,
   };
   standaloneItemCache.set(permission, item);
+  return item;
+}
+
+function standaloneElicitationItem(elicitation: AttachedElicitation): StandaloneElicitationItem {
+  const cached = standaloneElicitationItemCache.get(elicitation);
+  if (cached) return cached;
+  const item: StandaloneElicitationItem = {
+    key: elicitation.request.id,
+    kind: 'elicitation',
+    elicitation,
+  };
+  standaloneElicitationItemCache.set(elicitation, item);
   return item;
 }
 

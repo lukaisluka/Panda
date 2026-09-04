@@ -11,13 +11,14 @@ import {
 } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { ArrowDown } from 'lucide-react';
-import type { Block, PermissionOptionKind } from '../protocol/types';
+import type { Block, ElicitationResponse, PermissionOptionKind } from '../protocol/types';
 import { AgentMessage } from './AgentMessage';
 import { ThoughtBlock } from './ThoughtBlock';
 import { ToolCallCard } from './ToolCallCard';
 import { UserMessage } from './UserMessage';
 import { ContentColumn } from './ContentColumn';
 import { AttachedPermissionCard } from './PermissionCard';
+import { ElicitationCard } from './ElicitationCard';
 import { UnsupportedBlock } from './UnsupportedBlock';
 import { useMessageStreamItems } from '../projector/hooks';
 import type { AttachedPermission, BlockFlatItem, FlatItem } from '../projector/messageStream';
@@ -62,8 +63,9 @@ const DETACH_DISTANCE_PX = 48;
 const StreamHeader = () => <div className="stream-header-space" />;
 const StreamFooter = () => <div className="stream-footer-space" />;
 
-export function MessageStream({ onResolvePermission }: {
+export function MessageStream({ onResolvePermission, onResolveElicitation }: {
   onResolvePermission: (toolCallId: string, kind: PermissionOptionKind) => void;
+  onResolveElicitation: (id: string, response: ElicitationResponse) => void;
 }) {
   const [pinned, setPinned] = useState(true);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -196,6 +198,16 @@ export function MessageStream({ onResolvePermission }: {
                 <AttachedPermissionCard
                   permission={item.permission}
                   onResolve={(kind) => onResolvePermission(item.permission.request.toolCallId, kind)}
+                />
+              </ContentColumn>
+            );
+          }
+          if (item.kind === 'elicitation') {
+            return (
+              <ContentColumn>
+                <ElicitationCard
+                  elicitation={item.elicitation}
+                  onResolve={onResolveElicitation}
                 />
               </ContentColumn>
             );

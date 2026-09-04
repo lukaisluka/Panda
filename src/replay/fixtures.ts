@@ -4,6 +4,8 @@ import type {
   AcpSessionUpdate,
   AcpToolCallStatus,
   AcpToolKind,
+  ElicitationRequest,
+  ElicitationResponse,
   PermissionOptionKind,
   PermissionRequest,
   SessionStatus,
@@ -297,6 +299,112 @@ function rejectBranch(): ReplayStep[] {
   ];
 }
 
+/** The edit request + its permission gate — shared by both elicitation branches. */
+function editSteps(): ReplayStep[] {
+  return [
+    toolCallStep(
+      'edit-1',
+      'Edit src/auth/session.ts — extract verifySession()',
+      'edit',
+      'src/auth/session.ts',
+      { path: 'src/auth/session.ts', description: 'Extract verifySession() from handleLogin/refreshToken' },
+      600,
+    ),
+    {
+      kind: 'permission',
+      afterMs: 150,
+      request: permissionRequest,
+      onResolve: (decision: PermissionOptionKind) =>
+        decision === 'reject_once' ? rejectBranch() : allowBranch(),
+    },
+  ];
+}
+
+/**
+ * The form-mode elicitation fixture: one field per schema type (free string,
+ * enum string, boolean, multiselect, integer) so the demo calibrates every
+ * form control the live wire schema can produce.
+ */
+const elicitRequest: ElicitationRequest = {
+  id: 'elicit-1',
+  toolCallId: null,
+  title: '重构选项确认',
+  description: '动手改 session.ts 之前，确认几个执行选项。',
+  fields: [
+    {
+      key: 'tag',
+      type: 'string',
+      title: '发布 tag',
+      description: '重构合入后打的 git tag',
+      required: true,
+      options: null,
+    },
+    {
+      key: 'strategy',
+      type: 'string',
+      title: '迁移策略',
+      required: true,
+      default: 'alias',
+      options: [
+        { value: 'alias', label: '保留旧名别名（渐进）' },
+        { value: 'replace', label: '直接替换（彻底）' },
+      ],
+    },
+    {
+      key: 'notify',
+      type: 'boolean',
+      title: '完成后通知 #auth-review 频道',
+      required: false,
+      default: true,
+    },
+    {
+      key: 'scope',
+      type: 'multiselect',
+      title: '同步更新的范围',
+      required: false,
+      default: ['tests'],
+      options: [
+        { value: 'tests', label: '测试' },
+        { value: 'docs', label: '文档' },
+        { value: 'examples', label: '示例' },
+      ],
+    },
+    {
+      key: 'priority',
+      type: 'integer',
+      title: '评审优先级（1-5，选填）',
+      required: false,
+    },
+  ],
+};
+
+/** What happens after the user answers the elicitation form. */
+function elicitBranch(response: ElicitationResponse): ReplayStep[] {
+  if (response.outcome !== 'accepted') {
+    return [
+      statusStep('running', 150),
+      ...streamText(
+        'agent_message_chunk',
+        'msg-elicit-declined',
+        '好，不问细节了——按默认方式推进：保留旧名别名过渡，改完直接跑测试。',
+        { firstMs: 400 },
+      ),
+      ...editSteps(),
+    ];
+  }
+  const strategy = response.content.strategy === 'replace' ? '直接替换旧函数' : '保留旧名别名过渡';
+  return [
+    statusStep('running', 150),
+    ...streamText(
+      'agent_message_chunk',
+      'msg-elicit-ok',
+      `收到：${strategy}，完成后打 tag \`${String(response.content.tag)}\`。开始动手。`,
+      { firstMs: 400 },
+    ),
+    ...editSteps(),
+  ];
+}
+
 export function mainScenario(): ReplayStep[] {
   return [
     updateStep(
@@ -324,20 +432,11 @@ export function mainScenario(): ReplayStep[] {
     toolStatusStep('search-1', 'in_progress', 300),
     toolResultStep('search-1', '2 处引用：handleLogin、refreshToken，均在 src/auth/session.ts 内。', 450),
     ...streamText('agent_message_chunk', 'msg-1', messageAfterRead, { firstMs: 500 }),
-    toolCallStep(
-      'edit-1',
-      'Edit src/auth/session.ts — extract verifySession()',
-      'edit',
-      'src/auth/session.ts',
-      { path: 'src/auth/session.ts', description: 'Extract verifySession() from handleLogin/refreshToken' },
-      600,
-    ),
     {
-      kind: 'permission',
-      afterMs: 150,
-      request: permissionRequest,
-      onResolve: (decision: PermissionOptionKind) =>
-        decision === 'reject_once' ? rejectBranch() : allowBranch(),
+      kind: 'elicitation',
+      afterMs: 500,
+      request: elicitRequest,
+      onResolve: elicitBranch,
     },
   ];
 }

@@ -28,6 +28,7 @@ export function emptySession(): SessionDocument {
     plan: null,
     modes: null,
     permissions: {},
+    elicitations: {},
     latestNotifications: {},
     unhandledNotifications: [],
   };
@@ -143,6 +144,34 @@ export function applyUpdate(
 
     case 'permission_resolved':
       return resolvePermission(doc, update.toolCallId, update.response);
+
+    case 'elicitation_requested':
+      return {
+        ...doc,
+        elicitations: {
+          ...doc.elicitations,
+          [update.request.id]: { status: 'pending', request: update.request, response: null },
+        },
+      };
+
+    case 'elicitation_resolved': {
+      const existing = doc.elicitations[update.elicitationId];
+      if (!existing) {
+        console.warn(`[reducer] elicitation_resolved for unknown id ${update.elicitationId} — ignored`);
+        return doc;
+      }
+      return {
+        ...doc,
+        elicitations: {
+          ...doc.elicitations,
+          [update.elicitationId]: {
+            ...existing,
+            status: update.response.outcome === 'cancelled' ? 'cancelled' : 'resolved',
+            response: update.response,
+          },
+        },
+      };
+    }
   }
 }
 

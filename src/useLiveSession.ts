@@ -14,13 +14,14 @@ import {
   persistSessionsSnapshot,
   previewProfileConnection,
   removeLiveConnection,
+  resolveLiveElicitation,
   resolveLivePermission,
   sendLive,
   setLiveMode,
 } from './liveConnections';
 import type { AgentProfile } from './profiles';
 import { cwdToWorkspace, type Workspace } from './workspace';
-import type { AcpContentBlock, PermissionOptionKind } from './protocol/types';
+import type { AcpContentBlock, ElicitationResponse, PermissionOptionKind } from './protocol/types';
 
 /** Options for reconnecting the foreground slot. */
 export type ReconnectOptions = {
@@ -91,6 +92,7 @@ export function useLiveSession() {
       openSession: openLiveSession,
       send: (content: AcpContentBlock[]) => sendLive(content),
       resolvePermission: (toolCallId: string, kind: PermissionOptionKind) => resolveLivePermission(toolCallId, kind),
+      resolveElicitation: (id: string, response: ElicitationResponse) => resolveLiveElicitation(id, response),
       cancel: cancelLiveTurn,
       setMode: (modeId: string) => setLiveMode(modeId),
       newSession: (cwd: string) => newLiveSession(cwd),

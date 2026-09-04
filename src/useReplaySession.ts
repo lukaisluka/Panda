@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { DEMO_CONNECTION_ID, connectionStorePort, usePanda, type ConnectionStorePort } from './store';
 import { ReplayDriver } from './replay/ReplayDriver';
 import { DEMO_MODES, followUpScenario, longScenario, mainScenario } from './replay/fixtures';
-import type { AcpContentBlock, PermissionOptionKind } from './protocol/types';
+import type { AcpContentBlock, ElicitationResponse, PermissionOptionKind } from './protocol/types';
 
 /** `?demo=long` streams an 80-turn session instead — the virtualization calibration sample. */
 const demoScenario = () =>
@@ -76,6 +76,18 @@ export function useReplaySession() {
   );
 
   /**
+   * The demo holds at most one pending elicitation, so the id needs no
+   * routing — the driver settles whoever is waiting (the live path keys its
+   * waiters by the Panda-local mint instead).
+   */
+  const resolveElicitation = useCallback(
+    (_id: string, response: ElicitationResponse) => {
+      driver.resolveElicitation(response);
+    },
+    [driver],
+  );
+
+  /**
    * The demo's instant `session/set_mode`: there is no RPC to confirm, so the
    * mode_changed event IS the confirmation — same shape the live path emits
    * on the resolved RPC.
@@ -98,5 +110,5 @@ export function useReplaySession() {
     driver.play(demoScenario());
   }, [driver, port]);
 
-  return { send, resolvePermission, setMode, replayDemo };
+  return { send, resolvePermission, resolveElicitation, setMode, replayDemo };
 }

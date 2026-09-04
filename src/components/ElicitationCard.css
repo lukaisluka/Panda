@@ -1,0 +1,93 @@
+/* Inline form-mode elicitation: pending form + settled terminal record. */
+
+.elicit-card {
+  margin-top: 6px; /* mt-1.5 */
+  border: 1px solid color-mix(in oklab, var(--color-accent) 40%, transparent);
+  border-radius: var(--panda-radius-xl);
+  background: color-mix(in oklab, var(--color-accent) 5%, transparent);
+  padding: 14px; /* p-3.5 */
+}
+.elicit-card--settled {
+  border-color: var(--color-border);
+  background: color-mix(in oklab, var(--color-raised) 40%, transparent);
+}
+
+.elicit-head {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* gap-2 */
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-accent);
+}
+.elicit-head--settled {
+  color: var(--color-muted);
+}
+
+.elicit-title {
+  margin-top: 8px; /* mt-2 */
+  font-size: 14px;
+  font-weight: 500;
+  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+}
+
+.elicit-desc {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--color-faint);
+}
+
+.elicit-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* gap-3 */
+  margin-top: 12px; /* mt-3 */
+}
+
+.elicit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.elicit-label {
+  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+}
+
+.elicit-required {
+  margin-left: 3px;
+  color: var(--color-danger);
+}
+
+.elicit-field--check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px; /* gap-2 */
+  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+  cursor: pointer;
+}
+.elicit-field--check input {
+  accent-color: var(--color-accent);
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+.elicit-multiselect {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.elicit-unsupported {
+  font-size: 13px;
+  color: var(--color-faint);
+}
+
+.elicit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px; /* gap-2 */
+  margin-top: 14px; /* mt-3.5 */
+}

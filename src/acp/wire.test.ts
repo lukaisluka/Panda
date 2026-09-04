@@ -6,6 +6,7 @@ import {
   parseSessionNotification,
   removeSdkStrictSessionUpdateRouter,
   toAcpUpdates,
+  toElicitationRequest,
 } from './wire';
 
 /** Loose constructor: unknown-kind payloads need to bypass the SDK's closed union. */
@@ -259,6 +260,139 @@ describe('echoRelation (sent prompt vs agent echo)', () => {
         { type: 'audio', data: 'AQID', mimeType: 'audio/wav' } as unknown as ContentBlock,
       ]),
     ).toBe('different');
+    warnSpy.mockRestore();
+  });
+});
+
+describe('toElicitationRequest (form mode whitelisting)', () => {
+  it('maps every known property type to its field variant, honoring required and defaults', () => {
+    const params = {
+      sessionId: 's-1',
+      mode: 'form',
+      message: '补充信息',
+      requestedSchema: {
+        type: 'object',
+        title: '重构选项',
+        description: '动手前确认',
+        required: ['tag', 'priority'],
+        properties: {
+          tag: { type: 'string', title: 'Tag' },
+          strategy: {
+            type: 'string',
+            title: '策略',
+            default: 'alias',
+            oneOf: [
+              { const: 'alias', title: '别名过渡' },
+              { const: 'replace', title: '直接替换' },
+            ],
+          },
+          priority: { type: 'integer', title: '优先级', default: 3 },
+          notify: { type: 'boolean', title: '通知', default: true },
+          scope: {
+            type: 'array',
+            title: '范围',
+            default: ['tests'],
+            items: {
+              anyOf: [
+                { const: 'tests', title: '测试' },
+                { const: 'docs', title: '文档' },
+              ],
+            },
+          },
+        },
+      },
+    };
+    expect(toElicitationRequest('elicit-1', params as never)).toEqual({
+      id: 'elicit-1',
+      toolCallId: null,
+      title: '重构选项',
+      description: '动手前确认',
+      fields: [
+        { key: 'tag', type: 'string', title: 'Tag', required: true, options: null },
+        {
+          key: 'strategy',
+          type: 'string',
+          title: '策略',
+          required: false,
+          options: [
+            { value: 'alias', label: '别名过渡' },
+            { value: 'replace', label: '直接替换' },
+          ],
+          default: 'alias',
+        },
+        { key: 'priority', type: 'integer', title: '优先级', required: true, default: 3 },
+        { key: 'notify', type: 'boolean', title: '通知', required: false, default: true },
+        {
+          key: 'scope',
+          type: 'multiselect',
+          title: '范围',
+          required: false,
+          options: [
+            { value: 'tests', label: '测试' },
+            { value: 'docs', label: '文档' },
+          ],
+          default: ['tests'],
+        },
+      ],
+    });
+  });
+
+  it('bare enum strings and bare enum multiselect items map to unlabeled options', () => {
+    const params = {
+      sessionId: 's-1',
+      mode: 'form',
+      message: '选',
+      requestedSchema: {
+        properties: {
+          env: { type: 'string', enum: ['staging', 'prod'] },
+          items: { type: 'array', items: { type: 'string', enum: ['a', 'b'] } },
+        },
+      },
+    };
+    const mapped = toElicitationRequest('elicit-2', params as never);
+    expect(mapped.fields[0]).toMatchObject({
+      type: 'string',
+      options: [
+        { value: 'staging', label: 'staging' },
+        { value: 'prod', label: 'prod' },
+      ],
+    });
+    expect(mapped.fields[1]).toMatchObject({
+      type: 'multiselect',
+      options: [
+        { value: 'a', label: 'a' },
+        { value: 'b', label: 'b' },
+      ],
+    });
+  });
+
+  it('carries the session scope toolCallId when present, null when absent', () => {
+    const schema = { properties: { tag: { type: 'string' } } };
+    const withTool = { sessionId: 's-1', toolCallId: 't-9', mode: 'form', message: 'm', requestedSchema: schema };
+    expect(toElicitationRequest('e', withTool as never).toolCallId).toBe('t-9');
+    const noTool = { sessionId: 's-1', mode: 'form', message: 'm', requestedSchema: schema };
+    expect(toElicitationRequest('e', noTool as never).toolCallId).toBe(null);
+    const requestScoped = { requestId: 'r-1', mode: 'form', message: 'm', requestedSchema: schema };
+    expect(toElicitationRequest('e', requestScoped as never).toolCallId).toBe(null);
+  });
+
+  it('an unknown property type becomes an inert unsupported field (warned, not dropped)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const params = {
+      sessionId: 's-1',
+      mode: 'form',
+      message: 'm',
+      requestedSchema: {
+        properties: {
+          custom: { type: '_vendorObject', title: '自定义' },
+        },
+      },
+    };
+    const mapped = toElicitationRequest('elicit-3', params as never);
+    expect(mapped.fields).toEqual([
+      { key: 'custom', type: 'unsupported', title: '自定义', required: false, propertyType: '_vendorObject' },
+    ]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('custom'));
     warnSpy.mockRestore();
   });
 });

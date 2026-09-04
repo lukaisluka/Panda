@@ -5,6 +5,7 @@ import type {
   AcpContentBlock,
   AcpSessionModeState,
   AcpSessionUpdate,
+  ElicitationResponse,
   PermissionOptionKind,
   SessionStatus,
 } from './protocol/types';
@@ -544,6 +545,16 @@ export async function sendLive(content: AcpContentBlock[]): Promise<void> {
 export function resolveLivePermission(toolCallId: string, kind: PermissionOptionKind): void {
   const entry = foregroundEntry('resolvePermission');
   if (entry) entry.client.resolvePermission(toolCallId, kind);
+}
+
+/**
+ * Answers one pending form-mode `elicitation/create` (submit / decline /
+ * cancel) on the foreground connection. The id is the Panda-local mint
+ * (`elicit-N`) the request was folded into the document under.
+ */
+export function resolveLiveElicitation(id: string, response: ElicitationResponse): void {
+  const entry = foregroundEntry('resolveElicitation');
+  if (entry) entry.client.resolveElicititation(id, response);
 }
 
 export function cancelLiveTurn(): void {

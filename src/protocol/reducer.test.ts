@@ -624,3 +624,61 @@ describe('reducer permission lifecycle (issue #18)', () => {
     });
   });
 });
+
+describe('reducer elicitation lifecycle (form mode)', () => {
+  const request = (id: string, title = `表单 ${id}`) => ({
+    id,
+    toolCallId: null,
+    title,
+    description: null,
+    fields: [
+      { key: 'tag', type: 'string' as const, title: 'Tag', required: true, options: null },
+    ],
+  });
+
+  it('records a pending elicitation', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'elicitation_requested', request: request('elicit-1') },
+    ]);
+    expect(doc.elicitations['elicit-1']).toEqual({
+      status: 'pending',
+      request: request('elicit-1'),
+      response: null,
+    });
+  });
+
+  it('settles accepted/declined/cancelled, keeps the record, and leaves siblings pending', () => {
+    const base = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'elicitation_requested', request: request('elicit-1') },
+      { sessionUpdate: 'elicitation_requested', request: request('elicit-2') },
+    ]);
+    const settled = applyUpdate(base, {
+      sessionUpdate: 'elicitation_resolved',
+      elicitationId: 'elicit-1',
+      response: { outcome: 'accepted', content: { tag: 'v1.0.0' } },
+    });
+    expect(settled.elicitations['elicit-1']).toEqual({
+      status: 'resolved',
+      request: request('elicit-1'),
+      response: { outcome: 'accepted', content: { tag: 'v1.0.0' } },
+    });
+    expect(settled.elicitations['elicit-2']).toMatchObject({ status: 'pending' });
+
+    const cancelled = applyUpdate(settled, {
+      sessionUpdate: 'elicitation_resolved',
+      elicitationId: 'elicit-2',
+      response: { outcome: 'cancelled' },
+    });
+    expect(cancelled.elicitations['elicit-2']).toMatchObject({ status: 'cancelled' });
+  });
+
+  it('resolving an unknown elicitation id warns and leaves the document unchanged', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const doc = fold([{ sessionUpdate: 'elicitation_resolved', elicitationId: 'ghost', response: { outcome: 'declined' } }]);
+    expect(doc.elicitations).toEqual({});
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('ghost'));
+    warnSpy.mockRestore();
+  });
+});

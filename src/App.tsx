@@ -36,6 +36,7 @@ export default function App() {
 
   const send = liveActive ? live.send : demo.send;
   const resolvePermission = liveActive ? live.resolvePermission : demo.resolvePermission;
+  const resolveElicitation = liveActive ? live.resolveElicitation : demo.resolveElicitation;
   const setMode = liveActive ? live.setMode : demo.setMode;
 
   // A session switch in flight is busy too: the composer must not send into a
@@ -85,7 +86,7 @@ export default function App() {
           <span className="app-header-meta">{headerMeta}</span>
         </header>
         {doc.plan && doc.plan.length > 0 && <PlanDock entries={doc.plan} />}
-        <MessageStream onResolvePermission={resolvePermission} />
+        <MessageStream onResolvePermission={resolvePermission} onResolveElicitation={resolveElicitation} />
         <StatusBar
           doc={doc}
           connection={connection}
