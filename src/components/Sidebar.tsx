@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { IconButton } from '@astryxdesign/core/IconButton';
-import { Selector } from '@astryxdesign/core/Selector';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import {
   Bot,
   MessagesSquare,
-  Palette,
   Plus,
   PlugZap,
+  Settings,
   Trash2,
   Unplug,
   X,
@@ -26,7 +25,7 @@ import {
 import { effectiveCapability, PANDA_HOST_CAPABILITIES } from '../capabilities';
 import type { AgentProfile } from '../profiles';
 import { loadProfiles, saveProfiles, subscribeProfiles } from '../profiles';
-import { isThemeId, loadThemeId, saveThemeId, subscribeTheme, THEMES, EXPOSED_THEME_IDS } from '../theme';
+import { navigate } from '../routes';
 import { workspaceDisplay, workspaceLabel } from '../workspace';
 import { ConnectPanel, type FormPrefill } from './ConnectPanel';
 import type { LiveSessionFacade } from '../useLiveSession';
@@ -55,10 +54,6 @@ export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }:
   // write-back) — storage is the single source, the subscription keeps this
   // copy from diverging.
   useEffect(() => subscribeProfiles(setProfiles), []);
-  // Theme choice: same single-source contract — main.tsx's <Theme> anchor
-  // re-renders off this subscription when the picker saves (#32 Phase 4).
-  const [themeId, setThemeId] = useState(loadThemeId);
-  useEffect(() => subscribeTheme(setThemeId), []);
 
   const liveMode = mode === 'live';
   const activeConnectionId = usePanda((s) => s.activeConnectionId);
@@ -92,14 +87,27 @@ export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }:
       <div className="sidebar-brand">
         <span className="sidebar-logo">🐼</span>
         Panda
-        <span className="sidebar-close">
+        <span className="sidebar-brand-actions">
           <IconButton
             variant="ghost"
             size="sm"
-            icon={<X size={16} />}
-            label="关闭导航"
-            clickAction={onMobileClose}
+            icon={<Settings size={15} />}
+            label="设置"
+            tooltip="设置:Agent 配置、主题"
+            clickAction={() => {
+              navigate('settings');
+              onMobileClose();
+            }}
           />
+          <span className="sidebar-close">
+            <IconButton
+              variant="ghost"
+              size="sm"
+              icon={<X size={16} />}
+              label="关闭导航"
+              clickAction={onMobileClose}
+            />
+          </span>
         </span>
       </div>
 
@@ -177,26 +185,6 @@ export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }:
             onMobileClose();
           }}
         />
-        {/* Hidden while a single theme is exposed (joint-debug): a one-option
-         * selector is noise. Reappears automatically when EXPOSED_THEME_IDS
-         * grows past one entry. */}
-        {THEMES.filter((choice) => EXPOSED_THEME_IDS.includes(choice.id)).length > 1 && (
-          <div className="sidebar-theme-picker">
-            <Palette size={14} className="sidebar-footer-icon" />
-            <div className="sidebar-theme-select">
-              <Selector
-                label="主题"
-                isLabelHidden
-                value={themeId}
-                onChange={(value) => {
-                  if (isThemeId(value)) saveThemeId(value);
-                }}
-                options={THEMES.filter((choice) => EXPOSED_THEME_IDS.includes(choice.id)).map((choice) => ({ value: choice.id, label: choice.label }))}
-                labelTooltip="主题：Astryx 官方主题（7 个），随时切换，自动记住选择"
-              />
-            </div>
-          </div>
-        )}
         <div className="sidebar-footer">
           <Bot size={14} className="sidebar-footer-icon" />
           <span className="truncate">

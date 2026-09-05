@@ -15,11 +15,23 @@ import {
 } from './store';
 import { useStatusHint } from './projector/hooks';
 import { modeStateFromConfigOptions } from './protocol/modes';
+import { useHashRoute } from './routes';
+import { SettingsPage } from './components/SettingsPage';
 import { useReplaySession } from './useReplaySession';
 import { useLiveSession } from './useLiveSession';
 import './App.css';
 
+/** Route-level shell (IA refactor phase 1): `#/` is the session screen,
+ * `#/settings` the settings screen. Everything session-related (both live
+ * and demo replay) lives in MainScreen so the settings route renders none
+ * of its state. */
 export default function App() {
+  const route = useHashRoute();
+  if (route === 'settings') return <SettingsPage />;
+  return <MainScreen />;
+}
+
+function MainScreen() {
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const mode = usePanda((s) => s.mode);
   const doc = useActiveDoc();

@@ -125,6 +125,14 @@ describe('updateProfileFields', () => {
     saveProfiles([a], storage);
     expect(updateProfileFields('missing', { url: 'ws://x/acp', workspace: workspaces.none() }, storage)).toEqual([a]);
   });
+
+  it('renames a profile and ignores blank name/url (they can never be blanked)', () => {
+    const storage = new MemoryStorage();
+    const a = profile();
+    saveProfiles([a], storage);
+    expect(updateProfileFields(a.id, { name: '  重命名  ' }, storage)).toEqual([{ ...a, name: '  重命名  ' }]);
+    expect(updateProfileFields(a.id, { name: '   ', url: '' }, storage)).toEqual([{ ...a, name: '  重命名  ' }]);
+  });
 });
 
 describe('subscribeProfiles', () => {

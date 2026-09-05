@@ -110,12 +110,13 @@ export function saveProfiles(profiles: AgentProfile[], storage: ProfileStorage =
   notifyProfiles(storage);
 }
 
-/** Updates one profile's url/workspace (connect-time edit write-back) and
- * persists. Returns the new list; unknown ids leave the list unchanged
- * (warned). */
+/** Updates editable profile fields and persists. Empty name/url strings are
+ * ignored (neither can be blanked through this API — the settings editor
+ * and the connect-time write-back share that guarantee). Returns the new
+ * list; unknown ids leave the list unchanged (warned). */
 export function updateProfileFields(
   id: string,
-  fields: Pick<AgentProfile, 'url' | 'workspace'>,
+  fields: Partial<Pick<AgentProfile, 'name' | 'url' | 'workspace'>>,
   storage: ProfileStorage = defaultStorage(),
 ): AgentProfile[] {
   const profiles = loadProfiles(storage);
@@ -124,7 +125,11 @@ export function updateProfileFields(
     console.warn(`[panda/profiles] write-back skipped: no profile ${id}`);
     return profiles;
   }
-  const updated = profiles.map((profile) => (profile.id === id ? { ...profile, ...fields } : profile));
+  const applied: Partial<Pick<AgentProfile, 'name' | 'url' | 'workspace'>> = {};
+  if (typeof fields.name === 'string' && fields.name.trim().length > 0) applied.name = fields.name;
+  if (typeof fields.url === 'string' && fields.url.trim().length > 0) applied.url = fields.url;
+  if (fields.workspace !== undefined) applied.workspace = fields.workspace;
+  const updated = profiles.map((profile) => (profile.id === id ? { ...profile, ...applied } : profile));
   saveProfiles(updated, storage);
   return updated;
 }
