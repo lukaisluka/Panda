@@ -448,7 +448,7 @@ describe('LiveAcpClient', () => {
     expect(h.capabilities[0]?.image).toBe(false);
     await expect(
       h.acpClient.send([{ type: 'image', data: 'aGk=', mimeType: 'image/png' }]),
-    ).rejects.toThrow('agent 未声明 promptCapabilities.image');
+    ).rejects.toThrow('the agent did not declare promptCapabilities.image');
     expect(h.updates).toEqual([]);
     h.closeAll();
   });
@@ -917,7 +917,7 @@ describe('LiveAcpClient', () => {
     const h = await setup({ protocolVersion: 2 });
 
     expect(h.disconnected.length).toBe(1);
-    expect(h.disconnected[0]).toMatch(/协议 v2/);
+    expect(h.disconnected[0]).toMatch(/protocol v2/);
     expect(h.connected).toEqual([]);
     h.closeAll();
   });
@@ -932,7 +932,7 @@ describe('LiveAcpClient', () => {
     h.killTransport(); // the "ACP service" dies mid-turn
     await turn;
 
-    expect(h.disconnected).toEqual(['与服务器的连接已断开']);
+    expect(h.disconnected).toEqual(['The connection to the server was closed']);
     expect(h.statuses.at(-1)).toBe('idle');
     h.closeAll();
   });
@@ -1525,7 +1525,7 @@ describe('LiveAcpClient', () => {
       await vi.advanceTimersByTimeAsync(0); // request reaches the wire, timer arms
       await vi.advanceTimersByTimeAsync(CONTROL_REQUEST_TIMEOUT_MS + 100);
       const h = await harnessPromise;
-      expect(h.disconnected).toEqual(['agent initialize 超过 30s 未应答']);
+      expect(h.disconnected).toEqual(['agent initialize timed out after 30s']);
       expect(h.connected).toEqual([]); // never got far enough to settle onConnected
       h.closeAll();
     } finally {
@@ -1540,7 +1540,7 @@ describe('LiveAcpClient', () => {
       await vi.advanceTimersByTimeAsync(0);
       await vi.advanceTimersByTimeAsync(CONTROL_REQUEST_TIMEOUT_MS + 100);
       const h = await harnessPromise;
-      expect(h.disconnected).toEqual(['agent session/new 超过 30s 未应答']);
+      expect(h.disconnected).toEqual(['agent session/new timed out after 30s']);
       expect(h.connected).toEqual([]);
       h.closeAll();
     } finally {
@@ -2171,7 +2171,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
 
     await acpClient.connect(new FailingTransport(new Error('Invalid URL')), '/tmp/project');
 
-    expect(disconnected).toEqual(['连接失败: Invalid URL']);
+    expect(disconnected).toEqual(['Connection failed: Invalid URL']);
     errorSpy.mockRestore();
   });
 
@@ -2279,7 +2279,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
 
     expect(h.switchLog).toEqual([
       { kind: 'stage', sessionId: 's-2', cwd: '/tmp/project', era: 1 },
-      { kind: 'rollback', reason: '连接已被更新的连接替换', era: 1 },
+      { kind: 'rollback', reason: 'The connection was replaced by a newer one', era: 1 },
     ]);
     expect(h.sessionIds).toEqual(['s-1']); // nothing settled onto the target
     h.closeAll();
@@ -2473,7 +2473,7 @@ describe('LiveAcpClient v1 authentication', () => {
   it('auth_required with no usable methods reports a hard error', async () => {
     const h = await setup({ authGate: true });
     expect(h.authChallenges).toEqual([]);
-    expect(h.disconnected).toEqual(['agent 要求认证，但没有提供浏览器可用的登录方式']);
+    expect(h.disconnected).toEqual(['The agent requires authentication but provided no browser-usable login method']);
     h.closeAll();
   });
 

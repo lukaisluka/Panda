@@ -20,7 +20,9 @@ export type Workspace =
 export const WORKSPACE_NONE_CWD = '/';
 
 /** 「无工作区」的显示名。 */
-export const NO_WORKSPACE_LABEL = '无工作区';
+import { t } from './i18n';
+
+export const NO_WORKSPACE_LABEL_KEY = 'workspace.none';
 
 /** The only place a Workspace becomes a protocol cwd. */
 export function workspaceToCwd(workspace: Workspace): string {
@@ -50,11 +52,11 @@ export function isWorkspace(value: unknown): value is Workspace {
 
 /** Session-row label derived from the agent-reported working directory. */
 export function workspaceLabel(cwd: string): string {
-  if (cwd === WORKSPACE_NONE_CWD) return NO_WORKSPACE_LABEL;
+  if (cwd === WORKSPACE_NONE_CWD) return t(NO_WORKSPACE_LABEL_KEY);
   return cwd.split('/').filter(Boolean).at(-1) ?? cwd;
 }
 
 /** A Workspace as shown in tooltips and connection metadata. */
 export function workspaceDisplay(workspace: Workspace): string {
-  return workspace.kind === 'local-directory' ? workspace.path : NO_WORKSPACE_LABEL;
+  return workspace.kind === 'local-directory' ? workspace.path : t(NO_WORKSPACE_LABEL_KEY);
 }

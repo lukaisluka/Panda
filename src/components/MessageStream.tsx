@@ -27,6 +27,7 @@ import { useMessageStreamItems } from '../projector/hooks';
 import { JANITOR_GAP_PX, scrollIntent, stickDecision, userScrollWindowEnd } from './scrollPolicy';
 import type { AttachedPermission, BlockFlatItem, FlatItem } from '../projector/messageStream';
 import './MessageStream.css';
+import { useI18n } from '../i18n/context';
 
 /** Tool-run membership for the ZCode spacing ladder: cards inside a run
  * of consecutive tool_call blocks sit 8px apart; run edges against text
@@ -62,6 +63,7 @@ export function MessageStream({ onResolvePermission, onResolveElicitation, onOpe
   onResolveElicitation: (id: string, response: ElicitationResponse) => void;
   onOpenElicitationUrl: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const [pinned, setPinned] = useState(true);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -220,7 +222,7 @@ export function MessageStream({ onResolvePermission, onResolveElicitation, onOpe
               <ContentColumn>
                 <div className="turn-notice" role="status">
                   <Spinner size="sm" className="turn-notice-icon" />
-                  <span>正在压缩上下文…</span>
+                  <span>{t('stream.compacting')}</span>
                 </div>
               </ContentColumn>
             );
@@ -245,7 +247,7 @@ export function MessageStream({ onResolvePermission, onResolveElicitation, onOpe
         <button
           onClick={jumpToBottom}
           className="stream-jump"
-          aria-label="回到最新"
+          aria-label={t('stream.jumpToLatest')}
         >
           <ArrowDown size={16} />
         </button>
@@ -268,6 +270,7 @@ const BlockView = memo(function BlockView({ block, streaming, permission, onReso
   prevIsTool: boolean;
   nextIsTool: boolean;
 }) {
+  const { t } = useI18n();
   switch (block.kind) {
     case 'user_message':
       return <UserMessage block={block} />;
@@ -296,12 +299,12 @@ const BlockView = memo(function BlockView({ block, streaming, permission, onReso
           {block.outcome === 'completed' ? (
             <>
               <Archive size={12} className="turn-notice-icon" />
-              <span>上下文已压缩</span>
+              <span>{t('stream.compacted')}</span>
             </>
           ) : (
             <>
               <TriangleAlert size={12} className="turn-notice-icon" />
-              <span>{block.error ? `上下文压缩失败：${block.error}` : '上下文压缩失败'}</span>
+              <span>{block.error ? t('stream.compactFailedReason', { error: block.error }) : t('stream.compactFailed')}</span>
             </>
           )}
         </div>

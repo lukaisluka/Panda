@@ -12,6 +12,7 @@ import {
   type DiffRow,
   type RowSegment,
 } from './diff-utils';
+import { useI18n, type Translate } from '../i18n/context';
 import './DiffView.css';
 
 type DiffPart = Extract<AcpToolCallContent, { type: 'diff' }>;
@@ -29,6 +30,7 @@ const ROW_BG: Record<DiffRow['type'], string> = {
  * layout — tokens swap in asynchronously from plain text.
  */
 export function DiffView({ diff }: { diff: DiffPart }) {
+  const { t } = useI18n();
   const oldText = diff.oldText ?? '';
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<number | null>(null);
@@ -101,7 +103,7 @@ export function DiffView({ diff }: { diff: DiffPart }) {
           type="button"
           onClick={() => void copyPatch()}
           className="md-codeblock-copy"
-          aria-label="复制补丁"
+          aria-label={t('diff.copyPatch')}
         >
           {copied ? <Check size={13} /> : <Copy size={13} />}
         </button>
@@ -109,7 +111,7 @@ export function DiffView({ diff }: { diff: DiffPart }) {
       <div className="diff-scroll">
         <table className="diff-table">
           <tbody>
-            {segments.flatMap((seg) => renderSegment(seg, expandedFolds, expandFold, lines))}
+            {segments.flatMap((seg) => renderSegment(seg, expandedFolds, expandFold, lines, t))}
           </tbody>
         </table>
       </div>
@@ -123,6 +125,7 @@ function renderSegment(
   expandedFolds: ReadonlySet<number>,
   expandFold: (id: number) => void,
   lines: { old: TokenSpan[][] | null; new: TokenSpan[][] | null } | null,
+  t: Translate,
 ) {
   if (seg.type !== 'fold') return [<DiffRowView key={`r-${seg.oldNo}-${seg.newNo}`} row={seg} tokens={tokenLineFor(seg, lines)} />];
   if (expandedFolds.has(seg.id)) {
@@ -134,7 +137,7 @@ function renderSegment(
     <tr key={`fold-${seg.id}`} className="diff-fold">
       <td colSpan={4}>
         <button type="button" className="diff-fold-btn" onClick={() => expandFold(seg.id)}>
-          ⋯ {seg.rows.length} unchanged lines
+          {t('diff.fold', { n: seg.rows.length })}
         </button>
       </td>
     </tr>,

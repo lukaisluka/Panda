@@ -22,6 +22,10 @@ import {
 import { navigate } from '../routes';
 import { isThemeId, loadThemeId, saveThemeId, subscribeTheme, THEMES, EXPOSED_THEME_IDS } from '../theme';
 import { workspaceDisplay } from '../workspace';
+import { Languages } from 'lucide-react';
+import { LOCALES, saveLocale } from '../i18n';
+import { t } from '../i18n';
+import { useI18n } from '../i18n/context';
 import './SettingsPage.css';
 
 /**
@@ -33,6 +37,7 @@ import './SettingsPage.css';
  * sessions.
  */
 export function SettingsPage() {
+  const { t } = useI18n();
   const [profiles, setProfiles] = useState<AgentProfile[]>(() => loadProfiles());
   useEffect(() => subscribeProfiles(setProfiles), []);
 
@@ -42,11 +47,11 @@ export function SettingsPage() {
         <IconButton
           variant="ghost"
           icon={<ArrowLeft size={16} />}
-          label="返回"
-          tooltip="回到会话界面"
+          label={t('settings.back')}
+          tooltip={t('settings.backTooltip')}
           clickAction={() => navigate('main')}
         />
-        <h1 className="settings-title">设置</h1>
+        <h1 className="settings-title">{t('settings.title')}</h1>
       </header>
 
       <div className="settings-body">
@@ -55,10 +60,21 @@ export function SettingsPage() {
             <span className="settings-card-icon" aria-hidden>
               <Palette size={14} />
             </span>
-            <h2 className="settings-card-title">外观</h2>
+            <h2 className="settings-card-title">{t('settings.appearance')}</h2>
           </div>
-          <p className="settings-card-desc">主题影响整个界面的配色,随时切换,自动记住选择。</p>
+          <p className="settings-card-desc">{t('settings.appearanceDesc')}</p>
           <ThemeSwatches />
+        </section>
+
+        <section className="settings-card">
+          <div className="settings-card-head">
+            <span className="settings-card-icon" aria-hidden>
+              <Languages size={14} />
+            </span>
+            <h2 className="settings-card-title">{t('settings.language')}</h2>
+          </div>
+          <p className="settings-card-desc">{t('settings.languageDesc')}</p>
+          <LanguageChips />
         </section>
 
         <ProfileCard profiles={profiles} />
@@ -71,23 +87,23 @@ export function SettingsPage() {
             <span className="settings-card-icon" aria-hidden>
               <Terminal size={14} />
             </span>
-            <h2 className="settings-card-title">开发者</h2>
+            <h2 className="settings-card-title">{t('settings.dev')}</h2>
               <div className="settings-card-actions">
                 <Button
                   variant="secondary"
                   size="sm"
-                  label="Demo 回放"
+                  label={t('settings.demoReplay')}
                   icon={<Play size={12} />}
                   clickAction={() => navigate('demo')}
-                  tooltip="打开 #/demo 剧本回放(不连真实 agent);重新进入即从头重放"
+                  tooltip={t('settings.demoReplayTooltip')}
                 />
               </div>
             </div>
-            <p className="settings-card-desc">仅开发构建可见的内部工具。</p>
+            <p className="settings-card-desc">{t('settings.devDesc')}</p>
           </section>
         )}
 
-        <p className="settings-colophon">Panda — 连接任意 ACP agent 的纯协议客户端</p>
+        <p className="settings-colophon">{t('settings.colophon')}</p>
       </div>
     </div>
   );
@@ -97,6 +113,7 @@ export function SettingsPage() {
  * color dot resolves that theme's real --color-accent — the preview needs no
  * per-theme color table. */
 function ThemeSwatches() {
+  const { t } = useI18n();
   const [themeId, setThemeId] = useState(loadThemeId);
   useEffect(() => subscribeTheme(setThemeId), []);
   const exposed = THEMES.filter((choice) => EXPOSED_THEME_IDS.includes(choice.id));
@@ -122,7 +139,37 @@ function ThemeSwatches() {
           </button>
         );
       })}
-      {exposed.length <= 1 && <span className="settings-theme-more">更多主题将陆续开放</span>}
+      {exposed.length <= 1 && <span className="settings-theme-more">{t('settings.themeMore')}</span>}
+    </div>
+  );
+}
+
+/** Language picker (#91): same chip row as the theme swatches. Option labels
+ * are each locale's own endonym (English / 中文) — never translated. Switching
+ * goes through saveLocale so storage stays the single source of truth and
+ * non-React t() callers move with the provider. */
+function LanguageChips() {
+  const { locale } = useI18n();
+  const next = (id: string) => {
+    if (id === 'en' || id === 'zh') saveLocale(id);
+  };
+  return (
+    <div className="settings-theme-swatches">
+      {LOCALES.map((id) => {
+        const selected = id === locale;
+        return (
+          <button
+            key={id}
+            type="button"
+            className={`settings-theme-swatch ${selected ? 'settings-theme-swatch--active' : ''}`}
+            aria-pressed={selected}
+            onClick={() => next(id)}
+          >
+            <span className="settings-theme-name">{id === 'en' ? 'English' : '中文'}</span>
+            {selected && <Check size={11} className="settings-theme-check" />}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -130,6 +177,7 @@ function ThemeSwatches() {
 /** The Agent 配置 card: header with the create action, the description, and
  * the avatar-row list (a row swaps for the edit form in place). */
 function ProfileCard({ profiles }: { profiles: AgentProfile[] }) {
+  const { t } = useI18n();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -139,13 +187,13 @@ function ProfileCard({ profiles }: { profiles: AgentProfile[] }) {
         <span className="settings-card-icon" aria-hidden>
           <Bot size={15} />
         </span>
-        <h2 className="settings-card-title">Agent 配置</h2>
+        <h2 className="settings-card-title">{t('settings.profiles')}</h2>
         {!creating && (
           <div className="settings-card-actions">
             <Button
               variant="secondary"
               size="sm"
-              label="新增配置"
+              label={t('settings.addProfile')}
               icon={<Plus size={12} />}
               clickAction={() => {
                 setEditingId(null);
@@ -155,9 +203,7 @@ function ProfileCard({ profiles }: { profiles: AgentProfile[] }) {
           </div>
         )}
       </div>
-      <p className="settings-card-desc">
-        保存 agent 的端点地址与默认工作区,新建会话时直接选用。
-      </p>
+      <p className="settings-card-desc">{t('settings.profilesDesc')}</p>
 
       {creating ? (
         <ProfileForm
@@ -170,8 +216,8 @@ function ProfileCard({ profiles }: { profiles: AgentProfile[] }) {
       ) : profiles.length === 0 ? (
         <div className="settings-profile-empty">
           <Bot size={22} className="settings-profile-empty-icon" />
-          <p className="settings-profile-empty-title">还没有 Agent 配置</p>
-          <p className="settings-profile-empty-desc">新增一条,之后新建会话时就能直接选这个 agent。</p>
+          <p className="settings-profile-empty-title">{t('settings.noProfiles')}</p>
+          <p className="settings-profile-empty-desc">{t('settings.noProfilesDesc')}</p>
         </div>
       ) : (
         <div className="settings-profile-list">
@@ -205,8 +251,8 @@ function ProfileCard({ profiles }: { profiles: AgentProfile[] }) {
                     variant="ghost"
                     size="sm"
                     icon={<Pencil size={12} />}
-                    label="编辑配置"
-                    tooltip="编辑名称、端点地址或默认工作区"
+                    label={t('settings.editProfile')}
+                    tooltip={t('settings.editProfileTooltip')}
                     clickAction={() => {
                       setCreating(false);
                       setEditingId(profile.id);
@@ -216,10 +262,10 @@ function ProfileCard({ profiles }: { profiles: AgentProfile[] }) {
                     variant="ghost"
                     size="sm"
                     icon={<Trash2 size={12} />}
-                    label="删除配置"
-                    tooltip="删除这条配置(不影响该端点已记忆的会话)"
+                    label={t('settings.deleteProfile')}
+                    tooltip={t('settings.deleteProfileTooltip')}
                     clickAction={() => {
-                      if (window.confirm(`删除配置「${profile.name}」?该端点已记忆的会话不受影响。`)) {
+                      if (window.confirm(t('settings.deleteProfileConfirm', { name: profile.name }))) {
                         saveProfiles(loadProfiles().filter((entry) => entry.id !== profile.id));
                         if (editingId === profile.id) setEditingId(null);
                       }
@@ -239,6 +285,7 @@ function ProfileCard({ profiles }: { profiles: AgentProfile[] }) {
  * servers ride every session/new · session/load to the agent. Same in-place
  * edit pattern as the Agent 配置 card. */
 function McpCard() {
+  const { t } = useI18n();
   const [servers, setServers] = useState<McpServerConfig[]>(() => loadMcpServers());
   useEffect(() => subscribeMcpServers(setServers), []);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -250,13 +297,13 @@ function McpCard() {
         <span className="settings-card-icon" aria-hidden>
           <Plug size={15} />
         </span>
-        <h2 className="settings-card-title">MCP 服务器</h2>
+        <h2 className="settings-card-title">{t('settings.mcp')}</h2>
         {!creating && (
           <div className="settings-card-actions">
             <Button
               variant="secondary"
               size="sm"
-              label="新增服务器"
+              label={t('settings.addMcp')}
               icon={<Plus size={12} />}
               clickAction={() => {
                 setEditingId(null);
@@ -266,10 +313,7 @@ function McpCard() {
           </div>
         )}
       </div>
-      <p className="settings-card-desc">
-        配置的工具服务会随每个新建/载入的会话下发给 agent,由 agent 侧连接并取得工具;stdio 命令在
-        agent 所在主机上执行。修改对下一个会话生效。
-      </p>
+      <p className="settings-card-desc">{t('settings.mcpDesc')}</p>
 
       {creating ? (
         <McpForm
@@ -282,8 +326,8 @@ function McpCard() {
       ) : servers.length === 0 ? (
         <div className="settings-profile-empty">
           <Plug size={22} className="settings-profile-empty-icon" />
-          <p className="settings-profile-empty-title">还没有 MCP 服务器</p>
-          <p className="settings-profile-empty-desc">新增一条,agent 就能在会话里用到它提供的工具。</p>
+          <p className="settings-profile-empty-title">{t('settings.noMcp')}</p>
+          <p className="settings-profile-empty-desc">{t('settings.noMcpDesc')}</p>
         </div>
       ) : (
         <div className="settings-profile-list">
@@ -317,8 +361,8 @@ function McpCard() {
                     variant="ghost"
                     size="sm"
                     icon={<Pencil size={12} />}
-                    label="编辑服务器"
-                    tooltip="编辑名称、类型或启动参数"
+                    label={t('settings.editMcp')}
+                    tooltip={t('settings.editMcpTooltip')}
                     clickAction={() => {
                       setCreating(false);
                       setEditingId(server.id);
@@ -328,10 +372,10 @@ function McpCard() {
                     variant="ghost"
                     size="sm"
                     icon={<Trash2 size={12} />}
-                    label="删除服务器"
-                    tooltip="删除这条 MCP 服务器配置(不影响已建立的会话)"
+                    label={t('settings.deleteMcp')}
+                    tooltip={t('settings.deleteMcpTooltip')}
                     clickAction={() => {
-                      if (window.confirm(`删除 MCP 服务器「${server.name}」?`)) {
+                      if (window.confirm(t('settings.deleteMcpConfirm', { name: server.name }))) {
                         saveMcpServers(loadMcpServers().filter((entry) => entry.id !== server.id));
                         if (editingId === server.id) setEditingId(null);
                       }
@@ -367,9 +411,9 @@ export type McpDraft = {
  * form must block saving on. */
 export function mcpDraftErrors(draft: McpDraft): Partial<Record<'name' | 'command' | 'url', string>> {
   const errors: Partial<Record<'name' | 'command' | 'url', string>> = {};
-  if (!draft.name.trim()) errors.name = '服务器名称不能为空';
-  if (draft.type === 'stdio' && !draft.command.trim()) errors.command = 'stdio 类型需要可执行命令';
-  if ((draft.type === 'http' || draft.type === 'sse') && !draft.url.trim()) errors.url = '需要一个 URL';
+  if (!draft.name.trim()) errors.name = t('settings.mcpNameRequired');
+  if (draft.type === 'stdio' && !draft.command.trim()) errors.command = t('settings.mcpCommandRequired');
+  if ((draft.type === 'http' || draft.type === 'sse') && !draft.url.trim()) errors.url = t('settings.mcpUrlRequired');
   return errors;
 }
 
@@ -378,6 +422,7 @@ function McpForm({ initial, onSave, onCancel }: {
   onSave(server: McpServerConfig): void;
   onCancel(): void;
 }) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState<McpDraft>(() => ({
     name: initial?.name ?? '',
     type: initial?.type ?? 'stdio',
@@ -406,38 +451,38 @@ function McpForm({ initial, onSave, onCancel }: {
   return (
     <div className="settings-profile-form">
       <TextInput
-        label="服务器名称"
+        label={t('settings.serverName')}
         value={draft.name}
         onChange={(name) => set({ name })}
-        placeholder="如:filesystem"
+        placeholder={t('settings.serverNamePlaceholder')}
         status={statusOf('name')}
         hasAutoFocus={!initial}
       />
       <Selector
-        label="类型"
+        label={t('settings.type')}
         value={draft.type}
         onChange={(type) => set({ type: type === 'http' || type === 'sse' ? type : 'stdio' })}
         options={[
-          { value: 'stdio', label: 'stdio(agent 主机命令)' },
-          { value: 'http', label: 'HTTP(Streamable)' },
-          { value: 'sse', label: 'SSE' },
+          { value: 'stdio', label: t('settings.typeStdio') },
+          { value: 'http', label: t('settings.typeHttp') },
+          { value: 'sse', label: t('settings.typeSse') },
         ]}
-        labelTooltip="stdio 由 agent 所在主机拉起进程;HTTP/SSE 由 agent 侧按 URL 拨号"
+        labelTooltip={t('settings.typeTooltip')}
       />
       {draft.type === 'stdio' ? (
         <>
           <TextInput
-            label="命令"
+            label={t('settings.command')}
             value={draft.command}
             onChange={(command) => set({ command })}
-            placeholder="如:npx -y @modelcontextprotocol/server-filesystem"
+            placeholder={t('settings.commandPlaceholder')}
             status={statusOf('command')}
           />
           <TextInput
-            label="参数(空格分隔)"
+            label={t('settings.args')}
             value={draft.args}
             onChange={(args) => set({ args })}
-            placeholder="如:/path/to/dir --another"
+            placeholder={t('settings.argsPlaceholder')}
           />
         </>
       ) : (
@@ -449,10 +494,10 @@ function McpForm({ initial, onSave, onCancel }: {
           status={statusOf('url')}
         />
       )}
-      {initial && <p className="settings-card-desc">修改在下一个新建/载入的会话生效。</p>}
+      {initial && <p className="settings-card-desc">{t('settings.mcpEditNote')}</p>}
       <div className="settings-form-actions">
-        <Button variant="primary" size="sm" label={initial ? '保存' : '创建'} clickAction={submit} />
-        <Button variant="ghost" size="sm" label="取消" clickAction={onCancel} />
+        <Button variant="primary" size="sm" label={initial ? t('settings.save') : t('settings.create')} clickAction={submit} />
+        <Button variant="ghost" size="sm" label={t('settings.cancel')} clickAction={onCancel} />
       </div>
     </div>
   );
@@ -463,9 +508,9 @@ export type ProfileDraft = { name: string; url: string; workspace: { kind: strin
  * form must block saving on. */
 export function profileDraftErrors(draft: ProfileDraft): Partial<Record<'name' | 'url' | 'path', string>> {
   const errors: Partial<Record<'name' | 'url' | 'path', string>> = {};
-  if (!draft.name.trim()) errors.name = '配置名称不能为空';
-  if (!draft.url.trim()) errors.url = '端点地址不能为空';
-  if (draft.workspace.kind === 'local-directory' && !draft.workspace.path.trim()) errors.path = '本机文件夹需要路径';
+  if (!draft.name.trim()) errors.name = t('settings.nameRequired');
+  if (!draft.url.trim()) errors.url = t('settings.endpointRequired');
+  if (draft.workspace.kind === 'local-directory' && !draft.workspace.path.trim()) errors.path = t('settings.pathRequired');
   return errors;
 }
 
@@ -474,6 +519,7 @@ function ProfileForm({ initial, onSave, onCancel }: {
   onSave(profile: AgentProfile): void;
   onCancel(): void;
 }) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState<ProfileDraft>(() => ({
     name: initial?.name ?? '',
     url: initial?.url ?? '',
@@ -509,15 +555,15 @@ function ProfileForm({ initial, onSave, onCancel }: {
   return (
     <div className="settings-profile-form">
       <TextInput
-        label="配置名称"
+        label={t('settings.profileName')}
         value={draft.name}
         onChange={(name) => set({ name })}
-        placeholder="如:test-agent"
+        placeholder={t('settings.profileNamePlaceholder')}
         status={statusOf('name')}
         hasAutoFocus={!initial}
       />
       <TextInput
-        label="端点地址"
+        label={t('settings.endpoint')}
         value={draft.url}
         onChange={(url) => set({ url })}
         placeholder="ws://host:port/acp"
@@ -526,22 +572,22 @@ function ProfileForm({ initial, onSave, onCancel }: {
       <div className="settings-form-row">
         <div className="settings-form-kind">
           <Selector
-            label="默认工作区"
+            label={t('settings.defaultWorkspace')}
             value={draft.workspace.kind}
             onChange={(kind) =>
               set({ workspace: kind === 'none' ? { kind: 'none', path: '' } : { kind: 'local-directory', path: draft.workspace.path } })
             }
             options={[
-              { value: 'local-directory', label: '本机文件夹' },
-              { value: 'none', label: '无工作区' },
+              { value: 'local-directory', label: t('nsd.localDir') },
+              { value: 'none', label: t('nsd.noWorkspace') },
             ]}
-            labelTooltip="新建会话时默认使用的 agent 侧工作上下文(ADR 0005)"
+            labelTooltip={t('settings.workspaceTooltip')}
           />
         </div>
         {draft.workspace.kind === 'local-directory' && (
           <div className="settings-form-path">
             <TextInput
-              label="工作区路径"
+              label={t('nsd.workspacePath')}
               isLabelHidden
               width="100%"
               value={draft.workspace.path}
@@ -552,10 +598,10 @@ function ProfileForm({ initial, onSave, onCancel }: {
           </div>
         )}
       </div>
-      {initial && <p className="settings-card-desc">端点与工作区的修改在下一次连接时生效。</p>}
+      {initial && <p className="settings-card-desc">{t('settings.editNote')}</p>}
       <div className="settings-form-actions">
-        <Button variant="primary" size="sm" label={initial ? '保存' : '创建'} clickAction={submit} />
-        <Button variant="ghost" size="sm" label="取消" clickAction={onCancel} />
+        <Button variant="primary" size="sm" label={initial ? t('settings.save') : t('settings.create')} clickAction={submit} />
+        <Button variant="ghost" size="sm" label={t('settings.cancel')} clickAction={onCancel} />
       </div>
     </div>
   );

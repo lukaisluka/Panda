@@ -23,6 +23,8 @@ import { useConnectionLifecycle } from '../projector/hooks';
 import { isLinkUp, type AttentionReason, type ConnectionPhase } from '../projector/connectionLifecycle';
 import { isDirectConnectionId, reconcileProfileSlots } from '../liveConnections';
 import { effectiveCapability, PANDA_HOST_CAPABILITIES } from '../capabilities';
+import { useI18n } from '../i18n/context';
+import { t } from '../i18n';
 import type { AgentProfile } from '../profiles';
 import { loadProfiles, newProfileId, saveProfiles, subscribeProfiles } from '../profiles';
 import { navigate } from '../routes';
@@ -46,6 +48,7 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
   mobileOpen: boolean;
   onMobileClose(): void;
 }) {
+  const { t } = useI18n();
   const [newSessionOpen, setNewSessionOpen] = useState(false);
   const orderedIds = useConnectionOrder();
   const [profiles, setProfiles] = useState<AgentProfile[]>(() => loadProfiles());
@@ -78,7 +81,7 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
               variant="ghost"
               size="sm"
               icon={<X size={16} />}
-              label="关闭导航"
+              label={t('app.closeNav')}
               clickAction={onMobileClose}
             />
           </span>
@@ -93,8 +96,8 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
           variant="ghost"
           size="sm"
           icon={<Plus size={13} />}
-          label="新建会话"
-          tooltip="选择 agent 开始新会话(可临时直连自定义地址)"
+          label={t('side.newSession')}
+          tooltip={t('side.newSessionTooltip')}
           clickAction={() => setNewSessionOpen(true)}
         />
       </div>
@@ -102,7 +105,7 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
         {!liveMode && (
           <div className="sidebar-demo-chip">
             <MessagesSquare size={13} className="sidebar-icon-faint" />
-            <span className="truncate">重构 auth 校验</span>
+            <span className="truncate">{t('app.demoHeaderTitle')}</span>
           </div>
         )}
         <div className="sidebar-group-list">
@@ -117,9 +120,7 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
             />
           ))}
           {liveMode && orderedIds.length === 0 && (
-            <div className="sidebar-empty">
-              还没有 agent — 用下方「添加 agent」添加配置,或点上方 + 临时直连
-            </div>
+            <div className="sidebar-empty">{t('side.noAgents')}</div>
           )}
         </div>
       </div>
@@ -134,7 +135,7 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
           }}
         >
           <Plus size={13} />
-          添加 agent
+          {t('side.addAgent')}
         </button>
         <div className="sidebar-footer">
           <Bot size={14} className="sidebar-footer-icon" />
@@ -149,8 +150,8 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
             variant="ghost"
             size="sm"
             icon={<Settings size={14} />}
-            label="设置"
-            tooltip="设置:Agent 配置、主题"
+            label={t('side.settings')}
+            tooltip={t('side.settingsTooltip')}
             clickAction={() => {
               navigate('settings');
               onMobileClose();
@@ -189,7 +190,7 @@ function saveDirectAsProfile(url: string, cwd: string | null): void {
       return trimmedUrl;
     }
   })();
-  const name = window.prompt('配置名称', defaultName)?.trim();
+  const name = window.prompt(t('side.profileNamePrompt'), defaultName)?.trim();
   if (!name) return; // cancelled or left blank
   saveProfiles([...loadProfiles(), { id: newProfileId(), name, url: trimmedUrl, workspace }]);
 }
@@ -197,30 +198,31 @@ function saveDirectAsProfile(url: string, cwd: string | null): void {
 /** Astryx StatusDot per lifecycle phase; 运行中 overlays a pulse. Phase →
  * pixels is mechanical lookup — precedence lives in the projection (#53). */
 function SlotStatusDot({ phase, running }: { phase: ConnectionPhase; running: boolean }) {
+  const { t } = useI18n();
   if (phase === 'connecting') {
     return <Spinner size="sm" />;
   }
   if (phase === 'error') {
-    return <StatusDot variant="error" label="连接错误" />;
+    return <StatusDot variant="error" label={t('conn.error')} />;
   }
   if (phase === 'auth-required') {
-    return <StatusDot variant="warning" label="需要登录" />;
+    return <StatusDot variant="warning" label={t('conn.authRequired')} />;
   }
   if (isLinkUp(phase)) {
     return running
-      ? <StatusDot variant="accent" isPulsing label="运行中" />
-      : <StatusDot variant="success" label="已连接" />;
+      ? <StatusDot variant="accent" isPulsing label={t('conn.running')} />
+      : <StatusDot variant="success" label={t('conn.connected')} />;
   }
-  return <StatusDot variant="neutral" label="未连接" />;
+  return <StatusDot variant="neutral" label={t('conn.disconnected')} />;
 }
 
 /** 需要关注 reasons in user words — the projection carries the reasons,
  * only their phrasing lives here. */
-const ATTENTION_LABELS: Record<AttentionReason, string> = {
-  'unread-completion': '未读完成',
-  'pending-permission': '权限待处理',
-  'connection-error': '连接错误',
-  'auth-required': '需要登录',
+const ATTENTION_LABELS: Record<AttentionReason, 'side.attention.unreadCompletion' | 'side.attention.pendingPermission' | 'side.attention.connectionError' | 'side.attention.authRequired'> = {
+  'unread-completion': 'side.attention.unreadCompletion',
+  'pending-permission': 'side.attention.pendingPermission',
+  'connection-error': 'side.attention.connectionError',
+  'auth-required': 'side.attention.authRequired',
 };
 
 /** One agent's section: header (status, indicators, hover actions), an
@@ -238,6 +240,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
   const slot = usePanda((s) => s.connections[connectionId]);
   const lifecycle = useConnectionLifecycle(connectionId);
   const activeSessionId = usePanda((s) => s.activeSessionId);
+  const { t } = useI18n();
   if (!slot || !lifecycle) return null;
 
   const { phase } = lifecycle;
@@ -271,7 +274,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
         >
           <SlotStatusDot phase={phase} running={lifecycle.running} />
           <span className="truncate sidebar-row-title">{title}</span>
-          {isDirectConnectionId(connectionId) && <span className="sidebar-temp-badge">临时</span>}
+          {isDirectConnectionId(connectionId) && <span className="sidebar-temp-badge">{t('side.temp')}</span>}
           {slot.connection.agentName && (
             <span className="truncate sidebar-row-sub">{slot.connection.agentName}</span>
           )}
@@ -282,8 +285,8 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
             {attention && !isActiveConnection && (
               <StatusDot
                 variant="error"
-                label="需要关注"
-                tooltip={`需要关注:${lifecycle.attention.map((reason) => ATTENTION_LABELS[reason]).join(' / ')}`}
+                label={t('side.needsAttention')}
+                tooltip={t('side.attentionTooltip', { reasons: lifecycle.attention.map((reason) => t(ATTENTION_LABELS[reason])).join(' / ') })}
               />
             )}
           </span>
@@ -294,8 +297,8 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
               variant="ghost"
               size="sm"
               icon={<BookmarkPlus size={12} />}
-              label="存为配置"
-              tooltip="把当前端点与工作区保存为 Agent 配置(连接不打断)"
+              label={t('side.saveProfile')}
+              tooltip={t('side.saveProfileTooltip')}
               clickAction={() => saveDirectAsProfile(slot.connection.url!, slot.connection.cwd)}
             />
           )}
@@ -304,8 +307,8 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
               variant="ghost"
               size="sm"
               icon={<Unplug size={12} />}
-              label="断开连接"
-              tooltip={isDirectConnectionId(connectionId) ? '断开(临时直连到此结束)' : '断开(保留会话槽,可重连)'}
+              label={t('side.disconnect')}
+              tooltip={isDirectConnectionId(connectionId) ? t('side.disconnectTemp') : t('side.disconnectSlot')}
               clickAction={() => live.disconnect(connectionId)}
             />
           )}
@@ -314,8 +317,8 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
               variant="ghost"
               size="sm"
               icon={<PlugZap size={12} />}
-              label="连接此配置"
-              tooltip={`连接 ${profile.name}(${profile.url})`}
+              label={t('side.connectProfile')}
+              tooltip={t('side.connectProfileTooltip', { name: profile.name, url: profile.url })}
               clickAction={() => live.connectProfile(profile)}
             />
           )}
@@ -324,10 +327,10 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
               variant="ghost"
               size="sm"
               icon={<Trash2 size={12} />}
-              label="移除连接"
-              tooltip="移除(断开并清除该连接的本地会话文档)"
+              label={t('side.removeConnection')}
+              tooltip={t('side.removeConnectionTooltip')}
               clickAction={() => {
-                if (window.confirm(`移除连接「${title}」?其本地会话记录将被清除(按端点记忆的会话列表保留)。`)) {
+                if (window.confirm(t('side.removeConfirm', { title }))) {
                   live.remove(connectionId);
                 }
               }}
@@ -345,15 +348,15 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
               <Button
                 variant="primary"
                 size="sm"
-                label="重连并恢复会话"
-                tooltip="优先 resume 保留当前对话;agent 不支持时用 session/load 重建历史"
+                label={t('side.resume')}
+                tooltip={t('side.resumeTooltip')}
                 clickAction={() => live.reconnectForeground({ resume: true })}
               />
             )}
             <Button
               variant={canResume ? 'secondary' : 'primary'}
               size="sm"
-              label="重连"
+              label={t('side.reconnect')}
               clickAction={() => live.reconnectForeground()}
             />
           </div>
@@ -388,13 +391,13 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
                     foregroundSession
                       ? undefined
                       : !canSwitch && connected && lifecycle.busy
-                        ? '等待当前回合或切换完成'
+                        ? t('side.disabled.busy')
                         : !connected && !hasDoc
-                          ? '连接后可查看/切换该会话'
+                          ? t('side.disabled.offline')
                           : connected && !loadSession.available
                             ? loadSession.reason === 'unavailable-on-host'
-                              ? '宿主暂不支持会话回放'
-                              : 'agent 不支持历史回放(session/load)'
+                              ? t('side.disabled.host')
+                              : t('side.disabled.agent')
                             : entry.cwd
                   }
                   className={`sidebar-session-btn ${
@@ -414,8 +417,8 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
                       variant="ghost"
                       size="sm"
                       icon={<Trash2 size={12} />}
-                      label="删除会话"
-                      tooltip="删除会话(session/delete)"
+                      label={t('side.deleteSession')}
+                      tooltip={t('side.deleteSessionTooltip')}
                       clickAction={() => live.deleteSession(connectionId, entry.sessionId)}
                     />
                   </span>

@@ -9,6 +9,7 @@ import type {
 } from '../protocol/types';
 import type { AttachedElicitation } from '../projector/messageStream';
 import './AuthGate.css';
+import { useI18n } from '../i18n/context';
 
 /**
  * Main view while the foreground connection sits in auth_required (v1):
@@ -25,6 +26,7 @@ export function AuthGate({ methods, message, elicitation, onAuthenticate, onReso
   onResolveElicitation(id: string, response: ElicitationResponse): void;
   onOpenElicitationUrl(id: string): void;
 }) {
+  const { t } = useI18n();
   const attached: AttachedElicitation | null =
     elicitation !== null ? { state: 'pending', request: elicitation } : null;
   return (
@@ -33,7 +35,7 @@ export function AuthGate({ methods, message, elicitation, onAuthenticate, onReso
         <span className="auth-gate-icon" aria-hidden>
           <KeyRound size={18} />
         </span>
-        <h2 className="auth-gate-title">此 agent 需要登录</h2>
+        <h2 className="auth-gate-title">{t('auth.gateTitle')}</h2>
         {message && <p className="auth-gate-message">{message}</p>}
         <div className="auth-gate-methods">
           {methods.map((method) => (
@@ -48,7 +50,7 @@ export function AuthGate({ methods, message, elicitation, onAuthenticate, onReso
             />
           ))}
           {methods.length === 0 && (
-            <p className="auth-gate-none">agent 未提供浏览器可用的登录方式</p>
+            <p className="auth-gate-none">{t('auth.noMethods')}</p>
           )}
         </div>
         {attached?.request.mode === 'form' && (

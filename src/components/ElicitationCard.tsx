@@ -10,6 +10,7 @@ import type {
 } from '../protocol/types';
 import type { AttachedElicitation } from '../projector/messageStream';
 import './ElicitationCard.css';
+import { useI18n } from '../i18n/context';
 
 /**
  * The form-mode elicitation card: the agent asked the user for structured
@@ -34,6 +35,7 @@ function PendingElicitationCard({ request, onResolve }: {
   request: FormRequest;
   onResolve: (id: string, response: ElicitationResponse) => void;
 }) {
+  const { t } = useI18n();
   const [values, setValues] = useState<Record<string, string | number | boolean | string[]>>({});
   const set = (key: string, value: string | number | boolean | string[]) =>
     setValues((current) => ({ ...current, [key]: value }));
@@ -85,7 +87,7 @@ function PendingElicitationCard({ request, onResolve }: {
     <div className="elicit-card">
       <div className="elicit-head">
         <FormInput size={14} />
-        Agent 请求信息
+        {t('elicit.title')}
       </div>
       {request.title && <p className="elicit-title">{request.title}</p>}
       {request.description && <p className="elicit-desc">{request.description}</p>}
@@ -95,8 +97,8 @@ function PendingElicitationCard({ request, onResolve }: {
         ))}
       </div>
       <div className="elicit-actions">
-        <Button size="sm" variant="secondary" label="拒绝" clickAction={() => onResolve(request.id, { outcome: 'declined' })} />
-        <Button size="sm" variant="primary" label="提交" isDisabled={!canSubmit} clickAction={submit} />
+        <Button size="sm" variant="secondary" label={t('elicit.reject')} clickAction={() => onResolve(request.id, { outcome: 'declined' })} />
+        <Button size="sm" variant="primary" label={t('elicit.submit')} isDisabled={!canSubmit} clickAction={submit} />
       </div>
     </div>
   );
@@ -126,10 +128,11 @@ function ElicitationField({ field, value, onChange }: {
   value: string | number | boolean | string[] | undefined;
   onChange: (value: string | number | boolean | string[]) => void;
 }) {
+  const { t } = useI18n();
   const label = (
     <span className="elicit-label">
       {field.title}
-      {field.required && <span className="elicit-required" title="必填">*</span>}
+      {field.required && <span className="elicit-required" title={t('elicit.required')}>*</span>}
     </span>
   );
 
@@ -137,7 +140,7 @@ function ElicitationField({ field, value, onChange }: {
     return (
       <div className="elicit-field">
         {label}
-        <p className="elicit-unsupported">暂不支持的字段类型({field.propertyType}),此项不可填写</p>
+        <p className="elicit-unsupported">{t('elicit.unsupported', { type: field.propertyType })}</p>
       </div>
     );
   }
@@ -209,7 +212,7 @@ function ElicitationField({ field, value, onChange }: {
           width="100%"
           value={raw}
           onChange={(next) => onChange(next)}
-          placeholder={field.type === 'integer' ? '整数' : '数字'}
+          placeholder={field.type === 'integer' ? t('elicit.placeholderInteger') : t('elicit.placeholderNumber')}
         />
       </div>
     );
@@ -232,19 +235,20 @@ function ElicitationField({ field, value, onChange }: {
 }
 
 function SettledElicitationCard({ elicitation }: { elicitation: { request: FormRequest; response: ElicitationResponse | null } }) {
+  const { t } = useI18n();
   const response = elicitation.response;
   const summary = !response
-    ? '已完成' // url-completed shape; a form settle always carries a response
+    ? t('elicit.done') // url-completed shape; a form settle always carries a response
     : response.outcome === 'accepted'
-      ? `已提交(${Object.keys(response.content).length} 项)`
+      ? t('elicit.submitted', { n: Object.keys(response.content).length })
       : response.outcome === 'declined'
-        ? '已拒绝'
-        : '已取消(非用户决定)';
+        ? t('elicit.declined')
+        : t('elicit.cancelled');
   return (
     <div className="elicit-card elicit-card--settled">
       <div className="elicit-head elicit-head--settled">
         <CircleCheckBig size={14} />
-        {elicitation.request.title ?? 'Agent 请求信息'} · {summary}
+        {elicitation.request.title ?? t('elicit.title')} · {summary}
       </div>
     </div>
   );

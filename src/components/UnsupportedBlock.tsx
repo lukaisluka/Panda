@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, CircleAlert } from 'lucide-react';
 import type { Block } from '../protocol/types';
 import './disclosure.css';
+import { useI18n } from '../i18n/context';
 
 type UnsupportedBlockModel = Extract<Block, { kind: 'unsupported' }>;
 
@@ -11,6 +12,7 @@ type UnsupportedBlockModel = Extract<Block, { kind: 'unsupported' }>;
  * raw notification stays inspectable — unsupported ≠ dropped.
  */
 export function UnsupportedBlock({ block }: { block: UnsupportedBlockModel }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const kind = block.notification.update.sessionUpdate;
 
@@ -18,7 +20,7 @@ export function UnsupportedBlock({ block }: { block: UnsupportedBlockModel }) {
     <div className="disclosure">
       <button onClick={() => setOpen((o) => !o)} className="disclosure-toggle">
         <CircleAlert size={16} className="disclosure-icon" />
-        <span className="disclosure-label">暂不支持的 ACP 事件 · {kind}</span>
+        <span className="disclosure-label">{t('unsupported.event', { kind })}</span>
         <ChevronDown
           size={13}
           className={`disclosure-chevron ${open ? 'disclosure-chevron--open' : ''}`}

@@ -1,4 +1,5 @@
 import type { RequestPermissionRequest } from '@agentclientprotocol/sdk';
+import { t } from './i18n';
 import { LiveAcpClient } from './acp/LiveAcpClient';
 import { WebSocketTransport } from './acp/transport/WebSocketTransport';
 import type {
@@ -356,7 +357,7 @@ function wireHandlers(entry: LiveConnection) {
       // Surface the failure on a live connection only: after a disconnect
       // a stale error banner must not linger.
       if (usePanda.getState().connections[connectionId]?.connection.status === 'connected') {
-        port.setConnection({ error: `切换会话失败: ${reason}` });
+        port.setConnection({ error: t('live.switchFailed', { reason }) });
       }
     },
   };

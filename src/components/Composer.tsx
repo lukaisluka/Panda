@@ -23,6 +23,7 @@ import { ConfigPanelCard } from './ConfigPanel';
 import { ContentColumn } from './ContentColumn';
 import { ModePicker } from './ModePicker';
 import './Composer.css';
+import { useI18n } from '../i18n/context';
 
 export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onStop, modes, onSetMode, commands, configOptions, onSetConfigOption }: {
   onSend: (content: AcpContentBlock[]) => void;
@@ -41,6 +42,7 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
   configOptions: AcpConfigOption[] | null;
   onSetConfigOption: (configId: string, value: string | boolean) => void;
 }) {
+  const { t } = useI18n();
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
@@ -80,7 +82,7 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error('[panda/composer] failed to read image attachment', err);
-      setAttachmentError(`读取图片失败：${message}`);
+      setAttachmentError(t('composer.readImageFailed', { message }));
     }
   };
 
@@ -127,7 +129,7 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
             <ConfigPanelCard options={configOptions} disabled={disabled} onSetOption={onSetConfigOption} />
           )}
           {commandItems && (
-            <div className="composer-commands" role="listbox" aria-label="斜杠命令">
+            <div className="composer-commands" role="listbox" aria-label={t('composer.commands')}>
               {commandItems.map((command, index) => (
                 <button
                   key={command.name}
@@ -149,7 +151,7 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
               ))}
               {commandItems[commandIndex]?.inputHint && (
                 <div className="composer-commands-hint">
-                  参数:{commandItems[commandIndex].inputHint}
+                  {t('composer.paramHint', { hint: commandItems[commandIndex].inputHint })}
                 </div>
               )}
             </div>
@@ -175,7 +177,7 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
                         setAttachments((current) => current.filter((entry) => entry.id !== item.id))
                       }
                       className="composer-remove"
-                      aria-label={`移除 ${item.name}`}
+                      aria-label={t('composer.removeAttachment', { name: item.name })}
                     >
                       <X size={12} />
                     </button>
@@ -205,7 +207,7 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
               rows={1}
               value={value}
               disabled={disabled}
-              placeholder={hint ?? '给 Panda 发消息…'}
+              placeholder={hint ?? t('composer.placeholder')}
               onChange={(e) => {
                 setValue(e.target.value);
                 setCommandIndex(0);
@@ -222,14 +224,14 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
                 variant="ghost"
                 size="sm"
                 icon={<Paperclip size={16} />}
-                label="添加图片"
+                label={t('composer.attach')}
                 isDisabled={attachmentDisabled}
                 tooltip={
                   !canAttachImages
-                    ? '当前 agent 未声明图片输入能力'
+                    ? t('composer.attachUnavailable')
                     : disabled
-                      ? '当前不可添加图片'
-                      : '添加图片'
+                      ? t('composer.attachDisabled')
+                      : t('composer.attach')
                 }
                 clickAction={() => fileInputRef.current?.click()}
               />
@@ -239,9 +241,9 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
                   variant={configOpen ? 'secondary' : 'ghost'}
                   size="sm"
                   icon={<SlidersHorizontal size={16} />}
-                  label="会话设置"
+                  label={t('composer.settings')}
                   isDisabled={disabled}
-                  tooltip={disabled ? '当前不可调整设置' : '会话设置'}
+                  tooltip={disabled ? t('composer.settingsDisabled') : t('composer.settings')}
                   clickAction={() => setConfigOpen((v) => !v)}
                 />
               )}
@@ -251,7 +253,7 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
                 variant="destructive"
                 size="sm"
                 icon={<Square size={11} strokeWidth={3} />}
-                label="停止"
+                label={t('composer.stop')}
                 clickAction={() => onStop?.()}
               />
             ) : (
@@ -259,7 +261,7 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
                 variant="primary"
                 size="sm"
                 icon={<ArrowUp size={16} strokeWidth={2.5} />}
-                label="发送"
+                label={t('composer.send')}
                 isDisabled={!canSend}
                 clickAction={submit}
               />
@@ -269,11 +271,9 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
         {attachmentError ? (
           <p className="composer-hint composer-hint--danger">{attachmentError}</p>
         ) : !canAttachImages ? (
-          <p className="composer-hint composer-hint--faint">当前 agent 未声明图片输入能力</p>
+          <p className="composer-hint composer-hint--faint">{t('composer.attachUnavailable')}</p>
         ) : (
-          <p className="composer-hint composer-hint--faint">
-            Enter 发送，Shift+Enter 换行 · 可粘贴或选择图片
-          </p>
+          <p className="composer-hint composer-hint--faint">{t('composer.hintImages')}</p>
         )}
     </ContentColumn>
   );

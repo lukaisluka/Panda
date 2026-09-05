@@ -27,10 +27,10 @@ describe('image attachments', () => {
 
     expect(classifyAttachments(items).map((item) => item.error)).toEqual([
       null,
-      '>5MB，不会发送',
+      '>5MB, will not be sent',
       null,
       null,
-      '最多 4 张，不会发送',
+      'Up to 4 images, will not be sent',
     ]);
   });
 

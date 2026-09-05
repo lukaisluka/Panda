@@ -28,6 +28,7 @@ import type {
   ToolCallStatus,
 } from '../protocol/types';
 import { CodeBlock, markdownComponents } from './CodeBlock';
+import { useI18n } from '../i18n/context';
 import { ClampBox } from './ClampBox';
 import { DiffView } from './DiffView';
 import { FileTypeIcon, splitFilePath } from './FileTypeIcon';
@@ -66,17 +67,18 @@ const FILE_VERB: Partial<Record<AcpToolKind, string>> = {
 /** pending 的双语义:附着 pending 权限时是真在等用户批准;否则只是排队
  * (如同批工具被另一个工具的 HITL 中断连带挂起),不能谎称「等待批准」。 */
 function StatusBadge({ status, permissionPending = false }: { status: ToolCallStatus; permissionPending?: boolean }) {
+  const { t } = useI18n();
   switch (status) {
     case 'pending':
       return permissionPending ? (
-        <Badge variant="warning" icon={<ShieldAlert size={12} />} label="等待批准" />
+        <Badge variant="warning" icon={<ShieldAlert size={12} />} label={t('tool.awaitApproval')} />
       ) : (
-        <span title="同批工具里有一个在等审批;审批是按整批一起恢复的,批准后这张卡立即执行">
-          <Badge variant="neutral" icon={<Spinner size="sm" />} label="排队中" />
+        <span title={t('tool.queuedTooltip')}>
+          <Badge variant="neutral" icon={<Spinner size="sm" />} label={t('tool.queued')} />
         </span>
       );
     case 'in_progress':
-      return <Badge variant="neutral" icon={<Spinner size="sm" />} label="执行中" />;
+      return <Badge variant="neutral" icon={<Spinner size="sm" />} label={t('tool.running')} />;
     case 'completed':
       return <Check size={14} className="tool-status-icon tool-status-icon--ok" />;
     case 'failed':
@@ -105,6 +107,7 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
   nextIsTool?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const { t } = useI18n();
 
   // Inbound notifications are not schema-validated, so `kind` may be a
   // vendor/extension value outside the TS union (that's how switch_mode got
@@ -244,17 +247,17 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
             if (item.type === 'unsupported') {
               return (
                 <div key={i} className="tool-unsupported">
-                  未支持的内容块({item.blockType})
+                  {t('tool.unsupportedBlock', { type: item.blockType })}
                 </div>
               );
             }
-            return <div key={i} className="tool-unsupported">未支持的内容块({String(item.type)})</div>;
+            return <div key={i} className="tool-unsupported">{t('tool.unsupportedBlock', { type: String(item.type) })}</div>;
           })}
           {(call.status === 'in_progress' || permission?.state === 'pending') && call.content.length === 0 && (
             // 挂着审批时它等的是批准不是输出(#88);pending(占位/排队)只有
             // 附着审批的情况才值得渲染等待行,排队语义由徽标自己讲。
             <div className="tool-waiting">
-              <Spinner size="sm" /> {permission?.state === 'pending' ? '等待批准后执行…' : '等待输出…'}
+              <Spinner size="sm" /> {permission?.state === 'pending' ? t('tool.waitingApproval') : t('tool.waitingOutput')}
             </div>
           )}
         </div>
@@ -269,6 +272,7 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
 
 /** Input 展开区(#83):主视图按 kind 特化,原始 JSON 永远收在折叠兜底。 */
 function InputSection({ call }: { call: ToolCallState }) {
+  const { t } = useI18n();
   const rawJson =
     call.rawInput && Object.keys(call.rawInput).length > 0
       ? JSON.stringify(call.rawInput, null, 2)
@@ -303,7 +307,7 @@ function InputSection({ call }: { call: ToolCallState }) {
       {view.kind === 'command' && view.extras.length > 0 && <InputFields entries={view.extras} />}
       {view.kind === 'fields' && <InputFields entries={view.entries} />}
       <details className="tool-input-details tool-input-details--raw">
-        <summary className="tool-input-summary">原始 JSON</summary>
+        <summary className="tool-input-summary">{t('tool.rawJson')}</summary>
         <ClampBox>
           <pre className="tool-input-pre">{rawJson}</pre>
         </ClampBox>
