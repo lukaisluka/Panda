@@ -250,9 +250,11 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
             }
             return <div key={i} className="tool-unsupported">未支持的内容块({String(item.type)})</div>;
           })}
-          {call.status === 'in_progress' && call.content.length === 0 && (
+          {(call.status === 'in_progress' || permission?.state === 'pending') && call.content.length === 0 && (
+            // 挂着审批时它等的是批准不是输出(#88);pending(占位/排队)只有
+            // 附着审批的情况才值得渲染等待行,排队语义由徽标自己讲。
             <div className="tool-waiting">
-              <Spinner size="sm" /> 等待输出…
+              <Spinner size="sm" /> {permission?.state === 'pending' ? '等待批准后执行…' : '等待输出…'}
             </div>
           )}
         </div>

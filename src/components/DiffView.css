@@ -77,6 +77,29 @@
 .diff-row--add .diff-cell { background: var(--color-diff-add); }
 .diff-row--del .diff-cell { background: var(--color-diff-del); }
 
+/* 未变更段折叠占位(#88):横跨全表的按钮行,点击展开该段。 */
+.diff-fold > td {
+  padding: 0;
+}
+
+.diff-fold-btn {
+  display: block;
+  width: 100%;
+  border: none;
+  padding: 2px 0;
+  background: color-mix(in oklab, var(--color-raised) 45%, transparent);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.diff-fold-btn:hover {
+  background: color-mix(in oklab, var(--color-raised) 80%, transparent);
+  color: var(--color-fg);
+}
+
 .diff-word--add {
   border-radius: 2px;
   background: color-mix(in oklab, var(--color-add) 25%, transparent);

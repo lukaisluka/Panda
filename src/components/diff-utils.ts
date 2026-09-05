@@ -50,6 +50,45 @@ export function computeRows(oldText: string, newText: string): DiffRow[] {
   return rows;
 }
 
+/** 未变更段折叠占位(#88):rows 携带被折起的原始行,展开由渲染层决定。 */
+export type FoldSegment = { type: 'fold'; id: number; rows: DiffRow[] };
+export type RowSegment = DiffRow | FoldSegment;
+
+/**
+ * 大 diff 的未变更段折叠(#88):总行数不超过 threshold 时原样返回;超过
+ * 后每个变更行两侧保留 context 行 ctx(变更段 ±3 行不折),其余连续 ctx
+ * 段折为占位。不足 2 行的余段直接显示——占位行本身也占一行,折 1 行没有
+ * 收益。fold id 按出现顺序编号,输入不变则稳定,渲染层拿它记展开状态。
+ */
+export function foldRows(rows: DiffRow[], threshold = 15, context = 3): RowSegment[] {
+  if (rows.length <= threshold) return rows;
+  const kept = new Array<boolean>(rows.length).fill(false);
+  rows.forEach((row, i) => {
+    if (row.type === 'ctx') return;
+    for (let k = Math.max(0, i - context); k <= Math.min(rows.length - 1, i + context); k++) {
+      kept[k] = true;
+    }
+  });
+  const segments: RowSegment[] = [];
+  let foldId = 0;
+  for (let i = 0; i < rows.length; ) {
+    if (kept[i]) {
+      segments.push(rows[i]!);
+      i++;
+      continue;
+    }
+    let end = i;
+    while (end < rows.length && !kept[end]) end++;
+    if (end - i < 2) {
+      for (let k = i; k < end; k++) segments.push(rows[k]!);
+    } else {
+      segments.push({ type: 'fold', id: foldId++, rows: rows.slice(i, end) });
+    }
+    i = end;
+  }
+  return segments;
+}
+
 /**
  * Standard unified patch (`git diff` format, #84):3 行上下文,相邻变更
  * (间隔 ≤ 2×context 行 ctx)合入同一 hunk,可直接 `git apply`。行数据

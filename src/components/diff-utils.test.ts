@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeRows, intersectSpans, unifiedPatch, withWordSpans } from './diff-utils';
+import { computeRows, foldRows, intersectSpans, unifiedPatch, withWordSpans } from './diff-utils';
 
 describe('computeRows', () => {
   it('produces a unified row list with dual line numbers', () => {
@@ -184,5 +184,63 @@ describe('unifiedPatch', () => {
   it('identical texts produce an empty body (headers only)', () => {
     const patch = unifiedPatch('same.txt', 'a\nb', 'a\nb');
     expect(patch).toBe(['--- a/same.txt', '+++ b/same.txt', ''].join('\n'));
+  });
+});
+
+describe('foldRows', () => {
+  const numbered = (n: number) => Array.from({ length: n }, (_, i) => `l${i + 1}`);
+  const rowsFor = (oldLines: string[], newLines: string[]) => computeRows(oldLines.join('\n'), newLines.join('\n'));
+
+  it('returns short diffs unfolded, up to the threshold', () => {
+    const rows = rowsFor(numbered(10), numbered(10).map((l) => (l === 'l5' ? 'X' : l))); // 11 行
+    expect(foldRows(rows, 15, 3)).toBe(rows); // identity: no fold machinery engaged
+    const boundary = rowsFor(numbered(9), numbered(9).map((l) => (l === 'l5' ? 'X' : l))); // 恰好 10 行
+    expect(foldRows(boundary, 10, 3)).toBe(boundary); // boundary: exactly at threshold stays unfolded
+  });
+
+  it('folds long unchanged tails, keeping 3 ctx rows around the change', () => {
+    const old = numbered(50);
+    const rows = rowsFor(old, old.map((l) => (l === 'l5' ? 'X' : l)));
+    const segments = foldRows(rows, 15, 3);
+    const folds = segments.filter((s): s is import('./diff-utils').FoldSegment => s.type === 'fold');
+    // 变更在第 5 行:前导 ctx 只有 4 行(3 行保留 + 1 行不值得折),尾部
+    // l9..l50 全部折为一组
+    expect(folds).toHaveLength(1);
+    expect(folds[0]!.rows).toHaveLength(42);
+    expect(folds[0]!.rows[0]!.text).toBe('l9');
+    expect(folds[0]!.rows.at(-1)!.text).toBe('l50');
+    // 占位行前后各留 3 行 ctx(l6-l8 与变更段相邻,l1-l4 原样显示)
+    expect(segments.filter((s) => s.type !== 'fold')).toHaveLength(rows.length - 42);
+  });
+
+  it('does not fold between adjacent changes (gap ≤ 2×context+1)', () => {
+    const old = numbered(40);
+    // 变更从第 4 行起每 6 行一个(l4, l10, …, l40):间隔 5 行 ctx 全保留,
+    // 首尾也只剩 ≤3 行 ctx——整份 diff 无一处折叠
+    const next = old.map((l, i) => ((i + 1) % 6 === 3 ? l + '!' : l));
+    const segments = foldRows(rowsFor(old, next), 15, 3);
+    expect(segments.filter((s) => s.type === 'fold')).toHaveLength(0);
+  });
+
+  it('folds only the excess when the gap is 2×context+2', () => {
+    const old = numbered(30);
+    // 变更在第 5 行和第 16 行,间隔 10 行 ctx:两侧各留 3,中段 4 行折起;
+    // 尾部 l21..l30(10 行)是第二组折叠
+    const next = old.map((l) => (l === 'l5' || l === 'l16' ? l + '!' : l));
+    const folds = foldRows(rowsFor(old, next), 15, 3).filter(
+      (s): s is import('./diff-utils').FoldSegment => s.type === 'fold',
+    );
+    expect(folds).toHaveLength(2);
+    expect(folds[0]!.rows.map((r) => r.text)).toEqual(['l9', 'l10', 'l11', 'l12']);
+    expect(folds[1]!.rows.map((r) => r.text)).toEqual(numbered(30).slice(19)); // l20..l30,共 11 行
+  });
+
+  it('numbers fold ids sequentially so render state stays stable', () => {
+    const old = numbered(60);
+    const next = old.map((l, i) => (i === 4 || i === 34 || i === 54 ? l + '!' : l));
+    const folds = foldRows(rowsFor(old, next), 15, 3).filter(
+      (s): s is import('./diff-utils').FoldSegment => s.type === 'fold',
+    );
+    expect(folds.map((f) => f.id)).toEqual([0, 1, 2]);
   });
 });
