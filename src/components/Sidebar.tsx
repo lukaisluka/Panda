@@ -5,6 +5,7 @@ import { Spinner } from '@astryxdesign/core/Spinner';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import {
   Bot,
+  BookmarkPlus,
   MessagesSquare,
   PlugZap,
   Plus,
@@ -25,9 +26,9 @@ import {
 import { isDirectConnectionId } from '../liveConnections';
 import { effectiveCapability, PANDA_HOST_CAPABILITIES } from '../capabilities';
 import type { AgentProfile } from '../profiles';
-import { loadProfiles, subscribeProfiles } from '../profiles';
+import { loadProfiles, newProfileId, saveProfiles, subscribeProfiles } from '../profiles';
 import { navigate } from '../routes';
-import { workspaceLabel } from '../workspace';
+import { cwdToWorkspace, workspaceLabel } from '../workspace';
 import type { LiveSessionFacade } from '../useLiveSession';
 import { NewSessionDialog } from './NewSessionDialog';
 import './Sidebar.css';
@@ -135,17 +136,7 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
           ))}
           {liveMode && orderedIds.length === 0 && (
             <div className="sidebar-empty">
-              还没有 agent — 先添加一条配置
-              <Button
-                variant="secondary"
-                size="sm"
-                label="添加 agent"
-                icon={<Plus size={12} />}
-                clickAction={() => {
-                  navigate('settings');
-                  onMobileClose();
-                }}
-              />
+              还没有 agent — 用下方「添加 agent」添加配置,或点上方 + 临时直连
             </div>
           )}
         </div>
@@ -188,8 +179,29 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
   );
 }
 
-/** Astryx StatusDot per connection status; running overlays a pulse. */
-function SlotStatusDot({ status, running }: { status: ConnectionStatus; running: boolean }) {
+/**
+ * Saves a 临时直连's endpoint as an Agent 配置 (phase 4): the running
+ * connection is deliberately NOT migrated — the 配置's seeded slot appears
+ * ready for the next session, and the temporary one ends with its disconnect
+ * as always. Default name is the endpoint's host:port.
+ */
+function saveDirectAsProfile(url: string, cwd: string | null): void {
+  const trimmedUrl = url.trim();
+  if (!trimmedUrl) return;
+  const workspace = cwdToWorkspace(cwd ?? '/');
+  const defaultName = (() => {
+    try {
+      return new URL(trimmedUrl).host;
+    } catch {
+      return trimmedUrl;
+    }
+  })();
+  const name = window.prompt('配置名称', defaultName)?.trim();
+  if (!name) return; // cancelled or left blank
+  saveProfiles([...loadProfiles(), { id: newProfileId(), name, url: trimmedUrl, workspace }]);
+}
+
+/** Astryx StatusDot per connection status; running overlays a pulse. */function SlotStatusDot({ status, running }: { status: ConnectionStatus; running: boolean }) {
   if (status === 'connecting') {
     return <Spinner size="sm" />;
   }
@@ -252,6 +264,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
         >
           <SlotStatusDot status={status} running={running} />
           <span className="truncate sidebar-row-title">{title}</span>
+          {isDirectConnectionId(connectionId) && <span className="sidebar-temp-badge">临时</span>}
           {slot.connection.agentName && (
             <span className="truncate sidebar-row-sub">{slot.connection.agentName}</span>
           )}
@@ -265,6 +278,16 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
           </span>
         </button>
         <div className="sidebar-hover-actions">
+          {isDirectConnectionId(connectionId) && slot.connection.url && (
+            <IconButton
+              variant="ghost"
+              size="sm"
+              icon={<BookmarkPlus size={12} />}
+              label="存为配置"
+              tooltip="把当前端点与工作区保存为 Agent 配置(连接不打断)"
+              clickAction={() => saveDirectAsProfile(slot.connection.url!, slot.connection.cwd)}
+            />
+          )}
           {(connected || status === 'connecting') && (
             <IconButton
               variant="ghost"

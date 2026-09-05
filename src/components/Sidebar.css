@@ -227,6 +227,18 @@
 
 /* --- Offline / errored agent sections (phase 3) --- */
 
+/* 临时直连 marker (phase 4): a direct connection dies with its disconnect —
+ * the badge is what separates it from a saved 配置's section. */
+.sidebar-temp-badge {
+  flex-shrink: 0;
+  padding: 1px 5px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-full);
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--color-muted);
+}
+
 .sidebar-empty {
   padding: 8px 12px; /* px-3 py-2 */
   font-size: 13px;
