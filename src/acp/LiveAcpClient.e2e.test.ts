@@ -1,7 +1,7 @@
 /// <reference types="node" />
 
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,7 +32,8 @@ import type {
  * SDK 假件,deepagents-acp + deepagents 全部真实运行,只有 LLM 是确定性
  * 剧本模型(scenarios.py)。
  *
- * 需要本机装有 uv;没有 uv 时整组跳过(不破坏 `pnpm test` 的零依赖运行)。
+ * 需要 test-agent 已安装依赖(pnpm install 后 test-agent/node_modules 存在,
+ * 内含 tsx);未安装时整组跳过(不破坏 `pnpm test` 的零依赖运行)。
  * 可用 PANDA_TEST_AGENT_E2E=skip 强制跳过。
  */
 
@@ -40,15 +41,7 @@ const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const PROJECT_DIR = join(REPO_ROOT, 'test-agent');
 
 const forcedSkip = process.env.PANDA_TEST_AGENT_E2E === 'skip';
-let hasUv = false;
-if (!forcedSkip) {
-  try {
-    execFileSync('uv', ['--version'], { stdio: 'ignore' });
-    hasUv = true;
-  } catch {
-    hasUv = false;
-  }
-}
+const hasAgentDeps = !forcedSkip && existsSync(join(PROJECT_DIR, 'node_modules'));
 
 type Records = {
   updates: AcpSessionUpdate[];
@@ -105,7 +98,7 @@ function findFreePort(): Promise<number> {
   });
 }
 
-describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
+describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
   let agentProcess: ChildProcess | null = null;
   let serverLog = '';
   let sandboxDir = '';
@@ -127,14 +120,11 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
     port = await findFreePort();
 
     agentProcess = spawn(
-      'uv',
+      process.execPath,
       [
-        'run',
-        '--project',
-        PROJECT_DIR,
-        'python',
-        '-m',
-        'panda_test_agent',
+        '--import',
+        'tsx',
+        join(PROJECT_DIR, 'src', 'main.ts'),
         'serve',
         '--host',
         '127.0.0.1',
@@ -146,6 +136,7 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
         stateDir,
       ],
       {
+        cwd: PROJECT_DIR,
         detached: true,
         stdio: ['ignore', 'pipe', 'pipe'],
         // Developer-local test-agent/.env may opt into a billable real model.
