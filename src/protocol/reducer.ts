@@ -82,9 +82,11 @@ export function applyUpdate(
         {
           ...existing,
           title: update.title ?? existing.title,
+          kind: update.kind ?? existing.kind,
           status: update.status ?? existing.status,
           content: update.content ?? existing.content,
           locations: update.locations ?? existing.locations,
+          rawInput: update.rawInput ?? existing.rawInput,
           rawOutput: update.rawOutput ?? existing.rawOutput,
         },
         update.raw,

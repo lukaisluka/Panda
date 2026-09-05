@@ -296,9 +296,14 @@ export type AcpSessionUpdate =
       /** Every field except toolCallId is optional; only changes are sent. */
       toolCallId: string;
       title?: string;
+      /** v1 ToolCallUpdate.kind — agents may classify the call only after
+       * creation; a late kind re-icons the existing card. */
+      kind?: AcpToolKind;
       status?: AcpToolCallStatus;
       content?: AcpToolCallContent[];
       locations?: AcpToolCallLocation[];
+      /** v1 ToolCallUpdate.rawInput — same merge rule as the create event. */
+      rawInput?: Record<string, unknown>;
       /** The tool's raw output object, when the agent reports it separately
        * from content (protocol v1 ToolCallUpdate.rawOutput). */
       rawOutput?: Record<string, unknown>;

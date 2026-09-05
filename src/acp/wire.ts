@@ -294,9 +294,11 @@ function toToolCallUpdate(call: ToolCallUpdate, raw: SessionNotification): AcpSe
     sessionUpdate: 'tool_call_update',
     toolCallId: call.toolCallId,
     title: call.title ?? undefined,
+    kind: call.kind ?? undefined,
     status: call.status ?? undefined,
     content: toToolContent(call.content, call.toolCallId),
     locations: toToolLocations(call.locations),
+    rawInput: toRawJson(call.rawInput, call.toolCallId, 'rawInput'),
     rawOutput: toRawJson(call.rawOutput, call.toolCallId, 'rawOutput'),
     raw,
   };

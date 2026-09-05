@@ -598,3 +598,21 @@ describe('toConfigOptions (session config whitelisting)', () => {
     warnSpy.mockRestore();
   });
 });
+
+  it('passes a late kind and rawInput through tool_call_update (merge inputs for the reducer)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const n = note({
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 't-5',
+      kind: 'execute',
+      rawInput: { command: 'pnpm test' },
+    } as object);
+    expect(toAcpUpdates(n)).toMatchObject([
+      { sessionUpdate: 'tool_call_update', toolCallId: 't-5', kind: 'execute', rawInput: { command: 'pnpm test' } },
+    ]);
+
+    const bad = note({ sessionUpdate: 'tool_call_update', toolCallId: 't-6', rawInput: 'oops' } as object);
+    expect(toAcpUpdates(bad)).toMatchObject([{ sessionUpdate: 'tool_call_update', toolCallId: 't-6', rawInput: undefined }]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('rawInput'));
+    warnSpy.mockRestore();
+  });

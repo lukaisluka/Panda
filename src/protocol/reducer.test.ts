@@ -850,3 +850,25 @@ describe('reducer turn notices (PromptResponse.stopReason)', () => {
     }
   });
 });
+
+describe('reducer tool_call_update field merging', () => {
+  it('a late kind re-icons the call; late rawInput lands in the details', () => {
+    let doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'tool_call', toolCallId: 't-1', title: 'Working', kind: 'other', status: 'in_progress' },
+    ]);
+    doc = applyUpdate(doc, { sessionUpdate: 'tool_call_update', toolCallId: 't-1', kind: 'edit' });
+    doc = applyUpdate(doc, { sessionUpdate: 'tool_call_update', toolCallId: 't-1', rawInput: { file: 'a.ts' } });
+    const call = doc.turns[0]!.blocks.find((b) => b.kind === 'tool_call');
+    expect(call).toMatchObject({ kind: 'tool_call', call: { kind: 'edit', rawInput: { file: 'a.ts' }, title: 'Working' } });
+  });
+
+  it('absent fields keep the existing values (only changes are sent)', () => {
+    let doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'tool_call', toolCallId: 't-1', title: 'Read', kind: 'read', rawInput: { path: '/x' } },
+    ]);
+    doc = applyUpdate(doc, { sessionUpdate: 'tool_call_update', toolCallId: 't-1', status: 'completed' });
+    expect(doc.turns[0]!.blocks.find((b) => b.kind === 'tool_call')).toMatchObject({ kind: 'tool_call', call: { kind: 'read', rawInput: { path: '/x' } } });
+  });
+});
