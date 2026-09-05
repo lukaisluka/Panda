@@ -301,7 +301,7 @@ export const usePanda = create<PandaState>((set) => ({
       // their own transactional commit, never through this action.
       return {
         activeConnectionId: connectionId,
-        activeSessionId: sessionId ?? existing.connection.sessionId ?? null,
+        activeSessionId: sessionId ?? foregroundSessionId(s, connectionId),
         connections: {
           ...s.connections,
           [connectionId]: { ...existing, unreadCompletion: false },
@@ -377,6 +377,29 @@ export type ConnectionStorePort = {
   rollbackStagedSession(snapshot: SessionSwitchSnapshot): void;
 };
 
+/**
+ * The single write channel for the UI session pointer (#59): `activeSessionId`
+ * mirrors the foreground connection's anchor (`connection.sessionId`) — it
+ * never moves on its own. Sanctioned divergences are explicit at their call
+ * sites: demo replay (the session is intentionally unanchored, pointer stays
+ * 'demo') and retained-document viewing (an explicit sessionId on
+ * setActiveConnection). Every move of an anchor or the foreground must route
+ * through these helpers so the two pointers cannot drift.
+ */
+
+/** The anchored session of `connectionId` — what its UI pointer would show. */
+export const foregroundSessionId = (s: PandaState, connectionId: string): string | null =>
+  s.connections[connectionId]?.connection.sessionId ?? null;
+
+/**
+ * Whether a session move on `connectionId` carries the UI pointer too: only
+ * the foreground connection's session is "what the user is looking at". A
+ * null foreground (transient during teardown) follows along — the rule the
+ * adopt/commit writers have always applied.
+ */
+const carriesUiPointer = (s: PandaState, connectionId: string): boolean =>
+  s.activeConnectionId === connectionId || s.activeConnectionId === null;
+
 export function connectionStorePort(connectionId: string): ConnectionStorePort {
   /** The session this port's driver currently feeds; set via adoptSession. */
   let currentSessionId: string | null = null;
@@ -428,9 +451,7 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
         return {
           ...(patched ?? {}),
           // Only the active connection moves the UI pointer.
-          ...(s.activeConnectionId === connectionId || s.activeConnectionId === null
-            ? { activeSessionId: sessionId }
-            : {}),
+          ...(carriesUiPointer(s, connectionId) ? { activeSessionId: sessionId } : {}),
         };
       });
     },
@@ -514,6 +535,13 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
         const patched = patchConnectionState(s, connectionId, (state) => ({
           sessions: state.sessions.filter((entry) => entry.sessionId !== sessionId),
           docs: Object.fromEntries(Object.entries(state.docs).filter(([id]) => id !== sessionId)),
+          // The anchor must not dangle at the deleted session (#59): an
+          // error-state resume (canResume: sessionId !== null) would fire
+          // session/load at a session the agent no longer knows.
+          connection:
+            state.connection.sessionId === sessionId
+              ? { ...state.connection, sessionId: null }
+              : state.connection,
         }));
         // The deleted session must not stay behind as a dangling UI pointer.
         return {
@@ -613,9 +641,7 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
           // Only the active connection moves the UI pointer (same rule as
           // adoptSession) — and only now: a failed switch must leave the
           // user where they were.
-          ...(s.activeConnectionId === connectionId || s.activeConnectionId === null
-            ? { activeSessionId: sessionId }
-            : {}),
+          ...(carriesUiPointer(s, connectionId) ? { activeSessionId: sessionId } : {}),
         };
       });
     },
