@@ -70,8 +70,19 @@ function isProfile(value: unknown): value is AgentProfile {
   );
 }
 
-/** Loads all saved profiles; corrupt JSON resets to [], malformed entries are
- * dropped loudly (the storage is best-effort, the console is not). */
+/** Best-effort removal of a poisoned key (#87): without it a malformed entry
+ * survives every load and re-warns forever — the console is not a cleanup. */
+function purgeProfiles(storage: ProfileStorage): void {
+  try {
+    storage.removeItem(PROFILES_KEY);
+  } catch (err) {
+    console.warn('[panda/profiles] could not purge malformed profiles storage', err);
+  }
+}
+
+/** Loads all saved profiles; malformed storage or entries are dropped loudly
+ * AND removed from storage (直接清理,不迁移 — #87 拍板), so the warning
+ * fires once per bad entry instead of on every load. */
 export function loadProfiles(storage: ProfileStorage = defaultStorage()): AgentProfile[] {
   let raw: string | null;
   try {
@@ -85,6 +96,7 @@ export function loadProfiles(storage: ProfileStorage = defaultStorage()): AgentP
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
       console.warn('[panda/profiles] profiles storage is not an array — starting empty');
+      purgeProfiles(storage);
       return [];
     }
     const valid = parsed.filter((entry) => {
@@ -92,9 +104,18 @@ export function loadProfiles(storage: ProfileStorage = defaultStorage()): AgentP
       console.warn(`[panda/profiles] malformed profile dropped: ${JSON.stringify(entry)}`);
       return false;
     });
+    if (valid.length !== parsed.length) {
+      // 回写净化后的列表(不走 saveProfiles:它会再触发 notify→load 重入)
+      try {
+        storage.setItem(PROFILES_KEY, JSON.stringify(valid));
+      } catch (err) {
+        console.warn('[panda/profiles] could not persist cleaned profiles', err);
+      }
+    }
     return valid;
   } catch (err) {
     console.warn('[panda/profiles] could not parse profiles storage — starting empty', err);
+    purgeProfiles(storage);
     return [];
   }
 }

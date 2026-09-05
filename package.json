@@ -9,7 +9,7 @@
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run",
+    "test": "tsc --noEmit -p tsconfig.json && vitest run",
     "preview": "vite preview",
     "postinstall": "node scripts/sync-material-icons.mjs"
   },

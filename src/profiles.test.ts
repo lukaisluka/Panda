@@ -85,6 +85,23 @@ describe('loadProfiles', () => {
     expect(loadProfiles(storage)).toEqual([good, noneKind]);
   });
 
+  it('removes malformed entries from storage on load — the warning fires once (#87)', () => {
+    const storage = new MemoryStorage();
+    const good = profile();
+    storage.setRaw(JSON.stringify([{ id: 'no-url', name: '坏条目', workspace: workspaces.local() }, good, 'string']));
+    expect(loadProfiles(storage)).toEqual([good]);
+    // 直接清理(拍板):坏条目从 storage 消失,二次加载不再警告、结果稳定
+    expect(loadProfiles(storage)).toEqual([good]);
+    expect(JSON.parse(String(storage.raw))).toEqual([good]);
+  });
+
+  it('purges the key when the stored value is not an array (#87)', () => {
+    const storage = new MemoryStorage();
+    storage.setRaw('{"id":"x"}');
+    expect(loadProfiles(storage)).toEqual([]);
+    expect(storage.raw).toBeNull();
+  });
+
   it('survives a storage backend that throws on read', () => {
     const storage = new MemoryStorage();
     vi.spyOn(storage, 'getItem').mockImplementation(() => {
