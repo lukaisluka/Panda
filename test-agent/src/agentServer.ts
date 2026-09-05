@@ -276,7 +276,13 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
     }
     activeToolCalls.delete(message.tool_call_id);
     if (active.name === 'edit_file') {
-      // diff 已随 start 送达,结果文本是冗余
+      // diff 已随 start 送达,结果文本是冗余;但终态必须推进,否则卡片
+      // 永远停在 pending,accept_edits 静默放行时会挂着「等待批准」误导用户
+      await send(sessionId, {
+        sessionUpdate: 'tool_call_update',
+        toolCallId: message.tool_call_id,
+        status: message.status === 'error' ? 'failed' : 'completed',
+      });
       return;
     }
     const raw = toolText(message.content);

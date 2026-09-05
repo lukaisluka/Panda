@@ -331,6 +331,18 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
       expect(editDiff?.path).toBe('/auth.ts');
       expect(editDiff?.newText).toContain('!validateSession(session)');
 
+      // 每张工具卡都收到终态推进(issue #75):edit_file 曾整体跳过结果事件,
+      // 卡片永远停在 pending「等待批准」——accept_edits 静默放行时纯误导。
+      // 注意 edit 的 diff 由 Panda 投影成一条无 status 的 update,终态判定只认带 status 的。
+      for (const call of toolCalls) {
+        const final = records.updates.find(
+          (u): u is Extract<AcpSessionUpdate, { sessionUpdate: 'tool_call_update' }> =>
+            u.sessionUpdate === 'tool_call_update' && u.toolCallId === call.toolCallId && u.status !== undefined,
+        );
+        expect(final, `工具卡 ${call.title} 缺少终态 tool_call_update`).toBeDefined();
+        expect(final?.status).toBe('completed');
+      }
+
       // 沙箱里的文件被 agent 真实修改(工具执行不是演的)
       expect(readFileSync(join(sandboxDir, 'auth.ts'), 'utf8')).toContain(
         'if (!validateSession(session)) {',
