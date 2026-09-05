@@ -140,17 +140,9 @@ export function useReplaySession() {
     [port],
   );
 
-  /** Restarts the scripted scenario; from live mode it first switches back to demo. */
-  const replayDemo = useCallback(() => {
-    if (usePanda.getState().mode !== 'demo') {
-      usePanda.getState().setMode('demo'); // the effect above takes it from here
-      return;
-    }
-    port.resetDocument();
-    port.update({ sessionUpdate: 'modes_initialized', modes: DEMO_MODES });
-    resetConfig();
-    driver.play(demoScenario());
-  }, [driver, port]);
+  /** Restarts happen by re-entering the `#/demo` route (phase 2): leaving
+   * flips the store to live mode and cancels this driver's effect cleanup;
+   * coming back re-runs it and plays from the top. */
 
-  return { send, resolvePermission, resolveElicitation, openElicitationUrl, setMode, setConfigOption, replayDemo };
+  return { send, resolvePermission, resolveElicitation, openElicitationUrl, setMode, setConfigOption };
 }

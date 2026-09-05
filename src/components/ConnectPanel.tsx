@@ -32,13 +32,12 @@ export type FormPrefill = { url: string; workspace: Workspace; nonce: number };
  * Whoever started the ACP service owns the agent process, Panda never spawns
  * one.
  */
-export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, onReplayDemo }: {
+export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live }: {
   mode: SessionMode;
   profiles: AgentProfile[];
   onProfilesChange(profiles: AgentProfile[]): void;
   prefill: FormPrefill | null;
   live: LiveSessionFacade;
-  onReplayDemo(): void;
 }) {
   const [url, setUrl] = useState(() => lastConnectionDefaults().url);
   const [workspace, setWorkspace] = useState<Workspace>(() => lastConnectionDefaults().workspace);
@@ -258,16 +257,6 @@ export function ConnectPanel({ mode, profiles, onProfilesChange, prefill, live, 
           )}
         </>
       )}
-
-      <Button
-        className="connect-button"
-        variant="ghost"
-        size="sm"
-        width="100%"
-        label={mode === 'demo' ? '重放 demo' : '回到 demo 回放'}
-        icon={<RotateCcw size={11} />}
-        clickAction={onReplayDemo}
-      />
     </div>
   );
 }

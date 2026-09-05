@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Play, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { IconButton } from '@astryxdesign/core/IconButton';
 import { Selector } from '@astryxdesign/core/Selector';
@@ -55,6 +55,21 @@ export function SettingsPage() {
           </p>
           <ProfileList profiles={profiles} />
         </section>
+
+        {import.meta.env.DEV && (
+          <section className="settings-section">
+            <h2 className="settings-section-title">开发者</h2>
+            <p className="settings-hint">仅开发构建可见的内部工具。</p>
+            <Button
+              variant="secondary"
+              size="sm"
+              label="Demo 回放"
+              icon={<Play size={12} />}
+              clickAction={() => navigate('demo')}
+              tooltip="打开 #/demo 剧本回放(不连真实 agent);重新进入即从头重放"
+            />
+          </section>
+        )}
       </div>
     </div>
   );

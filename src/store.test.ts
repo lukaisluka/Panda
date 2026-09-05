@@ -13,11 +13,17 @@ import {
 /** Fresh store per test — connection slots are global singletons otherwise. */
 beforeEach(() => {
   usePanda.setState({
-    mode: 'demo',
+    mode: 'live',
     connections: {},
     activeConnectionId: null,
     activeSessionId: null,
     selectionGeneration: 0,
+  });
+});
+
+describe('initial mode', () => {
+  it('is live — the demo replay is a dev-only #/demo route, not the default', () => {
+    expect(usePanda.getInitialState().mode).toBe('live');
   });
 });
 

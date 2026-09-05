@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Menu } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { MessageStream } from './components/MessageStream';
@@ -27,6 +27,13 @@ import './App.css';
  * of its state. */
 export default function App() {
   const route = useHashRoute();
+  // Phase 2: the hash owns the session mode — `#/demo` (dev builds only)
+  // switches the UI to the scripted replay and auto-plays it; every other
+  // route renders live connections. Mode changes never touch connections
+  // (issue #21): the replay is a display layer over the same store.
+  useEffect(() => {
+    usePanda.getState().setMode(route === 'demo' ? 'demo' : 'live');
+  }, [route]);
   if (route === 'settings') return <SettingsPage />;
   return <MainScreen />;
 }
@@ -86,7 +93,6 @@ function MainScreen() {
       <Sidebar
         mode={mode}
         live={live}
-        onReplayDemo={demo.replayDemo}
         mobileOpen={mobileNavigationOpen}
         onMobileClose={() => setMobileNavigationOpen(false)}
       />

@@ -1,9 +1,11 @@
 /**
- * Lightweight hash routing (IA refactor phase 1). Panda has exactly two
- * in-app views — the session screen (`#/`) and the settings screen
- * (`#/settings`) — plus dev-only tree-level pages that replace the whole
- * render root (`#/astryx-smoke`, and later `#/demo`); those are parsed by
- * the same function so every hash spelling lives in one place.
+ * Lightweight hash routing (IA refactor phase 1). Panda has exactly three
+ * in-app views — the session screen (`#/`), the settings screen
+ * (`#/settings`), and the dev-only demo replay (`#/demo`, phase 2: the hash
+ * is what drives the demo/live session mode; leaving the route switches the
+ * UI back to live without touching connections) — plus dev-only tree-level
+ * pages that replace the whole render root (`#/astryx-smoke`); those are
+ * parsed by the same function so every hash spelling lives in one place.
  *
  * No router dependency: a `hashchange` listener and this module are the
  * entire mechanism. Unknown hashes fall back to the main view (a stale or
@@ -11,14 +13,16 @@
  */
 import { useEffect, useState } from 'react';
 
-export type AppRoute = 'main' | 'settings';
+export type AppRoute = 'main' | 'settings' | 'demo';
 
 export type DevPage = 'astryx-smoke';
 
-/** `''` · `'#'` · `'#/'` → main; `#/settings` (or `#settings`) → settings. */
+/** `''` · `'#'` · `'#/'` → main; `#/settings` → settings; `#/demo` (dev
+ * builds only — production has no replay entry) → demo. */
 export function parseHash(hash: string): AppRoute {
   const path = hash.replace(/^#\/?/, '').replace(/\/+$/, '');
   if (path === 'settings') return 'settings';
+  if (import.meta.env.DEV && path === 'demo') return 'demo';
   return 'main';
 }
 

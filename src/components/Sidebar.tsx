@@ -38,10 +38,9 @@ import './Sidebar.css';
  * row subscribes narrowly to its own slot so a streaming connection only
  * re-renders its own group, not the whole sidebar.
  */
-export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }: {
+export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
   mode: SessionMode;
   live: LiveSessionFacade;
-  onReplayDemo(): void;
   mobileOpen: boolean;
   onMobileClose(): void;
 }) {
@@ -180,10 +179,6 @@ export function Sidebar({ mode, live, onReplayDemo, mobileOpen, onMobileClose }:
           onProfilesChange={setProfiles}
           prefill={prefill}
           live={live}
-          onReplayDemo={() => {
-            onReplayDemo();
-            onMobileClose();
-          }}
         />
         <div className="sidebar-footer">
           <Bot size={14} className="sidebar-footer-icon" />
