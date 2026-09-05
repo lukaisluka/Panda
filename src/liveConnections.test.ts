@@ -13,7 +13,7 @@ import {
   newLiveSession,
   openLiveSession,
   persistSessionsSnapshot,
-  previewProfileConnection,
+  seedProfileSlots,
   removeLiveConnection,
   type SessionStorage,
 } from './liveConnections';
@@ -231,8 +231,8 @@ describe('opening sessions across connections (issue #21)', () => {
   });
 });
 
-describe('profile preview (issue #21)', () => {
-  it('seeds a disconnected slot from the endpoint memory and foregrounds it', () => {
+describe('offline agent seeding (phase 3)', () => {
+  it('seeds disconnected slots from the endpoint memory; the first takes the foreground', () => {
     const storage = new MemoryStorage();
     storage.setItem(
       'panda.sessions:ws://p/acp',
@@ -240,40 +240,40 @@ describe('profile preview (issue #21)', () => {
     );
     usePanda.getState().setMode('live');
 
-    previewProfileConnection(profile('p'), storage);
+    seedProfileSlots([profile('p'), profile('q')], storage);
 
     const slot = usePanda.getState().connections['p']!;
     expect(slot.connection.status).toBe('disconnected');
     expect(slot.connection.url).toBe('ws://p/acp');
     expect(slot.sessions.map((entry) => entry.sessionId)).toEqual(['known']);
+    expect(usePanda.getState().connections['q']!.connection.status).toBe('disconnected');
+    // An empty foreground may be taken; a later seed never steals it.
     expect(usePanda.getState().activeConnectionId).toBe('p');
   });
 
-  it('an existing slot is only foregrounded — its resume state survives', async () => {
+  it('an existing slot is left untouched — its resume state and foreground survive', async () => {
     const stubs = installStubClients();
     await connectedStub('p', stubs, 's-p');
     // The connection dies unexpectedly: error + resumable session id stay.
     stubs[0]!.handlers.onDisconnected('与服务器的连接已断开');
     await connectedStub('other', stubs, 's-o');
 
-    previewProfileConnection(profile('p'));
+    seedProfileSlots([profile('p')]);
 
     const slot = usePanda.getState().connections['p']!;
-    expect(usePanda.getState().activeConnectionId).toBe('p');
-    expect(slot.connection.status).toBe('error'); // not clobbered by preview
+    expect(usePanda.getState().activeConnectionId).toBe('other');
+    expect(slot.connection.status).toBe('error'); // not clobbered by seeding
     expect(slot.connection.sessionId).toBe('s-p');
   });
 
-  it('demo mode: preview is a no-op on the store', () => {
+  it('seeds regardless of mode — seeding is slot preparation, demo renders none of it', () => {
     const storage = new MemoryStorage();
-    storage.setItem(
-      'panda.sessions:ws://p/acp',
-      JSON.stringify([{ sessionId: 'known', cwd: '/p', title: null, updatedAt: null }]),
-    );
+    usePanda.getState().setMode('demo');
 
-    previewProfileConnection(profile('p'), storage);
+    seedProfileSlots([profile('p')], storage);
 
-    expect(usePanda.getState().connections['p']).toBeUndefined();
+    expect(usePanda.getState().connections['p']!.connection.status).toBe('disconnected');
+    expect(usePanda.getState().mode).toBe('demo');
   });
 });
 

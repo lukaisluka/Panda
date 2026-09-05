@@ -461,38 +461,37 @@ export function foregroundConnection(connectionId: string): void {
 }
 
 /**
- * Previews an Agent 配置 (the sidebar's click action on an unconnected
- * profile): shows its endpoint's remembered sessions without connecting. A
- * slot that already exists (connected, errored, retained) is only
- * foregrounded — its resume affordances must not be clobbered. In demo mode
- * this is a no-op; the form prefill is the UI's business.
+ * Seeds an offline section for every Agent 配置 (IA refactor phase 3): a
+ * disconnected slot carrying the endpoint's remembered sessions, without
+ * connecting and without claiming the foreground. Slots that already exist
+ * (connected, errored, retained) are left untouched — their resume
+ * affordances must not be clobbered. Called by the sidebar whenever its
+ * profile list changes; profiles whose slot died return on the next call.
  */
-export function previewProfileConnection(profile: AgentProfile, storage: SessionStorage = globalThis.localStorage): void {
-  if (usePanda.getState().mode !== 'live') return;
-  const url = profile.url.trim();
-  const cwd = workspaceToCwd(profile.workspace).trim();
-  if (!url || !cwd) {
-    console.error(`[panda/profiles] selected profile ${profile.id} has an empty url or workspace path`);
-    return;
+export function seedProfileSlots(profiles: AgentProfile[], storage: SessionStorage = globalThis.localStorage): void {
+  for (const profile of profiles) {
+    if (usePanda.getState().connections[profile.id]) continue;
+    const url = profile.url.trim();
+    const cwd = workspaceToCwd(profile.workspace).trim();
+    if (!url || !cwd) {
+      console.error(`[panda/profiles] seed skipped: profile ${profile.id} has an empty url or workspace path`);
+      continue;
+    }
+    usePanda.getState().seedConnection(profile.id);
+    const entry = ensureEntry(profile.id);
+    restoreEndpointSessions(url, entry.port.replaceSessions, storage);
+    entry.port.resetDocument();
+    entry.port.setCapabilities({ image: false, loadSession: false, list: false, resume: false, delete: false });
+    entry.port.setConnection({
+      status: 'disconnected',
+      url,
+      cwd,
+      agentName: null,
+      protocolVersion: null,
+      sessionId: null,
+      error: null,
+    });
   }
-  if (usePanda.getState().connections[profile.id]) {
-    foregroundConnection(profile.id);
-    return;
-  }
-  usePanda.getState().ensureConnection(profile.id);
-  const entry = ensureEntry(profile.id);
-  restoreEndpointSessions(url, entry.port.replaceSessions, storage);
-  entry.port.resetDocument();
-  entry.port.setCapabilities({ image: false, loadSession: false, list: false, resume: false, delete: false });
-  entry.port.setConnection({
-    status: 'disconnected',
-    url,
-    cwd,
-    agentName: null,
-    protocolVersion: null,
-    sessionId: null,
-    error: null,
-  });
 }
 
 /**

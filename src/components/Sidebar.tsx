@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useShallow } from 'zustand/react/shallow';
 import { IconButton } from '@astryxdesign/core/IconButton';
+import { Button } from '@astryxdesign/core/Button';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import {
   Bot,
   MessagesSquare,
-  Plus,
   PlugZap,
+  Plus,
   Settings,
   Trash2,
   Unplug,
@@ -22,21 +22,24 @@ import {
   type ConnectionStatus,
   type SessionMode,
 } from '../store';
+import { isDirectConnectionId } from '../liveConnections';
 import { effectiveCapability, PANDA_HOST_CAPABILITIES } from '../capabilities';
 import type { AgentProfile } from '../profiles';
-import { loadProfiles, saveProfiles, subscribeProfiles } from '../profiles';
+import { loadProfiles, subscribeProfiles } from '../profiles';
 import { navigate } from '../routes';
-import { workspaceDisplay, workspaceLabel } from '../workspace';
-import { ConnectPanel, type FormPrefill } from './ConnectPanel';
+import { workspaceLabel } from '../workspace';
 import type { LiveSessionFacade } from '../useLiveSession';
+import { NewSessionDialog } from './NewSessionDialog';
 import './Sidebar.css';
 
 /**
- * Grouped sidebar (issue #21, ADR 0002): every connection slot is a group
- * with its own sessions beneath — 前台连接置顶, 其余按最近活动. Unslotted
- * Agent 配置 render as dormant rows (click = 预览, hover = 连接). Each group
- * row subscribes narrowly to its own slot so a streaming connection only
- * re-renders its own group, not the whole sidebar.
+ * Session-centered sidebar (IA refactor phase 3): every Agent 配置 renders as
+ * a section — online ones with live sessions, offline ones as seeded
+ * disconnected slots carrying the endpoint's remembered sessions (历史可见,
+ * hover = 连接). Connection management lives in the settings page; the only
+ * sidebar entry points are 新建会话 (picker dialog) and 添加 agent (settings).
+ * 前台连接置顶, 其余按最近活动; each group row subscribes narrowly to its
+ * own slot so a streaming connection only re-renders its own group.
  */
 export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
   mode: SessionMode;
@@ -44,42 +47,31 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
   mobileOpen: boolean;
   onMobileClose(): void;
 }) {
-  const [prefill, setPrefill] = useState<FormPrefill | null>(null);
+  const [newSessionOpen, setNewSessionOpen] = useState(false);
   const orderedIds = useConnectionOrder();
-  // Slotted profile ids — the profiles without a slot render as dormant rows.
-  const slottedIds = usePanda(useShallow((s) => Object.keys(s.connections)));
   const [profiles, setProfiles] = useState<AgentProfile[]>(() => loadProfiles());
-  // The connection manager also writes profiles (connect-time url/cwd
-  // write-back) — storage is the single source, the subscription keeps this
-  // copy from diverging.
+  // The settings page also writes profiles (CRUD) — storage is the single
+  // source, the subscription keeps this copy from diverging.
   useEffect(() => subscribeProfiles(setProfiles), []);
+
+  // Offline agent sections: seed a disconnected slot (remembered sessions
+  // included) for every 配置, and drop slots whose 配置 was deleted —
+  // remembered sessions live per-endpoint in storage and survive both.
+  useEffect(() => {
+    live.seedProfileSlots(profiles);
+    const known = new Set(profiles.map((profile) => profile.id));
+    for (const connectionId of Object.keys(usePanda.getState().connections)) {
+      if (!isDirectConnectionId(connectionId) && !known.has(connectionId)) live.remove(connectionId);
+    }
+  }, [profiles, live]);
 
   const liveMode = mode === 'live';
   const activeConnectionId = usePanda((s) => s.activeConnectionId);
-  const foregroundCwd = usePanda((s) =>
-    s.activeConnectionId ? s.connections[s.activeConnectionId]?.connection.cwd ?? null : null,
-  );
-  const foregroundConnected = usePanda(
-    (s) => (s.activeConnectionId ? s.connections[s.activeConnectionId]?.connection.status : undefined) === 'connected',
-  );
-  const foregroundBusy = usePanda((s) => {
-    const slot = s.activeConnectionId ? s.connections[s.activeConnectionId] : undefined;
-    return !!slot && isConnectionBusy(slot);
-  });
   const footerAgent = usePanda((s) =>
     s.mode === 'live'
       ? s.connections[s.activeConnectionId ?? '']?.connection.agentName ?? null
       : null,
   );
-
-  const dormantProfiles = profiles.filter((profile) => !slottedIds.includes(profile.id));
-
-  const previewProfile = (profile: AgentProfile) => {
-    // Live mode: the manager seeds a disconnected slot with the endpoint's
-    // remembered sessions and foregrounds it; demo mode only prefills.
-    live.previewProfile(profile);
-    setPrefill({ url: profile.url, workspace: profile.workspace, nonce: Date.now() });
-  };
 
   return (
     <aside className={`sidebar ${mobileOpen ? 'sidebar--open' : ''}`}>
@@ -119,18 +111,8 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
           size="sm"
           icon={<Plus size={13} />}
           label="新建会话"
-          isDisabled={!liveMode || !foregroundConnected || !foregroundCwd || foregroundBusy}
-          tooltip={
-            liveMode && foregroundConnected && foregroundCwd && !foregroundBusy
-              ? '在前台连接新建会话（session/new）'
-              : foregroundBusy
-                ? '等待当前回合或切换完成'
-                : '连接 agent 后可新建会话'
-          }
-          clickAction={() => {
-            if (foregroundCwd) live.newSession(foregroundCwd);
-            onMobileClose();
-          }}
+          tooltip="选择 agent 开始新会话(可临时直连自定义地址)"
+          clickAction={() => setNewSessionOpen(true)}
         />
       </div>
       <div className="sidebar-sessions">
@@ -151,35 +133,36 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
               onMobileClose={onMobileClose}
             />
           ))}
-          {dormantProfiles.map((profile) => (
-            <DormantProfileRow
-              key={profile.id}
-              profile={profile}
-              live={live}
-              onPreview={previewProfile}
-              onDelete={() => {
-                // Sessions are keyed by endpoint, not by profile — they survive this.
-                const next = profiles.filter((entry) => entry.id !== profile.id);
-                saveProfiles(next);
-                setProfiles(next);
-              }}
-              onMobileClose={onMobileClose}
-            />
-          ))}
-          {liveMode && orderedIds.length === 0 && dormantProfiles.length === 0 && (
-            <div className="sidebar-empty">暂无连接或配置 — 在下方连接 ACP 服务</div>
+          {liveMode && orderedIds.length === 0 && (
+            <div className="sidebar-empty">
+              还没有 agent — 先添加一条配置
+              <Button
+                variant="secondary"
+                size="sm"
+                label="添加 agent"
+                icon={<Plus size={12} />}
+                clickAction={() => {
+                  navigate('settings');
+                  onMobileClose();
+                }}
+              />
+            </div>
           )}
         </div>
       </div>
 
       <div className="sidebar-footer-block">
-        <ConnectPanel
-          mode={mode}
-          profiles={profiles}
-          onProfilesChange={setProfiles}
-          prefill={prefill}
-          live={live}
-        />
+        <button
+          type="button"
+          className="sidebar-add-agent"
+          onClick={() => {
+            navigate('settings');
+            onMobileClose();
+          }}
+        >
+          <Plus size={13} />
+          添加 agent
+        </button>
         <div className="sidebar-footer">
           <Bot size={14} className="sidebar-footer-icon" />
           <span className="truncate">
@@ -191,6 +174,16 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
           </span>
         </div>
       </div>
+
+      {newSessionOpen && (
+        <NewSessionDialog
+          isOpen
+          onOpenChange={setNewSessionOpen}
+          onStarted={onMobileClose}
+          live={live}
+          profiles={profiles}
+        />
+      )}
     </aside>
   );
 }
@@ -211,7 +204,9 @@ function SlotStatusDot({ status, running }: { status: ConnectionStatus; running:
   return <StatusDot variant="neutral" label="未连接" />;
 }
 
-/** One connection's group: header (status, indicators, hover actions) + sessions. */
+/** One agent's section: header (status, indicators, hover actions), an
+ * inline error recovery block when the connection failed, and the session
+ * list (live or remembered). */
 function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, onMobileClose }: {
   connectionId: string;
   profile: AgentProfile | null;
@@ -226,11 +221,14 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
 
   const status = slot.connection.status;
   const connected = status === 'connected';
+  const offline = status === 'disconnected';
   const running = isConnectionRunning(slot);
   const busy = isConnectionBusy(slot);
   const attention = needsAttention(slot);
   const title = profile?.name ?? slot.connection.url ?? connectionId;
   const isForegroundSession = (sessionId: string) => isActiveConnection && sessionId === activeSessionId;
+  // Resume needs a retained session; seeded slots have none.
+  const canResume = status === 'error' && slot.connection.sessionId !== null;
 
   const ordered = [...slot.sessions].sort((a, b) => {
     if (isForegroundSession(a.sessionId)) return -1;
@@ -260,9 +258,9 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
           <span className="sidebar-row-end">
             {/* 需要关注 is a *background* connection indicator (CONTEXT.md):
                 the foreground slot's issues are in plain sight (permission
-                card, error text in the connect panel). */}
+                card, the error block below). */}
             {attention && !isActiveConnection && (
-              <StatusDot variant="error" label="需要关注" tooltip="需要关注：未读完成 / 权限待处理 / 连接错误" />
+              <StatusDot variant="error" label="需要关注" tooltip="需要关注:未读完成 / 权限待处理 / 连接错误" />
             )}
           </span>
         </button>
@@ -273,25 +271,60 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
               size="sm"
               icon={<Unplug size={12} />}
               label="断开连接"
-              tooltip="断开（保留会话槽，可重连）"
+              tooltip={isDirectConnectionId(connectionId) ? '断开(临时直连到此结束)' : '断开(保留会话槽,可重连)'}
               clickAction={() => live.disconnect(connectionId)}
             />
           )}
-          <IconButton
-            variant="ghost"
-            size="sm"
-            icon={<Trash2 size={12} />}
-            label="移除连接"
-            tooltip="移除（断开并清除该连接的本地会话文档）"
-            clickAction={() => {
-              const label = profile?.name ?? slot.connection.url ?? connectionId;
-              if (window.confirm(`移除连接「${label}」？其本地会话记录将被清除（按端点记忆的会话列表保留）。`)) {
-                live.remove(connectionId);
-              }
-            }}
-          />
+          {offline && profile && (
+            <IconButton
+              variant="ghost"
+              size="sm"
+              icon={<PlugZap size={12} />}
+              label="连接此配置"
+              tooltip={`连接 ${profile.name}(${profile.url})`}
+              clickAction={() => live.connectProfile(profile)}
+            />
+          )}
+          {(status === 'error' || !offline) && (
+            <IconButton
+              variant="ghost"
+              size="sm"
+              icon={<Trash2 size={12} />}
+              label="移除连接"
+              tooltip="移除(断开并清除该连接的本地会话文档)"
+              clickAction={() => {
+                if (window.confirm(`移除连接「${title}」?其本地会话记录将被清除(按端点记忆的会话列表保留)。`)) {
+                  live.remove(connectionId);
+                }
+              }}
+            />
+          )}
         </div>
       </div>
+      {status === 'error' && slot.connection.error && (
+        <div className="sidebar-conn-error">
+          <p className="sidebar-conn-error-text" title={slot.connection.error}>
+            {slot.connection.error}
+          </p>
+          <div className="sidebar-conn-error-actions">
+            {canResume && (
+              <Button
+                variant="primary"
+                size="sm"
+                label="重连并恢复会话"
+                tooltip="优先 resume 保留当前对话;agent 不支持时用 session/load 重建历史"
+                clickAction={() => live.reconnectForeground({ resume: true })}
+              />
+            )}
+            <Button
+              variant={canResume ? 'secondary' : 'primary'}
+              size="sm"
+              label="重连"
+              clickAction={() => live.reconnectForeground()}
+            />
+          </div>
+        </div>
+      )}
       {ordered.length > 0 && (
         <div className="sidebar-session-list">
           {ordered.map((entry) => {
@@ -327,7 +360,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
                           : connected && !loadSession.available
                             ? loadSession.reason === 'unavailable-on-host'
                               ? '宿主暂不支持会话回放'
-                              : 'agent 不支持历史回放（session/load）'
+                              : 'agent 不支持历史回放(session/load)'
                             : entry.cwd
                   }
                   className={`sidebar-session-btn ${
@@ -348,7 +381,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
                       size="sm"
                       icon={<Trash2 size={12} />}
                       label="删除会话"
-                      tooltip="删除会话（session/delete）"
+                      tooltip="删除会话(session/delete)"
                       clickAction={() => live.deleteSession(connectionId, entry.sessionId)}
                     />
                   </span>
@@ -358,53 +391,6 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
           })}
         </div>
       )}
-    </div>
-  );
-}
-
-/** An Agent 配置 without a connection slot: click = 预览, hover = 连接/删除. */
-function DormantProfileRow({ profile, live, onPreview, onDelete, onMobileClose }: {
-  profile: AgentProfile;
-  live: LiveSessionFacade;
-  onPreview(profile: AgentProfile): void;
-  onDelete(): void;
-  onMobileClose(): void;
-}) {
-  return (
-    <div className="sidebar-row">
-      <button
-        type="button"
-        onClick={() => {
-          onPreview(profile);
-          onMobileClose();
-        }}
-        title={`${profile.url} · ${workspaceDisplay(profile.workspace)}`}
-        className="sidebar-dormant-btn"
-      >
-        <span className="sidebar-dormant-dot" />
-        <span className="truncate">{profile.name}</span>
-      </button>
-      <div className="sidebar-hover-actions">
-        <IconButton
-          variant="ghost"
-          size="sm"
-          icon={<PlugZap size={12} />}
-          label="连接此配置"
-          tooltip={`连接 ${profile.name}（${profile.url}）`}
-          clickAction={() => {
-            live.connectProfile(profile);
-            onMobileClose();
-          }}
-        />
-        <IconButton
-          variant="ghost"
-          size="sm"
-          icon={<Trash2 size={12} />}
-          label="删除配置"
-          tooltip="删除这条配置（不影响该端点已记忆的会话）"
-          clickAction={onDelete}
-        />
-      </div>
     </div>
   );
 }

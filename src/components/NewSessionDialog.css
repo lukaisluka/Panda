@@ -1,0 +1,94 @@
+/* NewSessionDialog (IA refactor phase 3): agent picker + custom-address
+ * form inside an Astryx Dialog. Tokens mirror SettingsPage. */
+
+.nsd-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nsd-hint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+.nsd-agent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-lg);
+  background: var(--color-raised);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.nsd-agent:hover {
+  border-color: var(--color-accent);
+}
+
+.nsd-agent-status {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.nsd-agent-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.nsd-agent-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.nsd-agent-meta {
+  font-size: 11.5px;
+  color: var(--color-muted);
+}
+
+.nsd-agent-chevron {
+  flex-shrink: 0;
+  color: var(--color-faint);
+}
+
+.nsd-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.nsd-custom-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+.nsd-custom-fields {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.nsd-custom-kind {
+  flex-shrink: 0;
+}
+
+.nsd-custom-path {
+  flex: 1;
+  min-width: 0;
+}

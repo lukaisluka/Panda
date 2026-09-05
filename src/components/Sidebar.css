@@ -225,37 +225,43 @@
   display: block;
 }
 
-/* --- Dormant profile rows --- */
-
-.sidebar-dormant-btn {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 6px;
-  border-radius: var(--panda-radius-lg);
-  padding: 8px 12px;
-  text-align: left;
-  font-size: 13px;
-  color: color-mix(in oklab, var(--color-fg) 50%, transparent);
-  transition: var(--panda-colors-transition);
-}
-.sidebar-dormant-btn:hover {
-  background: color-mix(in oklab, var(--color-raised) 60%, transparent);
-  color: color-mix(in oklab, var(--color-fg) 80%, transparent);
-}
-
-.sidebar-dormant-dot {
-  height: 6px; /* h-1.5 */
-  width: 6px;
-  flex-shrink: 0;
-  border: 1px solid var(--color-faint);
-  border-radius: var(--panda-radius-full);
-}
+/* --- Offline / errored agent sections (phase 3) --- */
 
 .sidebar-empty {
   padding: 8px 12px; /* px-3 py-2 */
   font-size: 13px;
   color: var(--color-faint);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.sidebar-conn-error {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  margin: 2px 0 4px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-md);
+  background: var(--color-raised);
+}
+
+.sidebar-conn-error-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sidebar-conn-error-actions {
+  display: flex;
+  gap: 6px;
 }
 
 /* --- Footer block --- */
@@ -264,20 +270,25 @@
   margin-top: auto;
 }
 
-/* Theme picker (#32 Phase 4): sits between the connect panel and the footer
- * line. The wrapper div stretches the Selector to the row's remaining width
- * (same pattern as the connect panel's fixed-width kind selector). */
-.sidebar-theme-picker {
+.sidebar-add-agent {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  padding: 10px 20px;
+  border: none;
   border-top: 1px solid var(--color-border);
-  padding: 10px 14px;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
 }
 
-.sidebar-theme-select {
-  flex: 1;
-  min-width: 0;
+.sidebar-add-agent:hover {
+  color: var(--color-fg);
+  background: var(--color-raised);
 }
 
 .sidebar-footer {
