@@ -2,7 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
 import type { AcpToolCallContent } from '../protocol/types';
 import { highlightLines, type TokenSpan } from '../highlight/highlighter';
-import { computeRows, diffStats, intersectSpans, unifiedPatch, withWordSpans, type DiffRow } from './diff-utils';
+import {
+  computeRows,
+  diffStats,
+  foldRows,
+  intersectSpans,
+  unifiedPatch,
+  withWordSpans,
+  type DiffRow,
+  type RowSegment,
+} from './diff-utils';
 import './DiffView.css';
 
 type DiffPart = Extract<AcpToolCallContent, { type: 'diff' }>;
@@ -49,6 +58,18 @@ export function DiffView({ diff }: { diff: DiffPart }) {
     () => withWordSpans(computeRows(oldText, diff.newText)),
     [oldText, diff.newText],
   );
+  // 大 diff 折叠未变更段(#88);展开状态按 fold id 记录,segments 随 rows
+  // 记忆化,id 顺序稳定。
+  const segments = useMemo(() => foldRows(rows), [rows]);
+  const [expandedFolds, setExpandedFolds] = useState<ReadonlySet<number>>(() => new Set());
+  const expandFold = (id: number) => {
+    setExpandedFolds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  };
   const stats = useMemo(() => diffStats(oldText, diff.newText), [oldText, diff.newText]);
   const [lines, setLines] = useState<{ old: TokenSpan[][] | null; new: TokenSpan[][] | null } | null>(
     null,
@@ -88,26 +109,54 @@ export function DiffView({ diff }: { diff: DiffPart }) {
       <div className="diff-scroll">
         <table className="diff-table">
           <tbody>
-            {rows.map((row, i) => (
-              <tr key={i} className={ROW_BG[row.type]}>
-                <td className="diff-gutter">{row.oldNo ?? ''}</td>
-                <td className="diff-gutter">{row.newNo ?? ''}</td>
-                <td
-                  className={`diff-marker ${
-                    row.type === 'add' ? 'diff-marker--add' : row.type === 'del' ? 'diff-marker--del' : ''
-                  }`}
-                >
-                  {row.type === 'add' ? '+' : row.type === 'del' ? '−' : '·'}
-                </td>
-                <td className="diff-cell">
-                  <LineContent row={row} tokens={tokenLineFor(row, lines)} />
-                </td>
-              </tr>
-            ))}
+            {segments.flatMap((seg) => renderSegment(seg, expandedFolds, expandFold, lines))}
           </tbody>
         </table>
       </div>
     </div>
+  );
+}
+
+/** 未变更段(#88):折叠时渲染占位行,展开后渲染其全部行。 */
+function renderSegment(
+  seg: RowSegment,
+  expandedFolds: ReadonlySet<number>,
+  expandFold: (id: number) => void,
+  lines: { old: TokenSpan[][] | null; new: TokenSpan[][] | null } | null,
+) {
+  if (seg.type !== 'fold') return [<DiffRowView key={`r-${seg.oldNo}-${seg.newNo}`} row={seg} tokens={tokenLineFor(seg, lines)} />];
+  if (expandedFolds.has(seg.id)) {
+    return seg.rows.map((row, i) => (
+      <DiffRowView key={`f${seg.id}-${i}`} row={row} tokens={tokenLineFor(row, lines)} />
+    ));
+  }
+  return [
+    <tr key={`fold-${seg.id}`} className="diff-fold">
+      <td colSpan={4}>
+        <button type="button" className="diff-fold-btn" onClick={() => expandFold(seg.id)}>
+          ⋯ {seg.rows.length} unchanged lines
+        </button>
+      </td>
+    </tr>,
+  ];
+}
+
+function DiffRowView({ row, tokens }: { row: DiffRow; tokens: TokenSpan[] | null }) {
+  return (
+    <tr className={ROW_BG[row.type]}>
+      <td className="diff-gutter">{row.oldNo ?? ''}</td>
+      <td className="diff-gutter">{row.newNo ?? ''}</td>
+      <td
+        className={`diff-marker ${
+          row.type === 'add' ? 'diff-marker--add' : row.type === 'del' ? 'diff-marker--del' : ''
+        }`}
+      >
+        {row.type === 'add' ? '+' : row.type === 'del' ? '−' : '·'}
+      </td>
+      <td className="diff-cell">
+        <LineContent row={row} tokens={tokens} />
+      </td>
+    </tr>
   );
 }
 
