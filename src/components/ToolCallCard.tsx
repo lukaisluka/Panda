@@ -61,10 +61,16 @@ const FILE_VERB: Partial<Record<AcpToolKind, string>> = {
   move: 'Move',
 };
 
-function StatusBadge({ status }: { status: ToolCallStatus }) {
+/** pending 的双语义:附着 pending 权限时是真在等用户批准;否则只是排队
+ * (如同批工具被另一个工具的 HITL 中断连带挂起),不能谎称「等待批准」。 */
+function StatusBadge({ status, permissionPending = false }: { status: ToolCallStatus; permissionPending?: boolean }) {
   switch (status) {
     case 'pending':
-      return <Badge variant="warning" icon={<ShieldAlert size={12} />} label="等待批准" />;
+      return permissionPending ? (
+        <Badge variant="warning" icon={<ShieldAlert size={12} />} label="等待批准" />
+      ) : (
+        <Badge variant="neutral" icon={<Spinner size="sm" />} label="排队中" />
+      );
     case 'in_progress':
       return <Badge variant="neutral" icon={<Spinner size="sm" />} label="执行中" />;
     case 'completed':
@@ -170,7 +176,7 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
             </span>
           )}
           <span className="tool-card-status">
-            <StatusBadge status={call.status} />
+            <StatusBadge status={call.status} permissionPending={permission?.state === 'pending'} />
           </span>
           {hasDetails && (
             <ChevronDown

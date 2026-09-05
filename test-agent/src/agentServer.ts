@@ -333,6 +333,37 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
     return `Always allow ${name} commands`;
   }
 
+  /** 键序无关的 JSON 串:HITL 传来的 args 可能被重新序列化过,
+   * 与 tool_call 的 args 只保证深相等,不保证键序。 */
+  function stableStringify(value: unknown): string {
+    if (Array.isArray(value)) {
+      return `[${value.map(stableStringify).join(',')}]`;
+    }
+    if (value && typeof value === 'object') {
+      const entries = Object.entries(value as Record<string, unknown>)
+        .filter(([, v]) => v !== undefined)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+      return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(',')}}`;
+    }
+    return JSON.stringify(value) ?? 'null';
+  }
+
+  /**
+   * HITL 的 ActionRequest 不带工具调用 id(langchain 类型只有 name/args/
+   * description),interrupt.id 是中断自身的 id,拿它当权限卡 id 会在客户端
+   * 落成一张永远没人推进的占位卡。工具卡在 start 事件时已按 toolCall.id
+   * 登记,这里按 name+args 反查出真 id,让权限卡附着在真工具卡上。
+   */
+  function findToolCallIdForAction(name: string, args: Record<string, unknown>): string | null {
+    const target = stableStringify(args);
+    for (const [id, active] of activeToolCalls) {
+      if (active.name === name && stableStringify(active.args) === target) {
+        return id;
+      }
+    }
+    return null;
+  }
+
   /**
    * 处理一批 HITL interrupt:逐个向客户端请求权限,返回恢复图所需的
    * decisions。返回 null 表示回合被取消(客户端答了 cancelled 或权限通道
@@ -377,11 +408,15 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
         if (planLog) {
           await send(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: planLog } });
         }
+        const toolCallId = findToolCallIdForAction(name, args) ?? interrupt.id;
+        if (toolCallId === interrupt.id) {
+          deps.log(`[permission] 未找到 ${name} 的工具卡,回退 interrupt.id: ${interrupt.id}`);
+        }
         let response: { outcome?: { outcome: string; optionId?: string } } | undefined;
         try {
           response = (await conn.requestPermission({
             sessionId,
-            toolCall: { toolCallId: interrupt.id, title, rawInput: args },
+            toolCall: { toolCallId, title, rawInput: args },
             options: [
               { optionId: 'approve', name: 'Approve', kind: 'allow_once' },
               { optionId: 'reject', name: 'Reject', kind: 'reject_once' },

@@ -354,6 +354,20 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
           u.sessionUpdate === 'permission_requested',
       );
       expect(firstRequest?.request.options.map((o) => o.kind)).toContain('allow_once');
+
+      // 权限请求必须命中已存在的工具卡(issue #77):HITL 的 interrupt.id
+      // 不是工具调用 id,拿它发权限会在客户端落成永不推进的占位卡
+      const permissionRequests = records.updates.filter(
+        (u): u is Extract<AcpSessionUpdate, { sessionUpdate: 'permission_requested' }> =>
+          u.sessionUpdate === 'permission_requested',
+      );
+      const toolCallIds = new Set(toolCalls.map((u) => u.toolCallId));
+      for (const request of permissionRequests) {
+        expect(
+          toolCallIds.has(request.request.toolCallId),
+          `权限请求 toolCallId ${request.request.toolCallId} 未命中任何 tool_call(占位卡回归)`,
+        ).toBe(true);
+      }
     },
   );
 
