@@ -197,7 +197,9 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
         <div className="tool-card-details">
           <InputSection call={call} />
           {hasRawOutput && (
-            <details className="tool-input-details" open>
+            // 有 content 投影(文本/diff/图片)时原始 JSON 是双份信息,默认
+            // 折叠;投影缺席时它是唯一结果,保持默认展开(#84)
+            <details className="tool-input-details" open={call.content.length === 0}>
               <summary className="tool-input-summary">
                 Output
               </summary>

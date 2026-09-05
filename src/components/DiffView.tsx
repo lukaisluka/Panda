@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Copy } from 'lucide-react';
 import type { AcpToolCallContent } from '../protocol/types';
 import { highlightLines, type TokenSpan } from '../highlight/highlighter';
-import { computeRows, diffStats, intersectSpans, withWordSpans, type DiffRow } from './diff-utils';
+import { computeRows, diffStats, intersectSpans, unifiedPatch, withWordSpans, type DiffRow } from './diff-utils';
 import './DiffView.css';
 
 type DiffPart = Extract<AcpToolCallContent, { type: 'diff' }>;
@@ -20,6 +21,30 @@ const ROW_BG: Record<DiffRow['type'], string> = {
  */
 export function DiffView({ diff }: { diff: DiffPart }) {
   const oldText = diff.oldText ?? '';
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+    },
+    [],
+  );
+
+  // 复制为标准 unified 补丁(#84):贴 PR 描述/别处 git apply 都能用。
+  const copyPatch = async () => {
+    try {
+      await navigator.clipboard.writeText(unifiedPatch(diff.path, oldText, diff.newText));
+      setCopied(true);
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current);
+      copyTimer.current = window.setTimeout(() => {
+        copyTimer.current = null;
+        setCopied(false);
+      }, 1500);
+    } catch (err) {
+      console.error('[panda/diffview] clipboard write failed', err);
+    }
+  };
   const rows = useMemo(
     () => withWordSpans(computeRows(oldText, diff.newText)),
     [oldText, diff.newText],
@@ -51,6 +76,14 @@ export function DiffView({ diff }: { diff: DiffPart }) {
           <span className="diff-lines-add">+{stats.additions}</span>{' '}
           <span className="diff-lines-del">−{stats.deletions}</span>
         </span>
+        <button
+          type="button"
+          onClick={() => void copyPatch()}
+          className="md-codeblock-copy"
+          aria-label="复制补丁"
+        >
+          {copied ? <Check size={13} /> : <Copy size={13} />}
+        </button>
       </div>
       <div className="diff-scroll">
         <table className="diff-table">
