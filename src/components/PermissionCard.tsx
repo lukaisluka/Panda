@@ -5,11 +5,16 @@ import type {
   PermissionOptionKind,
   PermissionRequest,
   RememberedPermissionResponse,
+  SelectedPermissionResponse,
 } from '../protocol/types';
 import type { AttachedPermission } from '../projector/messageStream';
 import './PermissionCard.css';
 
-/**
+/** The option kinds Panda can actually answer; the wire stays open (the
+ * parse layer is deliberately unvalidated), so anything else renders
+ * disabled instead of answering a kind the client cannot map (issue #79). */
+const ANSWERABLE_KINDS = new Set<string>(['allow_once', 'allow_always', 'reject_once', 'reject_always']);
+
 /**
  * Inline approval card mounted below the tool call that triggered it —
  * the UI answer to "why did the agent stop?".
@@ -31,7 +36,8 @@ export function PermissionCard({ request, onResolve }: {
             key={option.id}
             size="sm"
             variant={option.kind.startsWith('reject') ? 'secondary' : 'primary'}
-            label={option.name}
+            label={ANSWERABLE_KINDS.has(option.kind) ? option.name : `${option.name}(未知选项类型)`}
+            isDisabled={!ANSWERABLE_KINDS.has(option.kind)}
             clickAction={() => onResolve(option.kind)}
           />
         ))}
@@ -92,6 +98,34 @@ export function RememberedPermissionCard({ request, response }: {
 }
 
 /**
+ * Settled record of a permission the user answered by hand (issue #79): the
+ * transcript's only trace of what was approved/rejected — kept as one
+ * compact line so history stays readable, mirroring the denied/remembered
+ * records rather than vanishing on click.
+ */
+export function ResolvedPermissionCard({ request, response }: {
+  request: PermissionRequest;
+  response: SelectedPermissionResponse;
+}) {
+  const allowed = response.kind.startsWith('allow');
+  const KIND_LABEL: Record<string, string> = {
+    allow_once: '允许',
+    allow_always: '始终允许',
+    reject_once: '拒绝',
+    reject_always: '始终拒绝',
+  };
+  return (
+    <div className="permission-card permission-card--resolved">
+      <div className="permission-head permission-head--resolved">
+        {allowed ? <ShieldCheck size={14} /> : <ShieldBan size={14} />}
+        {allowed ? '已批准' : '已拒绝'} · {KIND_LABEL[response.kind] ?? String(response.kind)}
+      </div>
+      <p className="permission-title permission-title--dim">{request.title}</p>
+    </div>
+  );
+}
+
+/**
  * An attached permission in either state (issue #22): pending waits for the
  * user's answer, denied is the policy's terminal record. The one render
  * point both attachment sites (tool-call card, standalone card) share.
@@ -105,6 +139,9 @@ export function AttachedPermissionCard({ permission, onResolve }: {
   }
   if (permission.state === 'remembered') {
     return <RememberedPermissionCard request={permission.request} response={permission.response} />;
+  }
+  if (permission.state === 'resolved') {
+    return <ResolvedPermissionCard request={permission.request} response={permission.response} />;
   }
   return <DeniedPermissionCard request={permission.request} response={permission.response} />;
 }

@@ -494,4 +494,37 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
       expect(records.sessionIds.at(-1)).toBe(sessionId);
     },
   );
+
+  it(
+    '回合中途切模式:剩余审批按新模式即时静默放行(issue #79)',
+    { timeout: 90_000 },
+    async () => {
+      await acpClient.newSession('/tmp/project');
+      const start = records.updates.length;
+      const turn = acpClient.send([{ type: 'text', text: '重构 auth 校验' }]);
+      // 第一个权限(write_todos)挂起时不答,先切 accept_everything——
+      // 修复前:本回合的 graph 仍按 ask_before_edits 继续,edit/execute
+      // 还会弹卡;修复后:壳层现查会话模式,剩余工具静默放行
+      await waitFor(() => pendingPermissionRequests().length > 0, 30_000, '第一个权限请求');
+      await acpClient.setMode('accept_everything');
+      acpClient.resolvePermission(pendingPermissionRequests()[0]!.toolCallId, 'allow_once');
+      await turn;
+
+      const slice = records.updates.slice(start);
+      const permissionCount = slice.filter(
+        (u) => u.sessionUpdate === 'permission_requested',
+      ).length;
+      expect(permissionCount).toBe(1);
+      // 回合完整走完:edit diff 与总结都送达,没有因审批被卡住
+      const joined = slice
+        .map((u) =>
+          u.sessionUpdate === 'agent_message_chunk' && u.content.type === 'text'
+            ? u.content.text
+            : '',
+        )
+        .join('');
+      expect(joined).toContain('重构完成');
+      expect(records.statuses.at(-1)).toBe('idle');
+    },
+  );
 });

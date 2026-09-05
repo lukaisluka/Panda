@@ -657,6 +657,10 @@ export type DeniedPermissionResponse = Extract<PermissionResponse, { outcome: 'd
 /** The session-memory variant (issue #68), extracted for the UI's terminal card. */
 export type RememberedPermissionResponse = Extract<PermissionResponse, { outcome: 'remembered' }>;
 
+/** The user's own hand-picked answer (issue #79), extracted for the UI's
+ * settled record — the only approval trace the transcript keeps. */
+export type SelectedPermissionResponse = Extract<PermissionResponse, { outcome: 'selected' }>;
+
 /** One permission's lifecycle state, session-scoped in the document. */
 export type PermissionState = {
   status: 'pending' | 'resolved' | 'cancelled';

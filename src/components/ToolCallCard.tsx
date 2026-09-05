@@ -69,7 +69,9 @@ function StatusBadge({ status, permissionPending = false }: { status: ToolCallSt
       return permissionPending ? (
         <Badge variant="warning" icon={<ShieldAlert size={12} />} label="等待批准" />
       ) : (
-        <Badge variant="neutral" icon={<Spinner size="sm" />} label="排队中" />
+        <span title="同批工具里有一个在等审批;审批是按整批一起恢复的,批准后这张卡立即执行">
+          <Badge variant="neutral" icon={<Spinner size="sm" />} label="排队中" />
+        </span>
       );
     case 'in_progress':
       return <Badge variant="neutral" icon={<Spinner size="sm" />} label="执行中" />;

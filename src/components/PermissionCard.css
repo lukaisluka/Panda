@@ -8,13 +8,15 @@
   padding: 14px; /* p-3.5 */
 }
 .permission-card--denied,
-.permission-card--remembered {
+.permission-card--remembered,
+.permission-card--resolved {
   border-color: var(--color-border);
   background: color-mix(in oklab, var(--color-raised) 40%, transparent);
 }
 
 .permission-head--denied,
-.permission-head--remembered {
+.permission-head--remembered,
+.permission-head--resolved {
   color: var(--color-muted);
 }
 

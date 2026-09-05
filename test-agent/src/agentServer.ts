@@ -36,7 +36,7 @@ import type {
 } from '@agentclientprotocol/sdk';
 import { titleFromFirstUserText } from './sessionTitles';
 import { containsDangerousPatterns, extractCommandTypes, formatExecuteResult, truncateExecuteCommandForDisplay } from './commandPolicy';
-import { buildDeepAgent, DEFAULT_MODE_ID, MODES } from './agentConfig';
+import { buildDeepAgent, DEFAULT_MODE_ID, INTERRUPT_CONFIGS, MODES } from './agentConfig';
 import type { LocalShellBackend } from 'deepagents';
 import type { ModelRegistry } from './models';
 import type { SessionStore, SessionRecord } from './sessionStore';
@@ -369,7 +369,8 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
    * decisions。返回 null 表示回合被取消(客户端答了 cancelled 或权限通道
    * 断开)。
    */
-  async function handleInterrupts(sessionId: string, interrupts: HitlInterrupt[]): Promise<Decision[] | null> {
+  async function handleInterrupts(record: SessionRecord, interrupts: HitlInterrupt[]): Promise<Decision[] | null> {
+    const sessionId = record.sessionId;
     const decisions: Decision[] = [];
     for (const interrupt of interrupts) {
       const actionRequests = interrupt.value?.actionRequests ?? [];
@@ -377,11 +378,29 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
         const name = action.name;
         const args = action.args ?? {};
 
+        // 模式动态生效(issue #79):interruptOn 固化在 createDeepAgent 构造
+        // 参数里,进行中回合仍按旧模式挂起;这里按会话当前 mode 补一道检查,
+        // 已不需要审批的工具静默放行,让「中途切模式」即时生效。modeId 必须
+        // 现读 store——streamTurn 持有的 record 是回合开始时的旧引用,
+        // set_session_mode 之后的 modeId 只存在于存储里。
+        const stored = deps.store.get(sessionId);
+        const modeId = stored?.modeId ?? record.modeId;
+        const currentTier = INTERRUPT_CONFIGS[modeId];
+        if (currentTier && !(name in currentTier)) {
+          if (name === 'write_todos' && Array.isArray(args.todos)) {
+            sessionPlans.set(sessionId, args.todos as Todo[]);
+          }
+          deps.log(`[permission] ${name} 不在当前模式(${modeId})审批清单,静默放行`);
+          decisions.push({ type: 'approve' });
+          continue;
+        }
+
         // 计划进行中的 write_todos 增量更新自动放行
         if (name === 'write_todos' && Array.isArray(args.todos)) {
           const existing = sessionPlans.get(sessionId);
           if (existing && existing.length > 0 && !allTasksCompleted(existing)) {
             sessionPlans.set(sessionId, args.todos as Todo[]);
+            deps.log('[permission] write_todos 计划增量更新,自动放行');
             decisions.push({ type: 'approve' });
             continue;
           }
@@ -394,11 +413,13 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
             if (!containsDangerousPatterns(args.command)) {
               const types = extractCommandTypes(args.command);
               if (types.length > 0 && types.every((type) => allowed.has(`execute:${type}`))) {
+                deps.log(`[permission] execute 命令签名(${types.join(' ')})已 always 放行`);
                 decisions.push({ type: 'approve' });
                 continue;
               }
             }
           } else if (allowed.has(`${name}:`)) {
+            deps.log(`[permission] ${name} 已 always 放行`);
             decisions.push({ type: 'approve' });
             continue;
           }
@@ -412,6 +433,7 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
         if (toolCallId === interrupt.id) {
           deps.log(`[permission] 未找到 ${name} 的工具卡,回退 interrupt.id: ${interrupt.id}`);
         }
+        deps.log(`[permission] 请求审批: ${title}(${toolCallId})`);
         let response: { outcome?: { outcome: string; optionId?: string } } | undefined;
         try {
           response = (await conn.requestPermission({
@@ -430,8 +452,10 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
         }
         const outcome = response?.outcome;
         if (!outcome || outcome.outcome !== 'selected') {
+          deps.log(`[permission] ${title} 被取消,终止回合`);
           return null; // cancelled
         }
+        deps.log(`[permission] ${title} 收到决定: ${String(outcome.optionId)}`);
         if (outcome.optionId === 'approve') {
           if (name === 'write_todos' && Array.isArray(args.todos)) {
             sessionPlans.set(sessionId, args.todos as Todo[]);
@@ -533,7 +557,7 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
       if (!pendingInterrupts) {
         break;
       }
-      const resolved = await handleInterrupts(record.sessionId, pendingInterrupts);
+      const resolved = await handleInterrupts(record, pendingInterrupts);
       if (resolved === null) {
         return 'cancelled';
       }
