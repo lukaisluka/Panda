@@ -61,6 +61,9 @@ export type AcpPlanEntry = {
 
 export type AcpCost = { amount: number; currency: string };
 
+/** v1 PromptResponse.stopReason — why a prompt turn ended. */
+export type AcpStopReason = 'end_turn' | 'max_tokens' | 'max_turn_requests' | 'refusal' | 'cancelled';
+
 // -- elicitation (protocol/v1 elicitation, form mode) --------------------------
 
 /** A titled choice for enum-like fields. */
@@ -319,6 +322,14 @@ export type AcpSessionUpdate =
       raw?: SessionNotification;
     }
   /**
+   * A prompt turn ended with a stop reason other than end_turn — the live
+   * driver translates the PromptResponse (not a wire notification, same
+   * pattern as modes_initialized). Rendered as a system row in the flow:
+   * refusal / max_tokens / max_turn_requests / cancelled must be visible,
+   * not silent.
+   */
+  | { sessionUpdate: 'turn_notice'; stopReason: Exclude<AcpStopReason, 'end_turn'> }
+  /**
    * The session's mode state arrived (session/new or session/load result).
    * Not a wire notification — the drivers translate the RPC result into this
    * event, exactly like the permission lifecycle events below. null = the
@@ -467,6 +478,7 @@ export type Block =
       rawNotifications?: SessionNotification[];
     }
   | { kind: 'tool_call'; call: ToolCallState }
+  | { kind: 'turn_notice'; stopReason: Exclude<AcpStopReason, 'end_turn'> }
   | { kind: 'unsupported'; notification: SessionNotification };
 
 export type Turn = { id: string; blocks: Block[] };

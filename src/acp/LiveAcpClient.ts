@@ -650,6 +650,12 @@ export class LiveAcpClient {
     try {
       const response = await prompt;
       console.info(`[panda/acp] turn complete: ${response.stopReason}`);
+      // end_turn is the unremarkable ending; every other stop reason is a
+      // user-visible fact about why the turn stopped (refusal, limits,
+      // cancellation). A superseded era must not write into the new one.
+      if (response.stopReason !== 'end_turn' && generation === this.connectionGeneration) {
+        this.handlers.onUpdate({ sessionUpdate: 'turn_notice', stopReason: response.stopReason });
+      }
     } catch (err) {
       if (generation !== this.connectionGeneration) {
         // The turn outlived its era: the replacement's close() rejected the

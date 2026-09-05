@@ -825,3 +825,28 @@ describe('reducer session config options', () => {
     expect(doc.turns).toHaveLength(0);
   });
 });
+
+describe('reducer turn notices (PromptResponse.stopReason)', () => {
+  it('a notice stays inside the turn that just ended', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }] },
+      { sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: { type: 'text', text: '…' } },
+      { sessionUpdate: 'turn_notice', stopReason: 'refusal' },
+    ]);
+    expect(doc.turns).toHaveLength(1);
+    expect(doc.turns[0]!.blocks.at(-1)).toEqual({ kind: 'turn_notice', stopReason: 'refusal' });
+  });
+
+  it('a notice with no turn yet opens one rather than being dropped', () => {
+    const doc = fold([{ sessionUpdate: 'turn_notice', stopReason: 'max_tokens' }]);
+    expect(doc.turns).toHaveLength(1);
+    expect(doc.turns[0]!.blocks).toHaveLength(1);
+  });
+
+  it('every non-end_turn reason survives the fold (rendering covers all four)', () => {
+    for (const stopReason of ['cancelled', 'refusal', 'max_tokens', 'max_turn_requests'] as const) {
+      const doc = fold([{ sessionUpdate: 'turn_notice', stopReason }]);
+      expect(doc.turns[0]!.blocks[0]).toEqual({ kind: 'turn_notice', stopReason });
+    }
+  });
+});

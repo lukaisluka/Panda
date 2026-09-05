@@ -30,7 +30,9 @@ import type { AcpSessionUpdate, SessionStatus } from '../protocol/types';
  */
 
 type PromptCtx = AgentRequestContext<PromptRequest>;
-type PromptHandler = (ctx: PromptCtx) => Promise<{ stopReason: 'end_turn' | 'cancelled' }>;
+type PromptHandler = (
+  ctx: PromptCtx,
+) => Promise<{ stopReason: 'end_turn' | 'cancelled' | 'refusal' | 'max_tokens' | 'max_turn_requests' }>;
 
 type Records = {
   updates: AcpSessionUpdate[];
@@ -337,6 +339,24 @@ describe('LiveAcpClient', () => {
     await h.acpClient.send([image]);
 
     expect(prompts).toEqual([[image]]);
+    h.closeAll();
+  });
+
+  it('emits a turn_notice for every stop reason except end_turn', async () => {
+    for (const stopReason of ['cancelled', 'refusal', 'max_tokens', 'max_turn_requests'] as const) {
+      const h = await setup({
+        onPrompt: async () => ({ stopReason }),
+      });
+      await h.acpClient.send([{ type: 'text', text: 'hi' }]);
+      expect(h.updates).toContainEqual({ sessionUpdate: 'turn_notice', stopReason });
+      h.closeAll();
+    }
+  });
+
+  it('end_turn emits no turn_notice (the unremarkable ending)', async () => {
+    const h = await setup({ onPrompt: async () => ({ stopReason: 'end_turn' }) });
+    await h.acpClient.send([{ type: 'text', text: 'hi' }]);
+    expect(h.updates.filter((u) => u.sessionUpdate === 'turn_notice')).toEqual([]);
     h.closeAll();
   });
 

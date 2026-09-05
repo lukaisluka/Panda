@@ -118,6 +118,10 @@ export function applyUpdate(
         update.raw,
       );
 
+    case 'turn_notice':
+      // Stays inside the turn that just ended — a system row, never a new turn.
+      return appendBlock(doc, { kind: 'turn_notice', stopReason: update.stopReason }, false);
+
     case 'modes_initialized':
       return { ...doc, modes: update.modes };
 

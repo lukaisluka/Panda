@@ -21,6 +21,7 @@ import { AttachedPermissionCard } from './PermissionCard';
 import { ElicitationCard } from './ElicitationCard';
 import { ElicitationUrlCard } from './ElicitationUrlCard';
 import { UnsupportedBlock } from './UnsupportedBlock';
+import { TurnNotice } from './TurnNotice';
 import { useMessageStreamItems } from '../projector/hooks';
 import type { AttachedPermission, BlockFlatItem, FlatItem } from '../projector/messageStream';
 import './MessageStream.css';
@@ -285,6 +286,8 @@ const BlockView = memo(function BlockView({ block, streaming, permission, onReso
           onResolvePermission={(kind) => onResolvePermission(permission?.request.toolCallId ?? '', kind)}
         />
       );
+    case 'turn_notice':
+      return <TurnNotice block={block} />;
     case 'unsupported':
       return <UnsupportedBlock block={block} />;
   }
