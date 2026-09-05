@@ -1,0 +1,45 @@
+/* ClampBox(#83):工具卡展开区内容块的限高渐隐 + 展开/收起。 */
+
+.tool-clamp {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* max-height 必须常驻(不能只在钳制态):溢出检测比较 scrollHeight 与
+ * clientHeight,只有高度受限两者才会分叉——见 ClampBox.tsx 头注。
+ * 限高取视口高度与 480px 的较小值:矮窗口里不至于只剩按钮,超长内容
+ * (整份文件/全量测试输出)也不会再撑爆虚拟列表条目。 */
+.tool-clamp-body {
+  display: block;
+  min-width: 0;
+  max-height: min(40vh, 480px);
+}
+
+/* 未钳制的中间帧内容会画出限高一瞬;检出后立即裁剪,视觉无感。 */
+.tool-clamp--clamped .tool-clamp-body {
+  overflow: hidden;
+  /* 底部渐隐提示还有更多——遮罩跟随元素自身,无需额外定位层。 */
+  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to bottom, black calc(100% - 32px), transparent);
+}
+
+.tool-clamp--expanded .tool-clamp-body {
+  max-height: none;
+}
+
+.tool-clamp-toggle {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-radius: var(--panda-radius-md);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  color: var(--color-faint);
+  transition: var(--panda-colors-transition);
+}
+
+.tool-clamp-toggle:hover {
+  color: var(--color-fg);
+  background: color-mix(in oklab, var(--color-raised) 40%, transparent);
+}

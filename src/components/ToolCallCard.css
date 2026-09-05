@@ -183,3 +183,59 @@
 .tool-unsupported {
   color: var(--color-faint);
 }
+
+/* —— Input 特化视图(#83)—— */
+
+/* execute 命令:终端样式一行,与折叠行的截断命令互补(这里完整)。 */
+.tool-input-command {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
+  border-radius: var(--panda-radius-md);
+  background: color-mix(in oklab, var(--color-surface) 60%, transparent);
+  padding: 6px 12px; /* px-3 py-1.5,与 .tool-input-summary 对齐 */
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+.tool-input-command-sign {
+  flex: none;
+  color: var(--color-faint);
+}
+
+.tool-input-command code {
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--color-muted);
+}
+
+/* 特化后的剩余标量参数:安静的自述键值表,无框(chrome,不是内容)。 */
+.tool-input-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+
+.tool-input-field {
+  display: flex;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.tool-input-field dt {
+  flex: none;
+  color: var(--color-faint);
+}
+
+.tool-input-field dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--color-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
