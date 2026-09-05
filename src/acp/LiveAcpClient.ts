@@ -29,7 +29,6 @@ import type {
   PermissionResponse,
 } from '../protocol/types';
 import {
-  echoRelation,
   parseSessionNotification,
   removeSdkStrictSessionUpdateRouter,
   toAcpUpdates,
@@ -39,6 +38,7 @@ import {
   toPermissionRequest,
   toSessionModeState,
 } from './wire';
+import { EchoReconciler } from './echoReconciliation';
 import { PANDA_HOST_CAPABILITIES, effectiveCapability, type AgentCapabilityDeclarations, type CapabilityKey, type EffectiveCapability } from '../capabilities';
 import { alwaysAskPolicy, denyResolution, UNKNOWN_POLICY_CONTEXT, type PermissionDecision } from '../policy';
 
@@ -157,24 +157,6 @@ type PendingElicitation = {
   resolve: (response: CreateElicitationResponse) => void;
 };
 
-/**
- * Echo reconciliation state for the outbound message of the in-flight turn
- * (issue #15): the agent's `user_message_chunk` echo is compared against what
- * `send()` dispatched optimistically. Equal → the optimistic block is
- * protocol-confirmed; different or boundary-closed → the buffered echo is
- * re-dispatched as real events and renders separately (never merged, never
- * tampered). Modeled on react-acp's PendingOutbound.
- */
-type PendingOutbound = {
-  prompt: AcpContentBlock[];
-  /** Echo notifications held while the relation is still `prefix`. */
-  buffered: SessionNotification[];
-  /** Protocol messageId seen on the first echo chunk, if the agent sent one. */
-  protocolMessageId?: string;
-  /** Echo window closed (matched, diverged, or boundary passed) — pass through. */
-  echoWindowClosed: boolean;
-};
-
 /** Keep in sync with package.json. */
 const CLIENT_INFO = { name: 'panda', title: 'Panda', version: '0.1.0' } as const;
 
@@ -270,7 +252,7 @@ export class LiveAcpClient {
     delete: false,
   };
   private pendingPrompt: Promise<unknown> | null = null;
-  private pendingOutbound: PendingOutbound | null = null;
+  private echo: EchoReconciler | null = null;
   /**
    * Concurrent `session/request_permission` waiters (issue #18), keyed
    * `${sessionId}:${toolCallId}` — each hangs independently; overlapping
@@ -784,9 +766,9 @@ export class LiveAcpClient {
     }
     const generation = this.connectionGeneration;
     // The reducer is the only path that opens a user turn — echo locally as
-    // optimistic (reconciled against the agent's echo, see pendingOutbound).
-    const pendingOutbound: PendingOutbound = { prompt: content, buffered: [], echoWindowClosed: false };
-    this.pendingOutbound = pendingOutbound;
+    // optimistic (reconciled against the agent's echo, see EchoReconciler).
+    const echo = new EchoReconciler(content);
+    this.echo = echo;
     this.handlers.onUpdate({ sessionUpdate: 'user_message', content, optimistic: true });
     this.handlers.onUpdate({ sessionUpdate: 'status_changed', status: 'running' });
     const wirePrompt: ContentBlock[] = content;
@@ -829,10 +811,10 @@ export class LiveAcpClient {
       // cleanup already cleared them and settling the dead turn's status is
       // exactly right (the turn is over, the document goes idle).
       if (this.pendingPrompt === prompt) this.pendingPrompt = null;
-      if (this.pendingOutbound === pendingOutbound) {
+      if (this.echo === echo) {
         // Turn over: render any echo still held un-reconciled, then drop the
         // pending state — with or without protocol confirmation.
-        this.settlePendingOutbound();
+        this.settleEcho(echo);
       }
       if (this.pendingPrompt === null) this.handlers.onUpdate({ sessionUpdate: 'status_changed', status: 'idle' });
     }
@@ -1111,78 +1093,18 @@ export class LiveAcpClient {
   /**
    * Echo reconciliation gate (issue #15). Returns true when the notification
    * was consumed (held in the echo buffer, or folded into a confirmation).
-   * Any non-echo update while a partial echo is buffered closes the echo
-   * window: the partial echo is flushed as real events before it.
    */
   private reconcileUserEcho(params: SessionNotification): boolean {
-    const pending = this.pendingOutbound;
-    if (!pending || pending.echoWindowClosed) return false;
-    const update = params.update;
-    if (update.sessionUpdate !== 'user_message_chunk') {
-      if (pending.buffered.length > 0) {
-        console.info('[panda/acp] echo window closed by non-echo update — flushing partial echo');
-        this.flushBufferedEcho();
-      }
-      return false;
-    }
-    const incomingId = update.messageId ?? undefined;
-    if (pending.protocolMessageId && incomingId && pending.protocolMessageId !== incomingId) {
-      // A second protocol message started echoing — the buffered one belongs
-      // elsewhere; render the buffer and let this chunk through as-is.
-      console.info(
-        `[panda/acp] echo messageId changed (${pending.protocolMessageId} -> ${incomingId}) — flushing`,
-      );
-      this.flushBufferedEcho();
-      return false;
-    }
-    pending.protocolMessageId ??= incomingId;
-    pending.buffered.push(params);
-    const relation = echoRelation(
-      pending.prompt,
-      pending.buffered.map((n) => (n.update as { content: ContentBlock }).content),
-    );
-    if (relation === 'equal') {
-      console.info(
-        `[panda/acp] echo matched outbound message${pending.protocolMessageId ? ` (messageId ${pending.protocolMessageId})` : ''}`,
-      );
-      this.handlers.onUpdate({
-        sessionUpdate: 'user_message_confirmed',
-        protocolMessageId: pending.protocolMessageId,
-        notifications: pending.buffered,
-      });
-      pending.buffered = [];
-      pending.echoWindowClosed = true;
-      return true;
-    }
-    if (relation === 'different') {
-      // The agent echoed something else: keep the optimistic block untouched
-      // and render the protocol version as its own message. Note a `prefix`
-      // that never completes is also flushed here or at turn end — an
-      // incomplete echo cannot be merged into the optimistic block because
-      // it may still diverge later (react-acp semantics, doc §4.7).
-      console.info('[panda/acp] echo diverged from outbound message — rendering protocol version');
-      this.flushBufferedEcho();
-    }
-    return true; // equal handled above; prefix keeps buffering, different flushed
-  }
-
-  /** Renders the held echo notifications as real events and closes the echo window. */
-  private flushBufferedEcho(): void {
-    const pending = this.pendingOutbound;
-    if (!pending || pending.buffered.length === 0) return;
-    for (const notification of pending.buffered) {
-      for (const mapped of toAcpUpdates(notification)) {
-        this.handlers.onUpdate(mapped);
-      }
-    }
-    pending.buffered = [];
-    pending.echoWindowClosed = true;
+    if (!this.echo) return false;
+    const feed = this.echo.feed(params);
+    for (const event of feed.events) this.handlers.onUpdate(event);
+    return feed.consumed;
   }
 
   /** Turn settled: flush anything still held and drop the reconciliation state. */
-  private settlePendingOutbound(): void {
-    this.flushBufferedEcho();
-    this.pendingOutbound = null;
+  private settleEcho(echo: EchoReconciler): void {
+    for (const event of echo.settle()) this.handlers.onUpdate(event);
+    this.echo = null;
   }
 
   /**
@@ -1472,7 +1394,7 @@ export class LiveAcpClient {
     this.pendingPrompt = null;
     // The dead era's echo state must not leak into the next connection: its
     // buffered chunks belong to a superseded transcript (issue #19).
-    this.pendingOutbound = null;
+    this.echo = null;
     this.finishAllPermissions();
     this.finishAllElicitations();
     this.connection?.close();
