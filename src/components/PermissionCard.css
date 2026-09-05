@@ -1,4 +1,4 @@
-/* Inline permission approval / policy-denied records (issue #22). */
+/* Inline permission approval / policy-denied / memory-replay records (issues #22, #68). */
 
 .permission-card {
   margin-top: 6px; /* mt-1.5 */
@@ -7,9 +7,15 @@
   background: color-mix(in oklab, var(--color-warn) 5%, transparent);
   padding: 14px; /* p-3.5 */
 }
-.permission-card--denied {
+.permission-card--denied,
+.permission-card--remembered {
   border-color: var(--color-border);
   background: color-mix(in oklab, var(--color-raised) 40%, transparent);
+}
+
+.permission-head--denied,
+.permission-head--remembered {
+  color: var(--color-muted);
 }
 
 .permission-head {
@@ -19,9 +25,6 @@
   font-size: 14px;
   font-weight: 500;
   color: var(--color-warn);
-}
-.permission-head--denied {
-  color: var(--color-muted);
 }
 
 .permission-title {

@@ -5,6 +5,10 @@
  * hangs for the user. The verdict union deliberately has NO `allow` member:
  * auto-approval is not expressible, only ask-able. A policy that wants to
  * deny answers on the user's behalf with a reject option — never an allow.
+ *
+ * Session memory (issue #68) is not a policy allow: it replays the user's
+ * own earlier 'always' choice for the same action, consulted after the
+ * policy — a deny always outranks a remembered allow.
  */
 
 import type { RequestPermissionRequest, RequestPermissionResponse } from '@agentclientprotocol/sdk';

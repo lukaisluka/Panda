@@ -1,9 +1,10 @@
-import { ShieldAlert, ShieldBan } from 'lucide-react';
+import { ShieldAlert, ShieldBan, ShieldCheck } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import type {
   DeniedPermissionResponse,
   PermissionOptionKind,
   PermissionRequest,
+  RememberedPermissionResponse,
 } from '../protocol/types';
 import type { AttachedPermission } from '../projector/messageStream';
 import './PermissionCard.css';
@@ -65,6 +66,32 @@ export function DeniedPermissionCard({ request, response }: {
 }
 
 /**
+ * Terminal record of a permission the session memory answered (issue #68):
+ * the user chose this 'always' option for the same action earlier in the
+ * session, so the answer is theirs — replayed, not invented. The card says
+ * so; an unexplained auto-approval would read as the agent approving itself.
+ */
+export function RememberedPermissionCard({ request, response }: {
+  request: PermissionRequest;
+  response: RememberedPermissionResponse;
+}) {
+  return (
+    <div className="permission-card permission-card--remembered">
+      <div className="permission-head permission-head--remembered">
+        {response.kind === 'reject_always' ? <ShieldBan size={14} /> : <ShieldCheck size={14} />}
+        按本会话既往选择代答
+      </div>
+      <p className="permission-title permission-title--dim">{request.title}</p>
+      <p className="permission-reason">
+        {response.kind === 'reject_always'
+          ? '你本会话曾对同一操作选择 reject_always，已自动拒绝'
+          : '你本会话曾对同一操作选择 allow_always，已自动放行'}
+      </p>
+    </div>
+  );
+}
+
+/**
  * An attached permission in either state (issue #22): pending waits for the
  * user's answer, denied is the policy's terminal record. The one render
  * point both attachment sites (tool-call card, standalone card) share.
@@ -73,9 +100,11 @@ export function AttachedPermissionCard({ permission, onResolve }: {
   permission: AttachedPermission;
   onResolve: (kind: PermissionOptionKind) => void;
 }) {
-  return permission.state === 'pending' ? (
-    <PermissionCard request={permission.request} onResolve={onResolve} />
-  ) : (
-    <DeniedPermissionCard request={permission.request} response={permission.response} />
-  );
+  if (permission.state === 'pending') {
+    return <PermissionCard request={permission.request} onResolve={onResolve} />;
+  }
+  if (permission.state === 'remembered') {
+    return <RememberedPermissionCard request={permission.request} response={permission.response} />;
+  }
+  return <DeniedPermissionCard request={permission.request} response={permission.response} />;
 }

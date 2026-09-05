@@ -30,6 +30,10 @@ function deniedState(request: PermissionRequest): PermissionState {
   return { status: 'resolved', request, response: { outcome: 'denied-by-policy', kind: 'reject_once' } };
 }
 
+function rememberedState(request: PermissionRequest): PermissionState {
+  return { status: 'resolved', request, response: { outcome: 'remembered', kind: 'allow_always' } };
+}
+
 function toolCall(id: string, status: ToolCallState['status'] = 'pending'): ToolCallState {
   return { id, title: id, kind: 'other', status, content: [], locations: [] };
 }
@@ -189,6 +193,21 @@ describe('projection permission placement', () => {
     // Standalone keys disambiguate by state: a re-ask after a deny can ping-pong
     // the same toolCallId between pending and denied records.
     expect(items[1]!.key).toBe('denied-permission-id');
+  });
+
+  it('attaches a remembered settlement as a terminal record on its tool call (issue #68)', () => {
+    const items = projectMessageStream(
+      withPermissions(documentWith(toolCall('permission-id')), rememberedState(permission)),
+    );
+
+    expect(items[0]).toMatchObject({
+      kind: 'block',
+      permission: {
+        state: 'remembered',
+        request: permission,
+        response: { outcome: 'remembered', kind: 'allow_always' },
+      },
+    });
   });
 });
 

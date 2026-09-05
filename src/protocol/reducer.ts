@@ -558,6 +558,7 @@ function resolvePermission(
   const toolWillNotRun =
     response.outcome === 'cancelled' ||
     response.outcome === 'denied-by-policy' ||
+    (response.outcome === 'remembered' && response.kind === 'reject_always') ||
     (response.outcome === 'selected' &&
       (response.kind === 'reject_once' || response.kind === 'reject_always'));
   return toolWillNotRun ? retirePendingToolCall(withRecord, toolCallId) : withRecord;

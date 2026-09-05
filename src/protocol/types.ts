@@ -637,18 +637,25 @@ export type PermissionRequest = {
 };
 
 /**
- * How a permission settled — the chosen option, a cancellation, or a host
- * policy denial (issue #22): `denied-by-policy` marks a settlement the user
- * never decided; `kind` is the reject option answered on the wire, null when
- * the agent offered no reject option and was answered cancelled.
+ * How a permission settled — the chosen option, a cancellation, a host
+ * policy denial (issue #22), or a session-memory replay (issue #68).
+ * `denied-by-policy` marks a settlement the user never decided; `kind` is
+ * the reject option answered on the wire, null when the agent offered no
+ * reject option and was answered cancelled. `remembered` marks a settlement
+ * the session memory answered — the user's own earlier 'always' choice for
+ * the same action this session, replayed by the agent's current offer.
  */
 export type PermissionResponse =
   | { outcome: 'selected'; kind: PermissionOptionKind }
   | { outcome: 'cancelled' }
-  | { outcome: 'denied-by-policy'; kind: PermissionOptionKind | null };
+  | { outcome: 'denied-by-policy'; kind: PermissionOptionKind | null }
+  | { outcome: 'remembered'; kind: PermissionOptionKind };
 
 /** The policy-denial variant, extracted for the UI's terminal card. */
 export type DeniedPermissionResponse = Extract<PermissionResponse, { outcome: 'denied-by-policy' }>;
+
+/** The session-memory variant (issue #68), extracted for the UI's terminal card. */
+export type RememberedPermissionResponse = Extract<PermissionResponse, { outcome: 'remembered' }>;
 
 /** One permission's lifecycle state, session-scoped in the document. */
 export type PermissionState = {
