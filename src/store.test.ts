@@ -434,8 +434,8 @@ describe('multi-connection foreground (issue #21)', () => {
 
     // 'a' becomes the foreground; 'b' runs a turn in the background.
     usePanda.getState().setActiveConnection('a');
-    b.setStatus('running');
-    b.setStatus('idle');
+    b.update({ sessionUpdate: 'status_changed', status: 'running' });
+    b.update({ sessionUpdate: 'status_changed', status: 'idle' });
 
     expect(usePanda.getState().connections['b']!.unreadCompletion).toBe(true);
     expect(connectionLifecycle(usePanda.getState().connections['b']!).attention).toContain('unread-completion');
@@ -448,8 +448,8 @@ describe('multi-connection foreground (issue #21)', () => {
     usePanda.getState().ensureConnection('live');
     const port = connectionStorePort('live');
     port.adoptSession('s-1', '/a');
-    port.setStatus('running');
-    port.setStatus('idle');
+    port.update({ sessionUpdate: 'status_changed', status: 'running' });
+    port.update({ sessionUpdate: 'status_changed', status: 'idle' });
     expect(usePanda.getState().connections['live']!.unreadCompletion).toBe(false);
   });
 
@@ -463,8 +463,8 @@ describe('multi-connection foreground (issue #21)', () => {
     usePanda.getState().closeConnection('fg'); // foreground removed — none left
     expect(usePanda.getState().activeConnectionId).toBeNull();
 
-    bg.setStatus('running');
-    bg.setStatus('idle');
+    bg.update({ sessionUpdate: 'status_changed', status: 'running' });
+    bg.update({ sessionUpdate: 'status_changed', status: 'idle' });
     expect(usePanda.getState().connections['bg']!.unreadCompletion).toBe(true);
   });
 
@@ -493,7 +493,7 @@ describe('multi-connection foreground (issue #21)', () => {
     port.adoptSession('s-1', '/a');
     expect(connectionLifecycle(usePanda.getState().connections['live']!).running).toBe(false);
 
-    port.setStatus('running');
+    port.update({ sessionUpdate: 'status_changed', status: 'running' });
     expect(connectionLifecycle(usePanda.getState().connections['live']!).running).toBe(true);
 
     port.update({
@@ -504,12 +504,12 @@ describe('multi-connection foreground (issue #21)', () => {
         options: [{ id: 'o-1', name: 'Allow once', kind: 'allow_once' }],
       },
     });
-    port.setStatus('requires_action');
+    port.update({ sessionUpdate: 'status_changed', status: 'requires_action' });
     const attention = connectionLifecycle(usePanda.getState().connections['live']!).attention;
     expect(attention).toContain('pending-permission');
     expect(attention.length).toBeGreaterThan(0);
 
-    port.setStatus('idle'); // foreground — no unread from this settle
+    port.update({ sessionUpdate: 'status_changed', status: 'idle' }); // foreground — no unread from this settle
     expect(connectionLifecycle(usePanda.getState().connections['live']!).attention).toContain('pending-permission'); // permission still pending
   });
 

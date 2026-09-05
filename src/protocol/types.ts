@@ -363,6 +363,13 @@ export type AcpSessionUpdate =
       raw?: SessionNotification;
     }
   /**
+   * A turn-status transition, client-synthesized — never arrives from wire
+   * (unknown wire kinds arrive as the `session_state` variant instead). The
+   * drivers emit this instead of a side channel so the document stays
+   * replayable from its event sequence: status is a fact, not a callback.
+   */
+  | { sessionUpdate: 'status_changed'; status: SessionStatus }
+  /**
    * A prompt turn ended with a stop reason other than end_turn — the live
    * driver translates the PromptResponse (not a wire notification, same
    * pattern as modes_initialized). Rendered as a system row in the flow:

@@ -6,7 +6,6 @@ import type {
   AcpSessionUpdate,
   ElicitationRequest,
   SessionDocument,
-  SessionStatus,
 } from './protocol/types';
 import {
   PANDA_HOST_CAPABILITIES,
@@ -330,7 +329,6 @@ export type ConnectionStorePort = {
    */
   adoptSession(sessionId: string, cwd: string): void;
   update(update: AcpSessionUpdate): void;
-  setStatus(status: SessionStatus): void;
   setConnection(patch: Partial<ConnectionInfo>): void;
   /** Clears the adopted session's document (permissions live inside it). */
   resetDocument(): void;
@@ -438,34 +436,34 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
     },
     update: (update) => {
       if (!requireSession('update')) return;
-      patchDoc((doc) => applyUpdate(doc, update));
-    },
-    setStatus: (status) => {
-      // Same narrowing shape as patchDoc: the null check must live in this
-      // function body for TS to carry it into the setState closure below.
-      if (currentSessionId === null) {
-        console.warn(`[store] connection "${connectionId}" status before adopting a session — dropped`);
+      if (update.sessionUpdate === 'status_changed') {
+        // setStatus's verbatim semantics moved here (#55): a status
+        // transition bumps activity and lights the unread signal when a
+        // running turn settled while this connection was backgrounded
+        // (which includes "no foreground at all"). A turn KILLED by a
+        // disconnect also lands idle here — the connection's error status
+        // signals attention anyway, and the extra unread flag clears on the
+        // same foregrounding.
+        // Same narrowing shape as the old setStatus: the null check must
+        // live in this function body for TS to carry it into the closure.
+        const sessionId = currentSessionId;
+        if (sessionId === null) return;
+        usePanda.setState((s) => {
+          const patched = patchConnectionState(s, connectionId, (state) => {
+            const prevStatus = state.docs[sessionId]?.status ?? 'idle';
+            const completedInBackground =
+              s.activeConnectionId !== connectionId && prevStatus === 'running' && update.status === 'idle';
+            return {
+              docs: { ...state.docs, [sessionId]: applyUpdate(state.docs[sessionId] ?? EMPTY_DOC, update) },
+              lastActivityAt: Date.now(),
+              ...(completedInBackground ? { unreadCompletion: true } : {}),
+            };
+          });
+          return patched ?? {};
+        });
         return;
       }
-      const sessionId = currentSessionId;
-      usePanda.setState((s) => {
-        const patched = patchConnectionState(s, connectionId, (state) => {
-          const prevStatus = state.docs[sessionId]?.status ?? 'idle';
-          // Unread signal (issue #21): a running turn settled while this
-          // connection was backgrounded (which includes "no foreground at
-          // all"). A turn KILLED by a disconnect also lands idle here — the
-          // connection's error status signals attention anyway, and the extra
-          // unread flag clears on the same foregrounding.
-          const completedInBackground =
-            s.activeConnectionId !== connectionId && prevStatus === 'running' && status === 'idle';
-          return {
-            docs: { ...state.docs, [sessionId]: { ...(state.docs[sessionId] ?? EMPTY_DOC), status } },
-            lastActivityAt: Date.now(),
-            ...(completedInBackground ? { unreadCompletion: true } : {}),
-          };
-        });
-        return patched ?? {};
-      });
+      patchDoc((doc) => applyUpdate(doc, update));
     },
     setConnection: (patch) =>
       patchSlot((state) => ({ connection: { ...state.connection, ...patch } })),

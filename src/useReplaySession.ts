@@ -33,7 +33,6 @@ export function useReplaySession(): ForegroundSessionController {
   if (driverRef.current === null) {
     driverRef.current = new ReplayDriver({
       onUpdate: (update) => port.update(update),
-      onStatus: (status) => port.setStatus(status),
     });
   }
   const driver = driverRef.current;

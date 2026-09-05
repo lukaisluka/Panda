@@ -168,10 +168,13 @@ describe.skipIf(!hasUv)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
     }
 
     const handlers: LiveClientHandlers = {
-      onUpdate: (update) => records.updates.push(update),
+      onUpdate: (update) => {
+        records.updates.push(update);
+        // Status rides the update stream (#55).
+        if (update.sessionUpdate === 'status_changed') records.statuses.push(update.status);
+      },
       onSessionModes: () => {},
       onSessionConfigOptions: () => {},
-      onStatus: (status) => records.statuses.push(status),
       onConnected: () => {},
       onSessionId: (sessionId) => records.sessionIds.push(sessionId),
       onDisconnected: () => {},
