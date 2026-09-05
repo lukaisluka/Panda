@@ -14,6 +14,7 @@ import {
   type Stream,
 } from '@agentclientprotocol/sdk';
 import { CONTROL_REQUEST_TIMEOUT_MS, LiveAcpClient, type LiveClientHandlers } from './LiveAcpClient';
+import type { McpServerConfig } from '../mcpServers';
 import type { PermissionDecision } from '../policy';
 import { StreamTransport } from './transport/StreamTransport';
 import type { AcpTransport } from './transport/AcpTransport';
@@ -74,6 +75,8 @@ type Harness = Records & {
     permissionResponses: RequestPermissionResponse[];
     resumeRequests: string[];
     deleteRequests: string[];
+    newSessionParams: Array<Record<string, unknown>>;
+    loadParams: Array<Record<string, unknown>>;
   };
   serverConnection: AgentConnection;
   /** Simulates the ACP service dying: kills the transport in both directions. */
@@ -104,6 +107,8 @@ type FakeAgentOptions = {
   onPrompt?: PromptHandler;
   /** Host policy injected into the client (issue #22); default = always ask. */
   clientPolicy?: (request: RequestPermissionRequest) => PermissionDecision;
+  /** MCP server source injected into the client (issue #71); default = none. */
+  mcpServers?: () => McpServerConfig[];
   /** authMethods advertised at initialize (v1 auth). */
   authMethods?: AuthMethod[];
   /** session/new rejects with auth_required until `authenticate` runs. */
@@ -200,6 +205,8 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     permissionResponses: [] as RequestPermissionResponse[],
     resumeRequests: [] as string[],
     deleteRequests: [] as string[],
+    newSessionParams: [] as Array<Record<string, unknown>>,
+    loadParams: [] as Array<Record<string, unknown>>,
   };
 
   const caps = opts.capabilities ?? {};
@@ -243,7 +250,8 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
         ...(opts.authMethods ? { authMethods: opts.authMethods } : {}),
       };
     })
-    .onRequest(methods.agent.session.new, async () => {
+    .onRequest(methods.agent.session.new, async (ctx) => {
+      agentState.newSessionParams.push(ctx.params as Record<string, unknown>);
       await opts.beforeNewSession?.();
       if (opts.authGate && !agentState.authenticated) {
         throw RequestError.authRequired(undefined, 'run authenticate first');
@@ -261,6 +269,7 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
       sessions: opts.listSessions ?? [],
     }))
     .onRequest(methods.agent.session.load, async (ctx) => {
+      agentState.loadParams.push(ctx.params as Record<string, unknown>);
       await opts.beforeLoad?.();
       if (opts.failLoadFor?.includes(ctx.params.sessionId)) {
         throw new Error(`session ${ctx.params.sessionId} 不存在`);
@@ -294,7 +303,10 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
 
   const acpClient = new LiveAcpClient(
     handlers,
-    opts.clientPolicy ? { policy: opts.clientPolicy } : {},
+    {
+      ...(opts.clientPolicy ? { policy: opts.clientPolicy } : {}),
+      ...(opts.mcpServers ? { mcpServers: opts.mcpServers } : {}),
+    },
   );
   await acpClient.connect(new StreamTransport(clientStream), '/tmp/project', opts.resume);
 
@@ -1687,6 +1699,40 @@ describe('LiveAcpClient', () => {
       toolCallId: 'edit-2',
       response: { outcome: 'selected', kind: 'allow_once' },
     });
+    h.closeAll();
+  });
+
+  // -- MCP server injection (issue #71) ---------------------------------------
+
+  it('carries the configured MCP servers on session/new and session/load (issue #71)', async () => {
+    const servers: McpServerConfig[] = [
+      { id: 'm-1', name: 'filesystem', type: 'stdio', command: 'npx', args: '-y @modelcontextprotocol/server-filesystem  /tmp' },
+      { id: 'm-2', name: 'search', type: 'http', url: 'https://mcp.example.com/mcp' },
+    ];
+    const h = await setup({
+      mcpServers: () => servers,
+      capabilities: { loadSession: true },
+      history: { 's-other': [] },
+    });
+    expect(h.agentState.newSessionParams).toHaveLength(1);
+    expect(h.agentState.newSessionParams[0]!.mcpServers).toEqual([
+      { name: 'filesystem', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'], env: [] },
+      { type: 'http', name: 'search', url: 'https://mcp.example.com/mcp', headers: [] },
+    ]);
+    await h.acpClient.loadSession('s-other', '/tmp/project');
+    expect(h.agentState.loadParams[0]!.mcpServers).toEqual(h.agentState.newSessionParams[0]!.mcpServers);
+    h.closeAll();
+  });
+
+  it('reads the MCP source fresh per establishment — edits apply to the next session (issue #71)', async () => {
+    let servers: McpServerConfig[] = [];
+    const h = await setup({ mcpServers: () => servers });
+    expect(h.agentState.newSessionParams[0]!.mcpServers).toEqual([]);
+    servers = [{ id: 'm-1', name: 'fs', type: 'sse', url: 'https://x/mcp' }];
+    await h.acpClient.newSession('/tmp/other');
+    expect(h.agentState.newSessionParams[1]!.mcpServers).toEqual([
+      { type: 'sse', name: 'fs', url: 'https://x/mcp', headers: [] },
+    ]);
     h.closeAll();
   });
 
