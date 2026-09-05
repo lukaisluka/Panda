@@ -321,6 +321,13 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
         expect(kinds, `工具卡缺少 kind=${kind}: ${[...kinds]}`).toContain(kind);
       }
 
+      // 文件操作卡必须带 locations(issue #81):客户端凭它渲染 ZCode 式
+      // 文件行(动词+文件图标+文件名+目录);缺失会退化成旧式长 title
+      const readCall = toolCalls.find((u) => u.kind === 'read');
+      expect(readCall?.locations[0]?.path).toBe('/auth.ts');
+      const editCall = toolCalls.find((u) => u.kind === 'edit');
+      expect(editCall?.locations[0]?.path).toBe('/auth.ts');
+
       // edit_file 的 diff 真实送达(来自沙箱里的真实文件改动)
       const diffs = records.updates.flatMap((u) =>
         u.sessionUpdate === 'tool_call_update' ? (u.content ?? []) : [],

@@ -202,7 +202,8 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
     const kind = TOOL_KINDS[name] ?? 'other';
     let update: Record<string, unknown>;
     if (name === 'read_file' && typeof args.file_path === 'string') {
-      update = { title: `Read \`${args.file_path}\`` };
+      // locations 让客户端渲染成文件行(动词+文件图标+文件名+目录)
+      update = { title: `Read \`${args.file_path}\``, locations: [{ path: args.file_path }] };
     } else if (name === 'edit_file' && typeof args.file_path === 'string') {
       const path = args.file_path;
       update = {
@@ -220,7 +221,10 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
         locations: [{ path }],
       };
     } else if (name === 'write_file' && typeof args.file_path === 'string') {
-      update = { title: `Write \`${args.file_path}\`` };
+      // 协议 ToolKind 没有 write 枚举,创建按协议归类 edit:kind 仍是 edit,
+      // 客户端动词显示 Edit,创建/修改靠 diff 统计的有无区分(创建无统计);
+      // 原始 Write title 保留在文件名 hover。
+      update = { title: `Write \`${args.file_path}\``, locations: [{ path: args.file_path }] };
     } else if (name === 'execute') {
       const command = typeof args.command === 'string' ? args.command : '';
       update = { title: command ? truncateExecuteCommandForDisplay(command) : 'Execute command' };
