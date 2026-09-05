@@ -803,6 +803,12 @@ export class LiveAcpClient {
       // end_turn is the unremarkable ending; every other stop reason is a
       // user-visible fact about why the turn stopped (refusal, limits,
       // cancellation). A superseded era must not write into the new one.
+      //
+      // response.usage (UNSTABLE) is NOT mapped: it is a cumulative token
+      // tally (total/input/output/thought/cache), not the context-occupancy
+      // pair (used/size) the usage_update event and the status bar model.
+      // Forcing it in would render a bogus window meter; it needs its own
+      // UI surface first.
       if (response.stopReason !== 'end_turn' && generation === this.connectionGeneration) {
         this.handlers.onUpdate({ sessionUpdate: 'turn_notice', stopReason: response.stopReason });
       }

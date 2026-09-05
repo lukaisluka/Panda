@@ -101,6 +101,7 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
   // here). Fall back to the Wrench instead of rendering undefined.
   const Icon = KIND_ICON[call.kind] ?? Wrench;
   const path = call.locations[0]?.path;
+  const line = call.locations[0]?.line;
   // Progressive → settled verb once the call ends ("Editing x" → "Edit x");
   // think calls show the fixed kind label instead (Thinking/Thought) —
   // protocol title is untouched in both cases, this is display-only.
@@ -115,7 +116,7 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
       : null;
   // File row data (null for non-file kinds or calls without a location).
   const fileVerb = path ? FILE_VERB[call.kind] : undefined;
-  const fileRow = path && fileVerb ? { path, verb: fileVerb, ...splitFilePath(path) } : null;
+  const fileRow = path && fileVerb ? { path, line, verb: fileVerb, ...splitFilePath(path) } : null;
   const diffPart = call.content.find((c): c is Extract<typeof c, { type: 'diff' }> => c.type === 'diff');
   const stats = useMemo(
     () => (diffPart ? diffStats(diffPart.oldText, diffPart.newText) : null),
@@ -143,6 +144,7 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
               <span className="tool-card-title">{fileRow.verb}</span>
               <FileTypeIcon path={fileRow.path} />
               <span className="truncate tool-card-file" title={call.title}>{fileRow.base}</span>
+              {fileRow.line != null && <span className="tool-card-line">:{fileRow.line}</span>}
               {fileRow.dir && <span className="truncate tool-card-path">{fileRow.dir}</span>}
             </>
           ) : (

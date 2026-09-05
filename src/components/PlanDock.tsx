@@ -44,7 +44,9 @@ export function PlanDock({ entries }: { entries: AcpPlanEntry[] }) {
                     ? 'plan-dock-item-text plan-dock-item-text--done'
                     : entry.status === 'in_progress'
                       ? 'plan-dock-item-text plan-dock-item-text--active'
-                      : 'plan-dock-item-text'
+                      : entry.priority === 'high'
+                        ? 'plan-dock-item-text plan-dock-item-text--high'
+                        : 'plan-dock-item-text'
                 }
               >
                 {entry.content}
