@@ -308,9 +308,14 @@
   align-items: center;
   gap: 8px;
   border-top: 1px solid var(--color-border);
-  padding: 14px 20px; /* px-5 py-3.5 */
+  padding: 10px 12px 10px 20px; /* px-5 py-2.5, tighter for the gear on the end */
   font-size: 11px;
   color: var(--color-muted);
+}
+
+.sidebar-footer .truncate {
+  flex: 1;
+  min-width: 0;
 }
 
 .sidebar-footer-icon {

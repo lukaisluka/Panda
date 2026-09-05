@@ -80,17 +80,6 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
         <span className="sidebar-logo">🐼</span>
         Panda
         <span className="sidebar-brand-actions">
-          <IconButton
-            variant="ghost"
-            size="sm"
-            icon={<Settings size={15} />}
-            label="设置"
-            tooltip="设置:Agent 配置、主题"
-            clickAction={() => {
-              navigate('settings');
-              onMobileClose();
-            }}
-          />
           <span className="sidebar-close">
             <IconButton
               variant="ghost"
@@ -163,6 +152,17 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
                 : 'acp · live'
               : 'claude-code · replay'}
           </span>
+          <IconButton
+            variant="ghost"
+            size="sm"
+            icon={<Settings size={14} />}
+            label="设置"
+            tooltip="设置:Agent 配置、主题"
+            clickAction={() => {
+              navigate('settings');
+              onMobileClose();
+            }}
+          />
         </div>
       </div>
 
