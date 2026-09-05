@@ -26,6 +26,7 @@ export function emptySession(): SessionDocument {
     status: 'idle',
     usage: { used: 0, size: 0, cost: null },
     plan: null,
+    compactions: {},
     modes: null,
     availableCommands: [],
     configOptions: null,
@@ -123,6 +124,63 @@ export function applyUpdate(
     case 'turn_notice':
       // Stays inside the turn that just ended — a system row, never a new turn.
       return appendBlock(doc, { kind: 'turn_notice', stopReason: update.stopReason }, false);
+
+    case 'compaction_update': {
+      // Patch fold per compactionId: omitted fields keep the stored value,
+      // null clears, a value replaces. Terminal transitions (→ completed /
+      // failed) plant one notice block in the flow — the moment the context
+      // shrank must stay visible, and a re-sent terminal status must not
+      // duplicate the row.
+      const prev = doc.compactions[update.compactionId];
+      const summary = update.summary !== undefined ? update.summary : (prev?.summary ?? null);
+      const error = update.error !== undefined ? update.error : (prev?.error ?? null);
+      const patched: SessionDocument = {
+        ...doc,
+        compactions: {
+          ...doc.compactions,
+          [update.compactionId]: { status: update.status, summary, error },
+        },
+      };
+      if (prev?.status !== 'completed' && update.status === 'completed') {
+        return appendBlock(
+          patched,
+          { kind: 'compaction_notice', compactionId: update.compactionId, outcome: 'completed', error },
+          false,
+        );
+      }
+      if (prev?.status !== 'failed' && update.status === 'failed') {
+        return appendBlock(
+          patched,
+          { kind: 'compaction_notice', compactionId: update.compactionId, outcome: 'failed', error },
+          false,
+        );
+      }
+      return patched;
+    }
+
+    case 'compaction_summary_chunk': {
+      // Appends to the retained summary. Chunks belong after an in_progress
+      // compaction_update (spec); one that arrives first still folds —
+      // planted as in_progress so the completed notice's summary is whole.
+      const prev = doc.compactions[update.compactionId];
+      if (!prev) {
+        console.warn(
+          `[reducer] compaction_summary_chunk for unknown compactionId: ${update.compactionId} — planted as in_progress`,
+        );
+      }
+      const summary = [...(prev?.summary ?? []), update.content];
+      return {
+        ...doc,
+        compactions: {
+          ...doc.compactions,
+          [update.compactionId]: {
+            status: prev?.status ?? 'in_progress',
+            summary,
+            error: prev?.error ?? null,
+          },
+        },
+      };
+    }
 
     case 'modes_initialized':
       return { ...doc, modes: update.modes };

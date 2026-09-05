@@ -403,10 +403,14 @@ export class LiveAcpClient {
         protocolVersion: PROTOCOL_VERSION,
         // Both elicitation modes are implemented — advertising per-mode keeps
         // spec-compliant agents from sending what Panda cannot render. The
-        // same goes for boolean config options (select is always allowed).
+        // same goes for boolean config options (select is always allowed),
+        // ID-addressed compaction updates (folded per compactionId), and the
+        // UNSTABLE plan_update/plan_removed kinds (items variant renders in
+        // the plan dock; file/markdown degrade to unsupported blocks).
         clientCapabilities: {
           elicitation: { form: {}, url: {} },
-          session: { configOptions: { boolean: {} } },
+          session: { configOptions: { boolean: {} }, compaction: {} },
+          plan: {},
         },
         clientInfo: CLIENT_INFO,
       });

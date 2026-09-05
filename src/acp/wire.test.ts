@@ -124,15 +124,11 @@ describe('toAcpUpdates raw preservation', () => {
   });
 
   it('records recognized session-level kinds as session_state with the raw notification', () => {
-    for (const update of [
-      { sessionUpdate: 'session_info_update', title: 't' },
-      { sessionUpdate: 'compaction_update' },
-    ] as object[]) {
-      const n = note(update);
-      expect(toAcpUpdates(n)).toEqual([
-        { sessionUpdate: 'session_state', kind: (update as SessionUpdate).sessionUpdate, raw: n },
-      ]);
-    }
+    const update = { sessionUpdate: 'session_info_update', title: 't' } as object;
+    const n = note(update);
+    expect(toAcpUpdates(n)).toEqual([
+      { sessionUpdate: 'session_state', kind: (update as SessionUpdate).sessionUpdate, raw: n },
+    ]);
   });
 
   it('maps current_mode_update to a mode_changed event (wire field is currentModeId)', () => {
@@ -168,6 +164,88 @@ describe('toAcpUpdates raw preservation', () => {
     expect(toAcpUpdates(usage)).toEqual([
       { sessionUpdate: 'usage_update', used: 1, size: 2, cost: undefined, raw: usage },
     ]);
+  });
+
+  it('maps a plan_update items variant onto the plan event (full replacement)', () => {
+    const n = note({
+      sessionUpdate: 'plan_update',
+      plan: {
+        type: 'items',
+        planId: 'plan-1',
+        entries: [{ content: 'step', priority: 'high', status: 'in_progress' }],
+      },
+    } as object);
+    expect(toAcpUpdates(n)).toEqual([
+      {
+        sessionUpdate: 'plan',
+        entries: [{ content: 'step', priority: 'high', status: 'in_progress' }],
+        raw: n,
+      },
+    ]);
+  });
+
+  it('keeps plan_update file/markdown variants as unsupported, loudly', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const file = note({
+      sessionUpdate: 'plan_update',
+      plan: { type: 'file', planId: 'plan-2', uri: 'file:///plan.md' },
+    } as object);
+    expect(toAcpUpdates(file)).toEqual([{ sessionUpdate: 'unsupported', raw: file }]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('plan_update variant "file"'));
+    warnSpy.mockRestore();
+  });
+
+  it('maps compaction_update with wire patch semantics verbatim', () => {
+    const n = note({
+      sessionUpdate: 'compaction_update',
+      compactionId: 'c-1',
+      status: 'in_progress',
+    } as object);
+    expect(toAcpUpdates(n)).toEqual([
+      { sessionUpdate: 'compaction_update', compactionId: 'c-1', status: 'in_progress', raw: n },
+    ]);
+
+    const withSummary = note({
+      sessionUpdate: 'compaction_update',
+      compactionId: 'c-1',
+      status: 'completed',
+      summary: [{ type: 'text', text: 'summed up' }],
+    } as object);
+    expect(toAcpUpdates(withSummary)).toEqual([
+      {
+        sessionUpdate: 'compaction_update',
+        compactionId: 'c-1',
+        status: 'completed',
+        summary: [{ type: 'text', text: 'summed up' }],
+        raw: withSummary,
+      },
+    ]);
+  });
+
+  it('maps a compaction_summary_chunk onto the append event; unsupported content degrades loudly', () => {
+    const n = note({
+      sessionUpdate: 'compaction_summary_chunk',
+      compactionId: 'c-1',
+      content: { type: 'text', text: 'part' },
+    } as object);
+    expect(toAcpUpdates(n)).toEqual([
+      {
+        sessionUpdate: 'compaction_summary_chunk',
+        compactionId: 'c-1',
+        content: { type: 'text', text: 'part' },
+        raw: n,
+      },
+    ]);
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const audio = note({
+      sessionUpdate: 'compaction_summary_chunk',
+      compactionId: 'c-1',
+      content: { type: 'audio', data: 'x', mimeType: 'audio/wav' },
+    } as object);
+    expect(toAcpUpdates(audio)).toEqual([{ sessionUpdate: 'unsupported', raw: audio }]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('compaction_summary_chunk'));
+    warnSpy.mockRestore();
   });
 });
 

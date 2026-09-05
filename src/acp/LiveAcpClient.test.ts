@@ -68,6 +68,7 @@ type Harness = Records & {
   agentState: {
     authenticated: boolean;
     authenticateRequests: string[];
+    initializeParams: { clientCapabilities?: Record<string, unknown> }[];
     cancelNotifications: { sessionId: string }[];
     permissionResponses: RequestPermissionResponse[];
     resumeRequests: string[];
@@ -186,6 +187,7 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
   const agentState = {
     authenticated: false,
     authenticateRequests: [] as string[],
+    initializeParams: [] as { clientCapabilities?: Record<string, unknown> }[],
     cancelNotifications: [] as { sessionId: string }[],
     permissionResponses: [] as RequestPermissionResponse[],
     resumeRequests: [] as string[],
@@ -217,17 +219,20 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     };
   })();
   const serverConnection: AgentConnection = agent({ name: 'fake-agent' })
-    .onRequest(methods.agent.initialize, () => ({
-      protocolVersion: opts.protocolVersion ?? PROTOCOL_VERSION,
-      agentInfo: { name: 'fake-agent', title: 'Fake Agent', version: '0.0.0' },
-      agentCapabilities: {
-        ...(caps.loadSession ? { loadSession: true } : {}),
-        ...(caps.image ? { promptCapabilities: { image: true } } : {}),
-        ...(Object.keys(sessionCaps).length > 0 ? { sessionCapabilities: sessionCaps } : {}),
-        ...(opts.authLogout ? { auth: { logout: {} } } : {}),
-      },
-      ...(opts.authMethods ? { authMethods: opts.authMethods } : {}),
-    }))
+    .onRequest(methods.agent.initialize, (ctx) => {
+      agentState.initializeParams.push(ctx.params);
+      return {
+        protocolVersion: opts.protocolVersion ?? PROTOCOL_VERSION,
+        agentInfo: { name: 'fake-agent', title: 'Fake Agent', version: '0.0.0' },
+        agentCapabilities: {
+          ...(caps.loadSession ? { loadSession: true } : {}),
+          ...(caps.image ? { promptCapabilities: { image: true } } : {}),
+          ...(Object.keys(sessionCaps).length > 0 ? { sessionCapabilities: sessionCaps } : {}),
+          ...(opts.authLogout ? { auth: { logout: {} } } : {}),
+        },
+        ...(opts.authMethods ? { authMethods: opts.authMethods } : {}),
+      };
+    })
     .onRequest(methods.agent.session.new, async () => {
       await opts.beforeNewSession?.();
       if (opts.authGate && !agentState.authenticated) {
@@ -1047,6 +1052,15 @@ describe('LiveAcpClient', () => {
   it('does not call session/list without the capability', async () => {
     const h = await setup({ listSessions: [{ sessionId: 'x', cwd: '/x' }] });
     expect(h.sessions).toEqual([]);
+    h.closeAll();
+  });
+
+  it('initialize advertises plan updates and ID-addressed compaction support', async () => {
+    const h = await setup({});
+    expect(h.agentState.initializeParams[0]?.clientCapabilities).toMatchObject({
+      plan: {},
+      session: { compaction: {} },
+    });
     h.closeAll();
   });
 

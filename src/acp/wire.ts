@@ -339,8 +339,57 @@ export function toAcpUpdates(notification: SessionNotification): AcpSessionUpdat
           raw,
         },
       ];
+    case 'plan_update': {
+      // UNSTABLE plan variants share the dock with the stable full plan.
+      // items is the complete-entry-list semantics Panda already renders; the
+      // file/markdown variants have no dock surface yet — preserved as
+      // unsupported blocks (payload inspectable), never silently dropped.
+      const content = update.plan;
+      if (content.type === 'items') {
+        return [
+          {
+            sessionUpdate: 'plan',
+            entries: content.entries.map(({ content: text, priority, status }) => ({ content: text, priority, status })),
+            raw,
+          },
+        ];
+      }
+      warn(`plan_update variant "${content.type}" not supported yet — preserved as unsupported`);
+      return [{ sessionUpdate: 'unsupported', raw }];
+    }
     case 'plan_removed':
       return [{ sessionUpdate: 'plan_removed', raw }];
+    case 'compaction_update': {
+      // Wire patch semantics travel verbatim (omitted keeps, null clears, a
+      // value replaces); the reducer folds per id. Unsupported summary blocks
+      // (audio/resource) drop out of the list with a warn — toContentBlock
+      // already named them.
+      const wireSummary = update.summary;
+      const summary =
+        wireSummary === undefined
+          ? undefined
+          : wireSummary === null
+            ? null
+            : wireSummary.flatMap((block, i) => {
+                const mapped = toContentBlock(block, `compaction_update summary[${i}]`);
+                return mapped ? [mapped] : [];
+              });
+      return [
+        {
+          sessionUpdate: 'compaction_update',
+          compactionId: update.compactionId,
+          status: update.status,
+          ...(summary !== undefined && { summary }),
+          ...(update.error !== undefined && { error: update.error }),
+          raw,
+        },
+      ];
+    }
+    case 'compaction_summary_chunk': {
+      const content = toContentBlock(update.content, 'compaction_summary_chunk');
+      if (!content) return [{ sessionUpdate: 'unsupported', raw }];
+      return [{ sessionUpdate: 'compaction_summary_chunk', compactionId: update.compactionId, content, raw }];
+    }
     case 'usage_update':
       return [
         {
