@@ -20,6 +20,7 @@ import { useHashRoute } from './routes';
 import { SettingsPage } from './components/SettingsPage';
 import { useReplaySession } from './useReplaySession';
 import { useLiveSession } from './useLiveSession';
+import type { ForegroundSessionController } from './session-controller';
 import './App.css';
 
 /** Route-level shell (IA refactor phase 1): `#/` is the session screen,
@@ -53,14 +54,10 @@ function MainScreen() {
   const demo = useReplaySession();
   const live = useLiveSession();
   const liveActive = mode === 'live';
+  // One pick per render (#51): both drivers implement the foreground
+  // session controller; members are handed down from here individually.
+  const controller: ForegroundSessionController = liveActive ? live : demo;
   const connected = connection.status === 'connected';
-
-  const send = liveActive ? live.send : demo.send;
-  const resolvePermission = liveActive ? live.resolvePermission : demo.resolvePermission;
-  const resolveElicitation = liveActive ? live.resolveElicitation : demo.resolveElicitation;
-  const openElicitationUrl = liveActive ? live.openElicitationUrl : demo.openElicitationUrl;
-  const setMode = liveActive ? live.setMode : demo.setMode;
-  const setConfigOption = liveActive ? live.setConfigOption : demo.setConfigOption;
   // protocol/v1 session-config-options: a client with config options SHOULD
   // use them exclusively and ignore `modes` — when the agent models its mode
   // selector as a config option, the picker derives from it and writes go
@@ -119,11 +116,11 @@ function MainScreen() {
             message={connection.error}
             elicitation={connection.authElicitation}
             onAuthenticate={live.authenticate}
-            onResolveElicitation={resolveElicitation}
-            onOpenElicitationUrl={openElicitationUrl}
+            onResolveElicitation={controller.resolveElicitation}
+            onOpenElicitationUrl={controller.openElicitationUrl}
           />
         ) : (
-          <MessageStream onResolvePermission={resolvePermission} onResolveElicitation={resolveElicitation} onOpenElicitationUrl={openElicitationUrl} />
+          <MessageStream onResolvePermission={controller.resolvePermission} onResolveElicitation={controller.resolveElicitation} onOpenElicitationUrl={controller.openElicitationUrl} />
         )}
         <StatusBar
           doc={doc}
@@ -132,17 +129,17 @@ function MainScreen() {
           switching={switching !== null}
         />
         <Composer
-          onSend={send}
+          onSend={controller.send}
           disabled={composerDisabled}
           hint={hint}
           canAttachImages={!liveActive || effectiveCaps.image.available}
           canStop={liveActive && connected && doc.status === 'running'}
           onStop={live.cancel}
           modes={derivedModes ?? doc.modes}
-          onSetMode={derivedModes ? (modeId: string) => setConfigOption('mode', modeId) : setMode}
+          onSetMode={derivedModes ? (modeId: string) => controller.setConfigOption('mode', modeId) : controller.setMode}
           commands={doc.availableCommands}
           configOptions={doc.configOptions}
-          onSetConfigOption={setConfigOption}
+          onSetConfigOption={controller.setConfigOption}
         />
       </main>
     </div>
