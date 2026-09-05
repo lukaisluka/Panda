@@ -285,6 +285,8 @@ export class LiveAcpClient {
   private authMethods: AcpAuthMethod[] = [];
   /** Whether the agent advertised `auth.logout` — gates the logout method. */
   private agentSupportsLogout = false;
+  /** session/close advertised (sessionCapabilities.close) — sent before teardown. */
+  private agentSupportsClose = false;
   /** initialize's identity, cached to settle onConnected after authenticate. */
   private initInfo: { agentName: string; protocolVersion: number } | null = null;
   /** cwd of the last connect/newSession — authenticate retries with it. */
@@ -428,6 +430,7 @@ export class LiveAcpClient {
       this.capabilities = readCaps(init.agentCapabilities);
       this.authMethods = toAuthMethods(init.authMethods);
       this.agentSupportsLogout = init.agentCapabilities?.auth?.logout != null;
+      this.agentSupportsClose = init.agentCapabilities?.sessionCapabilities?.close != null;
       this.initInfo = { agentName, protocolVersion: init.protocolVersion };
       this.lastCwd = cwd;
       this.handlers.onCapabilities(this.capabilities);
@@ -915,8 +918,34 @@ export class LiveAcpClient {
     this.finishAllElicitations();
   }
 
-  /** Cleanly closes the connection; safe to call repeatedly. */
+  /**
+   * Cleanly closes the connection; safe to call repeatedly. When the agent
+   * advertised `session/close` and a session lives, the close request goes
+   * out before the wire drops (bounded — an unresponsive agent must not
+   * hang the disconnect), so the agent can release its session-side state.
+   */
   disconnect(): void {
+    void this.disconnectAsync();
+  }
+
+  private async disconnectAsync(): Promise<void> {
+    if (this.disconnectReported) return;
+    const connection = this.connection;
+    const sessionId = this.sessionId;
+    const generation = this.connectionGeneration;
+    if (connection && sessionId && this.agentSupportsClose) {
+      try {
+        await Promise.race([
+          connection.agent.request(methods.agent.session.close, { sessionId }),
+          new Promise<void>((resolve) => setTimeout(resolve, 1500)),
+        ]);
+      } catch (err) {
+        console.warn('[panda/acp] session/close failed (disconnecting anyway)', err);
+      }
+      // A reconnect while the close was in flight superseded this era — the
+      // newer connection owns the state now, never report on its behalf.
+      if (this.disconnectReported || generation !== this.connectionGeneration) return;
+    }
     this.reportDisconnect(null);
   }
 

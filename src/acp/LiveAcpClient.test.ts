@@ -69,6 +69,7 @@ type Harness = Records & {
     authenticated: boolean;
     authenticateRequests: string[];
     initializeParams: { clientCapabilities?: Record<string, unknown> }[];
+    closeRequests: string[];
     cancelNotifications: { sessionId: string }[];
     permissionResponses: RequestPermissionResponse[];
     resumeRequests: string[];
@@ -83,7 +84,7 @@ type Harness = Records & {
 type FakeAgentOptions = {
   protocolVersion?: number;
   /** Capability gates advertised at initialize. */
-  capabilities?: { image?: boolean; loadSession?: boolean; list?: boolean; resume?: boolean; delete?: boolean };
+  capabilities?: { image?: boolean; loadSession?: boolean; list?: boolean; resume?: boolean; delete?: boolean; close?: boolean };
   /** Entries returned by session/list. */
   listSessions?: { sessionId: string; cwd: string; title?: string | null; updatedAt?: string | null }[];
   /** Per-session replay history served by session/load. */
@@ -188,6 +189,7 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     authenticated: false,
     authenticateRequests: [] as string[],
     initializeParams: [] as { clientCapabilities?: Record<string, unknown> }[],
+    closeRequests: [] as string[],
     cancelNotifications: [] as { sessionId: string }[],
     permissionResponses: [] as RequestPermissionResponse[],
     resumeRequests: [] as string[],
@@ -199,6 +201,7 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     ...(caps.list ? { list: {} } : {}),
     ...(caps.resume ? { resume: {} } : {}),
     ...(caps.delete ? { delete: {} } : {}),
+    ...(caps.close ? { close: {} } : {}),
   };
 
   const { clientStream, serverStream: rawServerStream } = streamPair();
@@ -270,6 +273,10 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     })
     .onRequest(methods.agent.session.delete, (ctx) => {
       agentState.deleteRequests.push(ctx.params.sessionId);
+      return {};
+    })
+    .onRequest(methods.agent.session.close, (ctx) => {
+      agentState.closeRequests.push(ctx.params.sessionId);
       return {};
     })
     .onNotification(methods.agent.session.cancel, (ctx) => {
@@ -1262,6 +1269,22 @@ describe('LiveAcpClient', () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('session/delete'));
     warnSpy.mockRestore();
     h.closeAll();
+  });
+
+  it('disconnect sends session/close when the agent advertises it, then reports', async () => {
+    const h = await setup({ capabilities: { close: true } });
+    h.acpClient.disconnect();
+    await waitFor(() => h.disconnected.includes(null));
+    expect(h.agentState.closeRequests).toEqual(['s-1']);
+    h.serverConnection.close();
+  });
+
+  it('disconnect without the capability (or a session) skips session/close', async () => {
+    const h = await setup();
+    h.acpClient.disconnect();
+    await waitFor(() => h.disconnected.includes(null));
+    expect(h.agentState.closeRequests).toEqual([]);
+    h.serverConnection.close();
   });
 });
 
