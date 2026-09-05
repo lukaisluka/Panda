@@ -9,6 +9,7 @@ import { Spinner } from '@astryxdesign/core/Spinner';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { usePanda } from '../store';
+import { connectionPhase, isLinkUp, type ConnectionPhase } from '../projector/connectionLifecycle';
 import { lastConnectionDefaults } from '../liveConnections';
 import type { AgentProfile } from '../profiles';
 import type { Workspace } from '../workspace';
@@ -30,12 +31,20 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
   live: LiveSessionFacade;
   profiles: AgentProfile[];
 }) {
-  // Per-profile slot status, as flat arrays of primitives so the selector's
-  // snapshot is shallow-stable (object values would re-create every call and
-  // loop useSyncExternalStore). A connect in progress updates its spinner
-  // the moment the slot settles.
-  const statuses = usePanda(
-    useShallow((s) => profiles.map((profile) => s.connections[profile.id]?.connection.status ?? 'disconnected')),
+  // Per-profile lifecycle phase, as flat arrays of primitives so the
+  // selector's snapshot is shallow-stable (object values would re-create
+  // every call and loop useSyncExternalStore). A connect in progress
+  // updates its spinner the moment the slot settles. Status meaning comes
+  // from the projection (#53) — this list only maps phase to pixels.
+  const phases = usePanda(
+    useShallow((s) =>
+      profiles.map((profile) => {
+        const slot = s.connections[profile.id];
+        return slot
+          ? connectionPhase(slot.connection.status, slot.connection.error, slot.switching !== null)
+          : ('disconnected' as ConnectionPhase);
+      }),
+    ),
   );
   const cwds = usePanda(useShallow((s) => profiles.map((profile) => s.connections[profile.id]?.connection.cwd ?? null)));
 
@@ -63,7 +72,7 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
             <p className="nsd-hint">还没有 Agent 配置 — 在设置页添加,或用下方自定义地址临时直连。</p>
           )}
           {profiles.map((profile, index) => {
-            const status = statuses[index] ?? 'disconnected';
+            const phase = phases[index] ?? 'disconnected';
             const cwd = cwds[index] ?? null;
             return (
               <button
@@ -72,22 +81,24 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
                 className="nsd-agent"
                 onClick={() =>
                   start(() =>
-                    status === 'connected' && cwd ? live.newSession(cwd) : live.connectProfile(profile),
+                    isLinkUp(phase) && cwd ? live.newSession(cwd) : live.connectProfile(profile),
                   )
                 }
                 title={
-                  status === 'connected'
+                  isLinkUp(phase)
                     ? `在 ${profile.name} 中新建会话`
                     : `连接 ${profile.name}(${profile.url})— 连接成功即进入新会话`
                 }
               >
                 <span className="nsd-agent-status">
-                  {status === 'connecting' ? (
+                  {phase === 'connecting' ? (
                     <Spinner size="sm" />
-                  ) : status === 'connected' ? (
+                  ) : isLinkUp(phase) ? (
                     <StatusDot variant="success" label="已连接" />
-                  ) : status === 'error' ? (
+                  ) : phase === 'error' ? (
                     <StatusDot variant="error" label="连接错误" />
+                  ) : phase === 'auth-required' ? (
+                    <StatusDot variant="warning" label="需要登录" />
                   ) : (
                     <StatusDot variant="neutral" label="未连接" />
                   )}

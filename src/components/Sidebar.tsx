@@ -15,14 +15,12 @@ import {
   X,
 } from 'lucide-react';
 import {
-  isConnectionBusy,
-  isConnectionRunning,
-  needsAttention,
   useConnectionOrder,
   usePanda,
-  type ConnectionStatus,
   type SessionMode,
 } from '../store';
+import { useConnectionLifecycle } from '../projector/hooks';
+import { isLinkUp, type AttentionReason, type ConnectionPhase } from '../projector/connectionLifecycle';
 import { isDirectConnectionId } from '../liveConnections';
 import { effectiveCapability, PANDA_HOST_CAPABILITIES } from '../capabilities';
 import type { AgentProfile } from '../profiles';
@@ -201,23 +199,34 @@ function saveDirectAsProfile(url: string, cwd: string | null): void {
   saveProfiles([...loadProfiles(), { id: newProfileId(), name, url: trimmedUrl, workspace }]);
 }
 
-/** Astryx StatusDot per connection status; running overlays a pulse. */function SlotStatusDot({ status, running }: { status: ConnectionStatus; running: boolean }) {
-  if (status === 'connecting') {
+/** Astryx StatusDot per lifecycle phase; 运行中 overlays a pulse. Phase →
+ * pixels is mechanical lookup — precedence lives in the projection (#53). */
+function SlotStatusDot({ phase, running }: { phase: ConnectionPhase; running: boolean }) {
+  if (phase === 'connecting') {
     return <Spinner size="sm" />;
   }
-  if (status === 'error') {
+  if (phase === 'error') {
     return <StatusDot variant="error" label="连接错误" />;
   }
-  if (status === 'auth_required') {
+  if (phase === 'auth-required') {
     return <StatusDot variant="warning" label="需要登录" />;
   }
-  if (status === 'connected') {
+  if (isLinkUp(phase)) {
     return running
       ? <StatusDot variant="accent" isPulsing label="运行中" />
       : <StatusDot variant="success" label="已连接" />;
   }
   return <StatusDot variant="neutral" label="未连接" />;
 }
+
+/** 需要关注 reasons in user words — the projection carries the reasons,
+ * only their phrasing lives here. */
+const ATTENTION_LABELS: Record<AttentionReason, string> = {
+  'unread-completion': '未读完成',
+  'pending-permission': '权限待处理',
+  'connection-error': '连接错误',
+  'auth-required': '需要登录',
+};
 
 /** One agent's section: header (status, indicators, hover actions), an
  * inline error recovery block when the connection failed, and the session
@@ -229,21 +238,21 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
   live: LiveSessionFacade;
   onMobileClose(): void;
 }) {
-  // Whole-slot subscription: only THIS group re-renders when it streams.
+  // Whole-slot subscription for the display facts; status meaning comes
+  // from the lifecycle projection (#53). Only THIS group re-renders on stream.
   const slot = usePanda((s) => s.connections[connectionId]);
+  const lifecycle = useConnectionLifecycle(connectionId);
   const activeSessionId = usePanda((s) => s.activeSessionId);
-  if (!slot) return null;
+  if (!slot || !lifecycle) return null;
 
-  const status = slot.connection.status;
-  const connected = status === 'connected';
-  const offline = status === 'disconnected';
-  const running = isConnectionRunning(slot);
-  const busy = isConnectionBusy(slot);
-  const attention = needsAttention(slot);
+  const { phase } = lifecycle;
+  const connected = isLinkUp(phase);
+  const offline = phase === 'disconnected';
+  const attention = lifecycle.attention.length > 0;
   const title = profile?.name ?? slot.connection.url ?? connectionId;
   const isForegroundSession = (sessionId: string) => isActiveConnection && sessionId === activeSessionId;
   // Resume needs a retained session; seeded slots have none.
-  const canResume = status === 'error' && slot.connection.sessionId !== null;
+  const canResume = phase === 'error' && slot.connection.sessionId !== null;
 
   const ordered = [...slot.sessions].sort((a, b) => {
     if (isForegroundSession(a.sessionId)) return -1;
@@ -265,7 +274,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
             isActiveConnection ? 'sidebar-connection-btn--active' : ''
           } ${connected ? '' : 'sidebar-connection-btn--offline'}`}
         >
-          <SlotStatusDot status={status} running={running} />
+          <SlotStatusDot phase={phase} running={lifecycle.running} />
           <span className="truncate sidebar-row-title">{title}</span>
           {isDirectConnectionId(connectionId) && <span className="sidebar-temp-badge">临时</span>}
           {slot.connection.agentName && (
@@ -276,7 +285,11 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
                 the foreground slot's issues are in plain sight (permission
                 card, the error block below). */}
             {attention && !isActiveConnection && (
-              <StatusDot variant="error" label="需要关注" tooltip="需要关注:未读完成 / 权限待处理 / 连接错误" />
+              <StatusDot
+                variant="error"
+                label="需要关注"
+                tooltip={`需要关注:${lifecycle.attention.map((reason) => ATTENTION_LABELS[reason]).join(' / ')}`}
+              />
             )}
           </span>
         </button>
@@ -291,7 +304,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
               clickAction={() => saveDirectAsProfile(slot.connection.url!, slot.connection.cwd)}
             />
           )}
-          {(connected || status === 'connecting') && (
+          {(connected || phase === 'connecting') && (
             <IconButton
               variant="ghost"
               size="sm"
@@ -311,7 +324,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
               clickAction={() => live.connectProfile(profile)}
             />
           )}
-          {(status === 'error' || !offline) && (
+          {(phase === 'error' || !offline) && (
             <IconButton
               variant="ghost"
               size="sm"
@@ -327,10 +340,10 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
           )}
         </div>
       </div>
-      {status === 'error' && slot.connection.error && (
+      {phase === 'error' && lifecycle.error && (
         <div className="sidebar-conn-error">
-          <p className="sidebar-conn-error-text" title={slot.connection.error}>
-            {slot.connection.error}
+          <p className="sidebar-conn-error-text" title={lifecycle.error}>
+            {lifecycle.error}
           </p>
           <div className="sidebar-conn-error-actions">
             {canResume && (
@@ -366,7 +379,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
               PANDA_HOST_CAPABILITIES,
             );
             const canDelete = effectiveCapability('delete', slot.capabilities, PANDA_HOST_CAPABILITIES);
-            const canSwitch = connected ? loadSession.available && !busy : hasDoc;
+            const canSwitch = connected ? loadSession.available && !lifecycle.busy : hasDoc;
             const label = entry.title ?? `${workspaceLabel(entry.cwd)} · ${entry.sessionId.slice(-6)}`;
             return (
               <div key={entry.sessionId} className="sidebar-session">
@@ -379,7 +392,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
                   title={
                     foregroundSession
                       ? undefined
-                      : !canSwitch && connected && busy
+                      : !canSwitch && connected && lifecycle.busy
                         ? '等待当前回合或切换完成'
                         : !connected && !hasDoc
                           ? '连接后可查看/切换该会话'
@@ -400,7 +413,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
                   <MessagesSquare size={12} className="sidebar-icon-faint" />
                   <span className="truncate">{label}</span>
                 </button>
-                {canDelete.available && connected && !foregroundSession && !busy && (
+                {canDelete.available && connected && !foregroundSession && !lifecycle.busy && (
                   <span className="sidebar-session-delete">
                     <IconButton
                       variant="ghost"
