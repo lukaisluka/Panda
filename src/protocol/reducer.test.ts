@@ -599,6 +599,33 @@ describe('reducer permission lifecycle (issue #18)', () => {
     expect(Object.values(doc.permissions).some((permission) => permission.status === 'pending')).toBe(false);
   });
 
+  it('remembered reject_always retires the pending tool; remembered allow lets it run (issue #68)', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'permission_requested', request: request('t-mem-r') },
+      { sessionUpdate: 'permission_requested', request: request('t-mem-a') },
+      { sessionUpdate: 'permission_resolved', toolCallId: 't-mem-r', response: { outcome: 'remembered', kind: 'reject_always' } },
+      { sessionUpdate: 'permission_resolved', toolCallId: 't-mem-a', response: { outcome: 'remembered', kind: 'allow_always' } },
+    ]);
+    expect(doc.permissions['t-mem-r']).toMatchObject({
+      status: 'resolved',
+      response: { outcome: 'remembered', kind: 'reject_always' },
+    });
+    // 代答的拒绝和用户拒绝同效：工具不再运行；代答的放行则照常放行。
+    expect(doc.turns[0]!.blocks).toContainEqual(
+      expect.objectContaining({
+        kind: 'tool_call',
+        call: expect.objectContaining({ id: 't-mem-r', status: 'cancelled' }),
+      }),
+    );
+    expect(doc.turns[0]!.blocks).toContainEqual(
+      expect.objectContaining({
+        kind: 'tool_call',
+        call: expect.objectContaining({ id: 't-mem-a', status: 'pending' }),
+      }),
+    );
+  });
+
   it('plants a placeholder tool record when the permission precedes its tool_call, then merges', () => {
     const before = fold([
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },

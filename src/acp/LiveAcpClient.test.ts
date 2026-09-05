@@ -1512,6 +1512,184 @@ describe('LiveAcpClient', () => {
     }
   });
 
+  // -- session permission memory (issue #68) ----------------------------------
+
+  /** askPermission with a configurable toolCallId/title/options. */
+  function askWith(
+    ctx: PromptCtx,
+    h: Harness,
+    toolCallId: string,
+    title: string,
+    options: RequestPermissionRequest['options'],
+  ) {
+    return ctx.client
+      .request(methods.client.session.requestPermission, {
+        sessionId: ctx.params.sessionId,
+        toolCall: { toolCallId, title, kind: 'edit', status: 'pending' },
+        options,
+      })
+      .then((response) => {
+        h.agentState.permissionResponses.push(response);
+        return response;
+      });
+  }
+
+  const WITH_ALWAYS: RequestPermissionRequest['options'] = [
+    { optionId: 'allow-once', name: 'Allow once', kind: 'allow_once' },
+    { optionId: 'allow-always', name: 'Always allow', kind: 'allow_always' },
+    { optionId: 'reject-once', name: 'Reject', kind: 'reject_once' },
+    { optionId: 'reject-always', name: 'Always reject', kind: 'reject_always' },
+  ];
+
+  it("replays the user's allow_always for the same action — settles with no second card (issue #68)", async () => {
+    const h = await setup({
+      onPrompt: async (ctx) => {
+        const first = askWith(ctx, h, 'edit-1', 'Edit file: src/a.ts', WITH_ALWAYS);
+        await waitForPermissionEvents(h, 1);
+        h.acpClient.resolvePermission('edit-1', 'allow_always');
+        expect((await first).outcome).toEqual({ outcome: 'selected', optionId: 'allow-always' });
+        // Same action identity (kind+title+locations), new toolCallId: the
+        // await below settles WITHOUT any resolvePermission — that is the
+        // memory working; a still-hanging request would time the test out.
+        const second = askWith(ctx, h, 'edit-2', 'Edit file: src/a.ts', WITH_ALWAYS);
+        expect((await second).outcome).toEqual({ outcome: 'selected', optionId: 'allow-always' });
+        return { stopReason: 'end_turn' };
+      },
+    });
+    await h.acpClient.send([{ type: 'text', text: 'go' }]);
+    const events = permissionEvents(h);
+    expect(events).toHaveLength(4);
+    expect(events[3]).toEqual({
+      sessionUpdate: 'permission_resolved',
+      toolCallId: 'edit-2',
+      response: { outcome: 'remembered', kind: 'allow_always' },
+    });
+    h.closeAll();
+  });
+
+  it('a different action still asks — memory is per action, not per tool (issue #68)', async () => {
+    const h = await setup({
+      onPrompt: async (ctx) => {
+        const first = askWith(ctx, h, 'edit-1', 'Edit file: src/a.ts', WITH_ALWAYS);
+        await waitForPermissionEvents(h, 1);
+        h.acpClient.resolvePermission('edit-1', 'allow_always');
+        await first;
+        const second = askWith(ctx, h, 'edit-2', 'Edit file: src/b.ts', WITH_ALWAYS);
+        await waitForPermissionEvents(h, 3); // the card landed and is hanging
+        h.acpClient.resolvePermission('edit-2', 'allow_once');
+        expect((await second).outcome).toEqual({ outcome: 'selected', optionId: 'allow-once' });
+        return { stopReason: 'end_turn' };
+      },
+    });
+    await h.acpClient.send([{ type: 'text', text: 'go' }]);
+    expect(permissionEvents(h)[3]).toEqual({
+      sessionUpdate: 'permission_resolved',
+      toolCallId: 'edit-2',
+      response: { outcome: 'selected', kind: 'allow_once' },
+    });
+    h.closeAll();
+  });
+
+  it('re-asks when the agent no longer offers the remembered kind (issue #68)', async () => {
+    const h = await setup({
+      onPrompt: async (ctx) => {
+        const first = askWith(ctx, h, 'edit-1', 'Edit file: src/a.ts', WITH_ALWAYS);
+        await waitForPermissionEvents(h, 1);
+        h.acpClient.resolvePermission('edit-1', 'allow_always');
+        await first;
+        const onlyOnce = WITH_ALWAYS.filter((o) => o.kind === 'allow_once' || o.kind === 'reject_once');
+        const second = askWith(ctx, h, 'edit-2', 'Edit file: src/a.ts', onlyOnce);
+        await waitForPermissionEvents(h, 3);
+        h.acpClient.resolvePermission('edit-2', 'allow_once');
+        await second;
+        return { stopReason: 'end_turn' };
+      },
+    });
+    await h.acpClient.send([{ type: 'text', text: 'go' }]);
+    expect(permissionEvents(h)[3]).toEqual({
+      sessionUpdate: 'permission_resolved',
+      toolCallId: 'edit-2',
+      response: { outcome: 'selected', kind: 'allow_once' },
+    });
+    h.closeAll();
+  });
+
+  it("replays the user's reject_always the same way (issue #68)", async () => {
+    const h = await setup({
+      onPrompt: async (ctx) => {
+        const first = askWith(ctx, h, 'edit-1', 'Edit file: src/a.ts', WITH_ALWAYS);
+        await waitForPermissionEvents(h, 1);
+        h.acpClient.resolvePermission('edit-1', 'reject_always');
+        await first;
+        const second = askWith(ctx, h, 'edit-2', 'Edit file: src/a.ts', WITH_ALWAYS);
+        expect((await second).outcome).toEqual({ outcome: 'selected', optionId: 'reject-always' });
+        return { stopReason: 'end_turn' };
+      },
+    });
+    await h.acpClient.send([{ type: 'text', text: 'go' }]);
+    expect(permissionEvents(h)[3]).toEqual({
+      sessionUpdate: 'permission_resolved',
+      toolCallId: 'edit-2',
+      response: { outcome: 'remembered', kind: 'reject_always' },
+    });
+    h.closeAll();
+  });
+
+  it('a policy deny outranks a remembered allow (issue #68)', async () => {
+    let denyAll = false;
+    const h = await setup({
+      clientPolicy: () => (denyAll ? 'deny' : 'ask'),
+      onPrompt: async (ctx) => {
+        const first = askWith(ctx, h, 'edit-1', 'Edit file: src/a.ts', WITH_ALWAYS);
+        await waitForPermissionEvents(h, 1);
+        h.acpClient.resolvePermission('edit-1', 'allow_always');
+        await first;
+        denyAll = true;
+        const second = askWith(ctx, h, 'edit-2', 'Edit file: src/a.ts', WITH_ALWAYS);
+        expect((await second).outcome).toEqual({ outcome: 'selected', optionId: 'reject-once' });
+        return { stopReason: 'end_turn' };
+      },
+    });
+    await h.acpClient.send([{ type: 'text', text: 'go' }]);
+    expect(permissionEvents(h)[3]).toEqual({
+      sessionUpdate: 'permission_resolved',
+      toolCallId: 'edit-2',
+      response: { outcome: 'denied-by-policy', kind: 'reject_once' },
+    });
+    h.closeAll();
+  });
+
+  it('switching sessions clears the memory (issue #68)', async () => {
+    const h = await setup({
+      capabilities: { loadSession: true },
+      history: { 's-other': [] },
+      onPrompt: async (ctx) => {
+        if (ctx.params.sessionId === 's-1') {
+          const first = askWith(ctx, h, 'edit-1', 'Edit file: src/a.ts', WITH_ALWAYS);
+          await waitForPermissionEvents(h, 1);
+          h.acpClient.resolvePermission('edit-1', 'allow_always');
+          await first;
+        } else {
+          const second = askWith(ctx, h, 'edit-2', 'Edit file: src/a.ts', WITH_ALWAYS);
+          await waitForPermissionEvents(h, 3);
+          // The memory died with the switch — this answer is required.
+          h.acpClient.resolvePermission('edit-2', 'allow_once');
+          await second;
+        }
+        return { stopReason: 'end_turn' };
+      },
+    });
+    await h.acpClient.send([{ type: 'text', text: 'go' }]);
+    await h.acpClient.loadSession('s-other', '/tmp/project');
+    await h.acpClient.send([{ type: 'text', text: 'go' }]);
+    expect(permissionEvents(h).at(-1)).toEqual({
+      sessionUpdate: 'permission_resolved',
+      toolCallId: 'edit-2',
+      response: { outcome: 'selected', kind: 'allow_once' },
+    });
+    h.closeAll();
+  });
+
 // -- store integration (issue #16) ------------------------------------------
 
 describe('LiveAcpClient × connectionStorePort', () => {

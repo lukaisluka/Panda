@@ -22,6 +22,7 @@ import type {
   ElicitationRequest,
   ElicitationResponse,
   ElicitationState,
+  RememberedPermissionResponse,
   PermissionRequest,
   PermissionState,
   SessionDocument,
@@ -34,7 +35,8 @@ import type {
  */
 export type AttachedPermission =
   | { state: 'pending'; request: PermissionRequest }
-  | { state: 'denied'; request: PermissionRequest; response: DeniedPermissionResponse };
+  | { state: 'denied'; request: PermissionRequest; response: DeniedPermissionResponse }
+  | { state: 'remembered'; request: PermissionRequest; response: RememberedPermissionResponse };
 
 export type BlockFlatItem = {
   key: string;
@@ -197,6 +199,9 @@ function attachedPermissions(record: Record<string, PermissionState>): AttachedP
   const list = Object.values(record).flatMap((permission): AttachedPermission[] => {
     if (permission.status === 'pending') return [attachedPermission(permission)];
     if (permission.response?.outcome === 'denied-by-policy') return [attachedPermission(permission)];
+    // A remembered settlement stays visible too (issue #68) — the auto-answer
+    // must read as the user's replayed choice, never as a silent approval.
+    if (permission.response?.outcome === 'remembered') return [attachedPermission(permission)];
     return [];
   });
   attachedListCache.set(record, list);
@@ -212,12 +217,15 @@ function attachedPermission(permission: PermissionState): AttachedPermission {
     return wrapper;
   }
   const response = permission.response;
-  if (response?.outcome !== 'denied-by-policy') {
-    // attachedPermissions filters to the two renderable states; reaching here
+  if (response?.outcome !== 'denied-by-policy' && response?.outcome !== 'remembered') {
+    // attachedPermissions filters to the renderable states; reaching here
     // means the filter and the wrapper drifted — fail loudly, never guess.
     throw new Error(`[projector] unexpected permission state to attach: ${permission.status}`);
   }
-  const wrapper: AttachedPermission = { state: 'denied', request: permission.request, response };
+  const wrapper: AttachedPermission =
+    response.outcome === 'remembered'
+      ? { state: 'remembered', request: permission.request, response }
+      : { state: 'denied', request: permission.request, response };
   attachedCache.set(permission, wrapper);
   return wrapper;
 }

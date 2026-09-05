@@ -147,6 +147,9 @@ export type LiveClientOptions = {
 
 type PendingPermission = {
   wireOptions: RequestPermissionRequest['options'];
+  /** The session and action identity a user 'always' choice records against (issue #68). */
+  sessionId: string;
+  actionKey: string;
   resolve: (response: RequestPermissionResponse) => void;
 };
 
@@ -254,6 +257,21 @@ function isAuthRequired(err: unknown): boolean {
   return err instanceof RequestError && err.code === -32000;
 }
 
+/**
+ * The stable identity of what a permission asks about (issue #68): SDK 1.4
+ * carries the ask inside the toolCall — kind, title and locations identify
+ * the action; toolCallId, status, content and rawInput differ per call and
+ * must not widen or narrow the match. Fixed key order keeps the JSON
+ * canonical (key equality is string equality).
+ */
+function permissionActionKey(request: RequestPermissionRequest): string {
+  return JSON.stringify([
+    request.toolCall.kind ?? null,
+    request.toolCall.title ?? null,
+    request.toolCall.locations ?? null,
+  ]);
+}
+
 export class LiveAcpClient {
   private readonly handlers: LiveClientHandlers;
   /** Host-side permission policy (issue #22); default hands every decision to the user. */
@@ -295,6 +313,14 @@ export class LiveAcpClient {
   private lastCwd: string | null = null;
   /** Local id mint for elicitation/create requests (form mode carries no wire id). */
   private elicitationSeq = 0;
+  /**
+   * Session-scoped permission memory (issue #68): the 'always' options the
+   * user already chose this session, keyed by action identity. Null after
+   * cleanup; lazily re-created per session, so a switch or a new session
+   * starts empty by construction. The host policy still runs first — a deny
+   * outranks any remembered allow.
+   */
+  private permissionMemory: { sessionId: string; entries: Map<string, PermissionOptionKind> } | null = null;
   /** A transactional session/load switch is in flight (issue #17). */
   private sessionSwitch = false;
   /**
@@ -876,6 +902,9 @@ export class LiveAcpClient {
       );
       this.settlePermission(entry.key, toolCallId, { outcome: { outcome: 'cancelled' } }, { outcome: 'cancelled' });
     } else {
+      // The user's own move — an 'always' choice starts (or joins) this
+      // session's memory for the action (issue #68).
+      this.rememberChoice(entry.waiter.sessionId, entry.waiter.actionKey, kind);
       this.settlePermission(
         entry.key,
         toolCallId,
@@ -1233,12 +1262,37 @@ export class LiveAcpClient {
       });
       return Promise.resolve(wire);
     }
+    // Session memory (issue #68): the user already chose an 'always' option
+    // for this exact action this session. Replayed BEFORE the request hangs;
+    // the agent's current offer governs (a kind it no longer offers is not
+    // auto-answered), and the host policy above still outranks a remembered
+    // allow. The card still lands as a terminal record marked 代答 — an
+    // unexplained auto-approval would read as the agent approving itself.
+    const remembered = this.rememberedOption(params);
+    if (remembered) {
+      console.info(`[panda/acp] permission ${key} answered ${remembered.kind} from session memory`);
+      this.handlers.onUpdate({
+        sessionUpdate: 'permission_requested',
+        request: toPermissionRequest(params),
+      });
+      this.handlers.onUpdate({
+        sessionUpdate: 'permission_resolved',
+        toolCallId: params.toolCall.toolCallId,
+        response: { outcome: 'remembered', kind: remembered.kind },
+      });
+      return Promise.resolve({ outcome: { outcome: 'selected', optionId: remembered.optionId } });
+    }
     this.handlers.onUpdate({
       sessionUpdate: 'permission_requested',
       request: toPermissionRequest(params),
     });
     return new Promise((resolve) => {
-      const waiter: PendingPermission = { wireOptions: params.options, resolve };
+      const waiter: PendingPermission = {
+        wireOptions: params.options,
+        sessionId: params.sessionId,
+        actionKey: permissionActionKey(params),
+        resolve,
+      };
       this.permissionWaiters.set(key, waiter);
       const settleAborted = () => {
         // Identity check: a superseding waiter under the same key owns the
@@ -1283,7 +1337,31 @@ export class LiveAcpClient {
   }
 
   /**
-   * Settles one permission: resolves the wire RPC, folds the outcome into
+   * The remembered option for this request, if any — only when the memory
+   * belongs to this session, the exact action was remembered, and the agent
+   * still offers a matching option now.
+   */
+  private rememberedOption(
+    params: RequestPermissionRequest,
+  ): { optionId: string; kind: PermissionOptionKind } | null {
+    const memory = this.permissionMemory;
+    if (!memory || memory.sessionId !== params.sessionId) return null;
+    const kind = memory.entries.get(permissionActionKey(params));
+    if (!kind) return null;
+    const option = params.options.find((candidate) => candidate.kind === kind);
+    return option ? { optionId: option.optionId, kind } : null;
+  }
+
+  /** Records one choice — once-kind options are never remembered (issue #68). */
+  private rememberChoice(sessionId: string, actionKey: string, kind: PermissionOptionKind): void {
+    if (kind !== 'allow_always' && kind !== 'reject_always') return;
+    if (!this.permissionMemory || this.permissionMemory.sessionId !== sessionId) {
+      this.permissionMemory = { sessionId, entries: new Map() };
+    }
+    this.permissionMemory.entries.set(actionKey, kind);
+  }
+
+  /** Settles one permission: resolves the wire RPC, folds the outcome into
    * the document, and converges the turn status (still requires_action
    * while other permissions remain pending).
    */
@@ -1470,6 +1548,9 @@ export class LiveAcpClient {
     // The dead era's echo state must not leak into the next connection: its
     // buffered chunks belong to a superseded transcript (issue #19).
     this.echo = null;
+    // Session memory dies with the connection (issue #68) — it never
+    // outlives the session it was learned in.
+    this.permissionMemory = null;
     this.finishAllPermissions();
     this.finishAllElicitations();
     this.connection?.close();
