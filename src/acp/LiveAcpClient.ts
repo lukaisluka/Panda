@@ -885,7 +885,10 @@ export class LiveAcpClient {
 
   /** Cancels the in-flight turn: `session/cancel` + cancelled permission outcomes. */
   cancel(): void {
-    if (!this.connection || !this.sessionId) return;
+    if (!this.connection || !this.sessionId) {
+      console.warn('[panda/acp] cancel ignored: not connected');
+      return;
+    }
     if (!this.pendingPrompt) {
       console.warn('[panda/acp] cancel ignored: no prompt turn in flight');
       return;
