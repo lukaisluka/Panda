@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Menu } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { MessageStream } from './components/MessageStream';
@@ -15,11 +15,30 @@ import {
 } from './store';
 import { useStatusHint } from './projector/hooks';
 import { modeStateFromConfigOptions } from './protocol/modes';
+import { useHashRoute } from './routes';
+import { SettingsPage } from './components/SettingsPage';
 import { useReplaySession } from './useReplaySession';
 import { useLiveSession } from './useLiveSession';
 import './App.css';
 
+/** Route-level shell (IA refactor phase 1): `#/` is the session screen,
+ * `#/settings` the settings screen. Everything session-related (both live
+ * and demo replay) lives in MainScreen so the settings route renders none
+ * of its state. */
 export default function App() {
+  const route = useHashRoute();
+  // Phase 2: the hash owns the session mode — `#/demo` (dev builds only)
+  // switches the UI to the scripted replay and auto-plays it; every other
+  // route renders live connections. Mode changes never touch connections
+  // (issue #21): the replay is a display layer over the same store.
+  useEffect(() => {
+    usePanda.getState().setMode(route === 'demo' ? 'demo' : 'live');
+  }, [route]);
+  if (route === 'settings') return <SettingsPage />;
+  return <MainScreen />;
+}
+
+function MainScreen() {
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const mode = usePanda((s) => s.mode);
   const doc = useActiveDoc();
@@ -74,7 +93,6 @@ export default function App() {
       <Sidebar
         mode={mode}
         live={live}
-        onReplayDemo={demo.replayDemo}
         mobileOpen={mobileNavigationOpen}
         onMobileClose={() => setMobileNavigationOpen(false)}
       />

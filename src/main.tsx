@@ -5,6 +5,7 @@ import './index.css';
 import App from './App';
 import { AstryxSmoke } from './dev/AstryxSmoke';
 import { loadThemeId, resolveTheme, subscribeTheme } from './theme';
+import { parseDevPage } from './routes';
 
 const root = createRoot(document.getElementById('root')!);
 
@@ -24,9 +25,10 @@ function ThemeRoot() {
   );
 }
 
-// Dev-only foundation check (#32): open with #/astryx-smoke to verify the
-// cascade layers survived a change; the page self-checks and prints PASS/FAIL.
-if (import.meta.env.DEV && window.location.hash.replace(/^#\/?/, '') === 'astryx-smoke') {
+// Dev-only tree-level pages: parseDevPage (routes.ts) owns every hash
+// spelling — a tree-level page replaces the whole render root, while
+// in-app views (#/, #/settings) route inside App.
+if (parseDevPage(window.location.hash) === 'astryx-smoke') {
   root.render(
     <StrictMode>
       <AstryxSmoke />

@@ -50,6 +50,11 @@ export function useReplaySession() {
 
   useEffect(() => {
     if (mode !== 'demo') return;
+    // Entering demo moves the foreground onto the replay slot; leaving must
+    // hand it back — since phase 2 the hash (not a click) owns the switch,
+    // and the live view would otherwise render the replay slot's leftover
+    // document (plan dock, messages) as if it were a connection.
+    const prevForeground = usePanda.getState().activeConnectionId;
     usePanda.getState().ensureConnection(DEMO_CONNECTION_ID);
     port.adoptSession(DEMO_SESSION_ID, 'demo');
     port.resetDocument();
@@ -67,7 +72,22 @@ export function useReplaySession() {
     port.update({ sessionUpdate: 'modes_initialized', modes: DEMO_MODES });
     resetConfig();
     driver.play(demoScenario());
-    return () => driver.cancel();
+    return () => {
+      driver.cancel();
+      if (usePanda.getState().activeConnectionId === DEMO_CONNECTION_ID) {
+        // The pre-demo foreground may be gone (connection removed while the
+        // replay ran); settle on nothing rather than on the replay slot.
+        const target =
+          prevForeground !== null && usePanda.getState().connections[prevForeground]
+            ? prevForeground
+            : null;
+        usePanda.setState({
+          activeConnectionId: target,
+          activeSessionId:
+            target !== null ? usePanda.getState().connections[target]!.connection.sessionId ?? null : null,
+        });
+      }
+    };
   }, [driver, mode, port]);
 
   const send = useCallback(
@@ -140,17 +160,9 @@ export function useReplaySession() {
     [port],
   );
 
-  /** Restarts the scripted scenario; from live mode it first switches back to demo. */
-  const replayDemo = useCallback(() => {
-    if (usePanda.getState().mode !== 'demo') {
-      usePanda.getState().setMode('demo'); // the effect above takes it from here
-      return;
-    }
-    port.resetDocument();
-    port.update({ sessionUpdate: 'modes_initialized', modes: DEMO_MODES });
-    resetConfig();
-    driver.play(demoScenario());
-  }, [driver, port]);
+  /** Restarts happen by re-entering the `#/demo` route (phase 2): leaving
+   * flips the store to live mode and cancels this driver's effect cleanup;
+   * coming back re-runs it and plays from the top. */
 
-  return { send, resolvePermission, resolveElicitation, openElicitationUrl, setMode, setConfigOption, replayDemo };
+  return { send, resolvePermission, resolveElicitation, openElicitationUrl, setMode, setConfigOption };
 }

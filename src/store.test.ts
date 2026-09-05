@@ -13,11 +13,43 @@ import {
 /** Fresh store per test — connection slots are global singletons otherwise. */
 beforeEach(() => {
   usePanda.setState({
-    mode: 'demo',
+    mode: 'live',
     connections: {},
     activeConnectionId: null,
     activeSessionId: null,
     selectionGeneration: 0,
+  });
+});
+
+describe('initial mode', () => {
+  it('is live — the demo replay is a dev-only #/demo route, not the default', () => {
+    expect(usePanda.getInitialState().mode).toBe('live');
+  });
+});
+
+describe('seedConnection (phase 3: offline agent sections)', () => {
+  it('creates the slot without claiming an existing foreground', () => {
+    usePanda.getState().ensureConnection('foreground');
+    usePanda.getState().seedConnection('seeded');
+    expect(usePanda.getState().connections['seeded']).toBeDefined();
+    expect(usePanda.getState().activeConnectionId).toBe('foreground');
+  });
+
+  it('may take an empty foreground — the sidebar seeds before anything is active', () => {
+    usePanda.getState().seedConnection('first');
+    expect(usePanda.getState().activeConnectionId).toBe('first');
+  });
+
+  it('never rewrites an existing slot (documents survive re-seeding)', () => {
+    usePanda.getState().seedConnection('p');
+    const port = connectionStorePort('p');
+    port.adoptSession('s-1', '/a');
+    port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'kept' }] });
+
+    usePanda.getState().seedConnection('p');
+
+    const slot = usePanda.getState().connections['p']!;
+    expect(slot.docs['s-1']!.turns[0]!.blocks[0]).toMatchObject({ kind: 'user_message' });
   });
 });
 

@@ -159,6 +159,12 @@ interface PandaState {
    * their transcript) and makes it the active connection.
    */
   ensureConnection(connectionId: string): void;
+  /**
+   * Creates the slot if missing without claiming the foreground (phase 3):
+   * the sidebar's offline agent seeding — the first seed may take an empty
+   * foreground, later ones never steal it.
+   */
+  seedConnection(connectionId: string): void;
   /** Drops a slot entirely; clears the pointers if it was active. */
   closeConnection(connectionId: string): void;
   /**
@@ -222,7 +228,10 @@ function patchConnectionState(
 }
 
 export const usePanda = create<PandaState>((set) => ({
-  mode: 'demo',
+  // Live by default (IA refactor phase 2): the demo replay is a dev-only
+  // route (#/demo) whose hash drives the mode — the app opens on the real
+  // session screen, never on a scripted one.
+  mode: 'live',
   connections: {},
   activeConnectionId: null,
   activeSessionId: null,
@@ -234,6 +243,19 @@ export const usePanda = create<PandaState>((set) => ({
         ? s.connections
         : { ...s.connections, [connectionId]: emptyConnectionState() },
       activeConnectionId: connectionId,
+    })),
+  /**
+   * Seeds a slot without claiming the foreground (IA refactor phase 3): the
+   * sidebar auto-seeds every Agent 配置 at mount so offline agent sections
+   * (remembered sessions included) exist immediately — the first seed may
+   * take an empty foreground, later ones never steal it.
+   */
+  seedConnection: (connectionId) =>
+    set((s) => ({
+      connections: s.connections[connectionId]
+        ? s.connections
+        : { ...s.connections, [connectionId]: emptyConnectionState() },
+      activeConnectionId: s.activeConnectionId ?? connectionId,
     })),
   closeConnection: (connectionId) =>
     set((s) => {
