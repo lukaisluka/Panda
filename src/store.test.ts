@@ -2,13 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEMO_CONNECTION_ID,
   connectionStorePort,
-  hasPendingPermission,
-  isConnectionRunning,
-  needsAttention,
   orderedConnectionIds,
   usePanda,
   type SessionEntry,
 } from './store';
+import { connectionLifecycle } from './projector/connectionLifecycle';
 
 /** Fresh store per test — connection slots are global singletons otherwise. */
 beforeEach(() => {
@@ -440,7 +438,7 @@ describe('multi-connection foreground (issue #21)', () => {
     b.setStatus('idle');
 
     expect(usePanda.getState().connections['b']!.unreadCompletion).toBe(true);
-    expect(needsAttention(usePanda.getState().connections['b']!)).toBe(true);
+    expect(connectionLifecycle(usePanda.getState().connections['b']!).attention).toContain('unread-completion');
 
     usePanda.getState().setActiveConnection('b');
     expect(usePanda.getState().connections['b']!.unreadCompletion).toBe(false);
@@ -493,10 +491,10 @@ describe('multi-connection foreground (issue #21)', () => {
     usePanda.getState().ensureConnection('live');
     const port = connectionStorePort('live');
     port.adoptSession('s-1', '/a');
-    expect(isConnectionRunning(usePanda.getState().connections['live']!)).toBe(false);
+    expect(connectionLifecycle(usePanda.getState().connections['live']!).running).toBe(false);
 
     port.setStatus('running');
-    expect(isConnectionRunning(usePanda.getState().connections['live']!)).toBe(true);
+    expect(connectionLifecycle(usePanda.getState().connections['live']!).running).toBe(true);
 
     port.update({
       sessionUpdate: 'permission_requested',
@@ -507,20 +505,20 @@ describe('multi-connection foreground (issue #21)', () => {
       },
     });
     port.setStatus('requires_action');
-    const slot = usePanda.getState().connections['live']!;
-    expect(hasPendingPermission(slot)).toBe(true);
-    expect(needsAttention(slot)).toBe(true);
+    const attention = connectionLifecycle(usePanda.getState().connections['live']!).attention;
+    expect(attention).toContain('pending-permission');
+    expect(attention.length).toBeGreaterThan(0);
 
     port.setStatus('idle'); // foreground — no unread from this settle
-    expect(needsAttention(usePanda.getState().connections['live']!)).toBe(true); // permission still pending
+    expect(connectionLifecycle(usePanda.getState().connections['live']!).attention).toContain('pending-permission'); // permission still pending
   });
 
   it('a connection error lights attention until it clears', () => {
     usePanda.getState().ensureConnection('live');
     const port = connectionStorePort('live');
     port.setConnection({ status: 'error', error: '连接失败: boom' });
-    expect(needsAttention(usePanda.getState().connections['live']!)).toBe(true);
+    expect(connectionLifecycle(usePanda.getState().connections['live']!).attention).toContain('connection-error');
     port.setConnection({ status: 'connected', error: null });
-    expect(needsAttention(usePanda.getState().connections['live']!)).toBe(false);
+    expect(connectionLifecycle(usePanda.getState().connections['live']!).attention).toEqual([]);
   });
 });

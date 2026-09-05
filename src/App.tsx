@@ -11,10 +11,9 @@ import {
   useActiveDoc,
   useActiveEffectiveCapabilities,
   useActiveSessions,
-  useActiveSwitching,
   usePanda,
 } from './store';
-import { useStatusHint } from './projector/hooks';
+import { useForegroundLifecycle } from './projector/hooks';
 import { modeStateFromConfigOptions } from './protocol/modes';
 import { useHashRoute } from './routes';
 import { SettingsPage } from './components/SettingsPage';
@@ -49,7 +48,6 @@ function MainScreen() {
   // The foreground connection's effective capabilities (issue #22) — the
   // single decision point, never the raw agent declaration.
   const effectiveCaps = useActiveEffectiveCapabilities();
-  const switching = useActiveSwitching();
 
   const demo = useReplaySession();
   const live = useLiveSession();
@@ -57,18 +55,14 @@ function MainScreen() {
   // One pick per render (#51): both drivers implement the foreground
   // session controller; members are handed down from here individually.
   const controller: ForegroundSessionController = liveActive ? live : demo;
-  const connected = connection.status === 'connected';
+  // Status meaning comes from the lifecycle projection (#53) — busy,
+  // composer gating, hint and the auth-gate branch are consumed, not derived.
+  const lifecycle = useForegroundLifecycle();
   // protocol/v1 session-config-options: a client with config options SHOULD
   // use them exclusively and ignore `modes` — when the agent models its mode
   // selector as a config option, the picker derives from it and writes go
   // through set_config_option (one full-list response refreshes both views).
   const derivedModes = modeStateFromConfigOptions(doc.configOptions);
-
-  // A session switch in flight is busy too: the composer must not send into a
-  // session that has not settled yet, and the sidebar locks other switches.
-  const busy = doc.status !== 'idle' || switching !== null;
-  const composerDisabled = liveActive ? !connected || busy : busy;
-  const hint = useStatusHint();
 
   const activeSession = liveActive
     ? sessions.find((entry) => entry.sessionId === connection.sessionId)
@@ -110,7 +104,7 @@ function MainScreen() {
           <span className="app-header-meta">{headerMeta}</span>
         </header>
         {doc.plan && doc.plan.length > 0 && <PlanDock entries={doc.plan} />}
-        {liveActive && connection.status === 'auth_required' ? (
+        {liveActive && lifecycle.phase === 'auth-required' ? (
           <AuthGate
             methods={connection.authMethods ?? []}
             message={connection.error}
@@ -126,14 +120,13 @@ function MainScreen() {
           doc={doc}
           connection={connection}
           mode={mode}
-          switching={switching !== null}
         />
         <Composer
           onSend={controller.send}
-          disabled={composerDisabled}
-          hint={hint}
+          disabled={lifecycle.composerDisabled}
+          hint={lifecycle.hint}
           canAttachImages={!liveActive || effectiveCaps.image.available}
-          canStop={liveActive && connected && doc.status === 'running'}
+          canStop={lifecycle.canStop}
           onStop={live.cancel}
           modes={derivedModes ?? doc.modes}
           onSetMode={derivedModes ? (modeId: string) => controller.setConfigOption('mode', modeId) : controller.setMode}

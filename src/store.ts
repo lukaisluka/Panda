@@ -735,34 +735,5 @@ export function orderedConnectionIds(s: {
  */
 export const useConnectionOrder = () => usePanda(useShallow(orderedConnectionIds));
 
-/** True while any of the connection's documents is mid-turn (每连接单 pending turn). */
-export function isConnectionRunning(slot: ConnectionState): boolean {
-  return Object.values(slot.docs).some((doc) => doc.status === 'running');
-}
-
-/** 连接级 busy: a transactional session switch or a running turn — the
- * states in which session switching/creating is refused. */
-export function isConnectionBusy(slot: ConnectionState): boolean {
-  return slot.switching !== null || isConnectionRunning(slot);
-}
-
-/** True while any of the connection's documents has a pending permission. */
-export function hasPendingPermission(slot: ConnectionState): boolean {
-  return Object.values(slot.docs).some((doc) =>
-    Object.values(doc.permissions).some((permission) => permission.status === 'pending'),
-  );
-}
-
-/**
- * Aggregated 需要关注 (issue #21): unread completion | pending permission |
- * connection error — any source lights the dot. Derived, not stored: the
- * document and `connection.status` stay the single sources of truth.
- */
-export function needsAttention(slot: ConnectionState): boolean {
-  return (
-    slot.unreadCompletion ||
-    slot.connection.status === 'error' ||
-    slot.connection.status === 'auth_required' ||
-    hasPendingPermission(slot)
-  );
-}
+// Per-slot status derivations (运行中 / busy / 需要关注) moved to the
+// lifecycle projection (#53): projector/connectionLifecycle.ts.
