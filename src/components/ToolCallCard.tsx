@@ -27,7 +27,8 @@ import type {
   ToolCallState,
   ToolCallStatus,
 } from '../protocol/types';
-import { markdownComponents } from './CodeBlock';
+import { CodeBlock, markdownComponents } from './CodeBlock';
+import { ClampBox } from './ClampBox';
 import { DiffView } from './DiffView';
 import { FileTypeIcon, splitFilePath } from './FileTypeIcon';
 import { MessageImage } from './MessageImage';
@@ -35,6 +36,7 @@ import { AttachedPermissionCard } from './PermissionCard';
 import type { AttachedPermission } from '../projector/messageStream';
 import { diffStats } from './diff-utils';
 import { settledToolTitle } from './tool-title';
+import { specializeInput, type InputField } from './tool-input';
 import './ToolCallCard.css';
 
 const KIND_ICON: Record<AcpToolKind, LucideIcon> = {
@@ -125,6 +127,8 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
   // File row data (null for non-file kinds or calls without a location).
   const fileVerb = path ? FILE_VERB[call.kind] : undefined;
   const fileRow = path && fileVerb ? { path, line, verb: fileVerb, ...splitFilePath(path) } : null;
+  // read/search 的文本结果按原文(代码块)渲染,见 details 区注释。
+  const rawTextKind = call.kind === 'read' || call.kind === 'search';
   const diffPart = call.content.find((c): c is Extract<typeof c, { type: 'diff' }> => c.type === 'diff');
   const stats = useMemo(
     () => (diffPart ? diffStats(diffPart.oldText, diffPart.newText) : null),
@@ -191,36 +195,48 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
 
       {open && hasDetails && (
         <div className="tool-card-details">
-          {call.rawInput && Object.keys(call.rawInput).length > 0 && (
-            <details className="tool-input-details">
-              <summary className="tool-input-summary">
-                Input
-              </summary>
-              <pre className="tool-input-pre">
-                {JSON.stringify(call.rawInput, null, 2)}
-              </pre>
-            </details>
-          )}
+          <InputSection call={call} />
           {hasRawOutput && (
             <details className="tool-input-details" open>
               <summary className="tool-input-summary">
                 Output
               </summary>
-              <pre className="tool-input-pre">
-                {JSON.stringify(call.rawOutput, null, 2)}
-              </pre>
+              <ClampBox>
+                <pre className="tool-input-pre">
+                  {JSON.stringify(call.rawOutput, null, 2)}
+                </pre>
+              </ClampBox>
             </details>
           )}
           {call.content.map((item, i) => {
-            if (item.type === 'diff') return <DiffView key={i} diff={item} />;
+            if (item.type === 'diff') {
+              return (
+                <ClampBox key={i}>
+                  <DiffView diff={item} />
+                </ClampBox>
+              );
+            }
             if (item.type === 'content' && item.content.type === 'image') {
               return <MessageImage key={i} image={item.content} />;
             }
             if (item.type === 'content' && item.content.type === 'text') {
+              // read/search 的文本结果是原文件/匹配行,过 markdown 会被
+              // "翻译"变形(缩进 4 行变代码块、# 变标题)——按路径扩展名
+              // 走代码块原文渲染,还自带复制按钮。execute/think 等的文本
+              // 是 agent 产出的 markdown,保持原渲染。
+              if (rawTextKind) {
+                return (
+                  <ClampBox key={i}>
+                    <CodeBlock lang={extLang(path)} code={item.content.text} />
+                  </ClampBox>
+                );
+              }
               return (
-                <div key={i} className="md-body tool-text-box">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{item.content.text}</ReactMarkdown>
-                </div>
+                <ClampBox key={i}>
+                  <div className="md-body tool-text-box">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{item.content.text}</ReactMarkdown>
+                  </div>
+                </ClampBox>
               );
             }
             if (item.type === 'unsupported') {
@@ -245,4 +261,71 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
       )}
     </div>
   );
+}
+
+/** Input 展开区(#83):主视图按 kind 特化,原始 JSON 永远收在折叠兜底。 */
+function InputSection({ call }: { call: ToolCallState }) {
+  const rawJson =
+    call.rawInput && Object.keys(call.rawInput).length > 0
+      ? JSON.stringify(call.rawInput, null, 2)
+      : null;
+  if (rawJson === null) return null;
+  const view = specializeInput(call);
+
+  if (view.kind === 'raw') {
+    return (
+      <details className="tool-input-details">
+        <summary className="tool-input-summary">Input</summary>
+        <ClampBox>
+          <pre className="tool-input-pre">{rawJson}</pre>
+        </ClampBox>
+      </details>
+    );
+  }
+
+  return (
+    <>
+      {view.kind === 'command' && (
+        <div className="tool-input-command">
+          <span className="tool-input-command-sign">$</span>
+          <code>{view.command}</code>
+        </div>
+      )}
+      {view.kind === 'code' && (
+        <ClampBox>
+          <CodeBlock lang={extLang(view.path)} code={view.code} />
+        </ClampBox>
+      )}
+      {view.kind === 'command' && view.extras.length > 0 && <InputFields entries={view.extras} />}
+      {view.kind === 'fields' && <InputFields entries={view.entries} />}
+      <details className="tool-input-details tool-input-details--raw">
+        <summary className="tool-input-summary">原始 JSON</summary>
+        <ClampBox>
+          <pre className="tool-input-pre">{rawJson}</pre>
+        </ClampBox>
+      </details>
+    </>
+  );
+}
+
+function InputFields({ entries }: { entries: InputField[] }) {
+  return (
+    <dl className="tool-input-fields">
+      {entries.map(({ key, value }) => (
+        <div key={key} className="tool-input-field">
+          <dt>{key}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** 路径扩展名 → CodeBlock 语言标签(highlighter 的别名表负责映射到 shiki)。
+ * 无扩展名(pop 出带 / 的整段路径)时不标语言,纯文本渲染。 */
+function extLang(path: string | undefined): string | null {
+  if (!path) return null;
+  const ext = path.split('.').pop() ?? '';
+  if (!ext || ext.includes('/')) return null;
+  return ext.toLowerCase();
 }
