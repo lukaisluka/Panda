@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { client } from '@agentclientprotocol/sdk';
-import type { ContentBlock, SessionNotification, SessionUpdate } from '@agentclientprotocol/sdk';
+import type { SessionNotification, SessionUpdate } from '@agentclientprotocol/sdk';
 import {
-  echoRelation,
   parseSessionNotification,
   removeSdkStrictSessionUpdateRouter,
   toAcpUpdates,
@@ -300,49 +299,6 @@ describe('removeSdkStrictSessionUpdateRouter', () => {
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('strict session/update router'));
     errorSpy.mockRestore();
   });
-
-describe('echoRelation (sent prompt vs agent echo)', () => {
-  const text = (t: string) => ({ type: 'text' as const, text: t });
-
-  it('equal for verbatim text echo, including segmented chunks', () => {
-    expect(echoRelation([text('hello world')], [text('hello world')])).toBe('equal');
-    expect(echoRelation([text('hello world')], [text('hello '), text('world')])).toBe('equal');
-  });
-
-  it('prefix while the echo is still streaming', () => {
-    expect(echoRelation([text('hello')], [text('hel')])).toBe('prefix');
-  });
-
-  it('different for divergent text or extra blocks', () => {
-    expect(echoRelation([text('hi')], [text('别的')])).toBe('different');
-    expect(echoRelation([text('hi')], [text('hi'), text('again')])).toBe('different');
-  });
-
-  it('compares non-text content structurally, ignoring key order', () => {
-    const sent = [{ type: 'image' as const, data: 'aGk=', mimeType: 'image/png' }];
-    // Wire JSON arrives with agent-chosen key order; must still match.
-    const echoed = [
-      { mimeType: 'image/png', data: 'aGk=', type: 'resource' } as unknown as ContentBlock,
-      { data: 'aGk=', mimeType: 'image/png', type: 'image' } as unknown as ContentBlock,
-    ];
-    expect(echoRelation(sent, echoed.slice(1))).toBe('equal');
-    expect(
-      echoRelation(sent, [
-        { data: 'aGk=', mimeType: 'image/webp', type: 'image' } as unknown as ContentBlock,
-      ]),
-    ).toBe('different');
-  });
-
-  it('treats an echo containing unmappable content as different', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    expect(
-      echoRelation([text('hi')], [
-        { type: 'audio', data: 'AQID', mimeType: 'audio/wav' } as unknown as ContentBlock,
-      ]),
-    ).toBe('different');
-    warnSpy.mockRestore();
-  });
-});
 
 describe('toElicitationFormRequest (form mode whitelisting)', () => {
   it('maps every known property type to its field variant, honoring required and defaults', () => {

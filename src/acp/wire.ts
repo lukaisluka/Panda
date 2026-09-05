@@ -138,98 +138,11 @@ export function removeSdkStrictSessionUpdateRouter(app: ClientApp): void {
   }
 }
 
-function toContentBlock(block: ContentBlock, context: string): AcpContentBlock | null {
+export function toContentBlock(block: ContentBlock, context: string): AcpContentBlock | null {
   if (block.type === 'text') return { type: 'text', text: block.text };
   if (block.type === 'image') return { type: 'image', data: block.data, mimeType: block.mimeType };
   warn(`${context}: content block "${block.type}" not supported yet — preserved as raw only`);
   return null;
-}
-
-// ---------------------------------------------------------------------------
-// Echo reconciliation (issue #15)
-// ---------------------------------------------------------------------------
-
-/** Order-insensitive structural equality — JSON.stringify would be key-order sensitive. */
-function deepEqual(left: unknown, right: unknown): boolean {
-  if (left === right) return true;
-  if (typeof left !== 'object' || typeof right !== 'object' || left === null || right === null) {
-    return false;
-  }
-  if (Array.isArray(left) || Array.isArray(right)) {
-    return (
-      Array.isArray(left) &&
-      Array.isArray(right) &&
-      left.length === right.length &&
-      left.every((item, index) => deepEqual(item, right[index]))
-    );
-  }
-  const leftKeys = Object.keys(left).sort();
-  const rightKeys = Object.keys(right).sort();
-  return (
-    leftKeys.length === rightKeys.length &&
-    leftKeys.every(
-      (key, index) =>
-        key === rightKeys[index] &&
-        deepEqual((left as Record<string, unknown>)[key], (right as Record<string, unknown>)[key]),
-    )
-  );
-}
-
-/** Folds adjacent text blocks so a segmented echo compares as one message. */
-function coalesceText(blocks: readonly AcpContentBlock[]): AcpContentBlock[] {
-  const result: AcpContentBlock[] = [];
-  for (const block of blocks) {
-    const previous = result.at(-1);
-    if (block.type === 'text' && previous?.type === 'text') {
-      result[result.length - 1] = { type: 'text', text: previous.text + block.text };
-    } else {
-      result.push(block);
-    }
-  }
-  return result;
-}
-
-export type EchoRelation = 'prefix' | 'equal' | 'different';
-
-/**
- * Compares the content the client sent (`prompt`, internal blocks) against
- * the echo the agent has produced so far (wire `user_message_chunk` contents).
- * Text allows a trailing partial (`prefix` — echo still streaming); anything
- * else must match structurally. An echo containing content Panda cannot map
- * (audio/…) can never equal a prompt Panda sent, so it counts as `different`.
- */
-export function echoRelation(
-  prompt: readonly AcpContentBlock[],
-  echoChunks: readonly ContentBlock[],
-): EchoRelation {
-  const mapped: (AcpContentBlock | null)[] = echoChunks.map((chunk) =>
-    toContentBlock(chunk, 'echo reconciliation'),
-  );
-  if (mapped.some((block) => block === null)) return 'different';
-  const expected = coalesceText(prompt);
-  const actual = coalesceText(mapped as AcpContentBlock[]);
-
-  if (actual.length > expected.length) return 'different';
-  for (let index = 0; index < actual.length; index += 1) {
-    const incoming = actual[index]!;
-    const target = expected[index];
-    if (!target || incoming.type !== target.type) return 'different';
-    if (incoming.type === 'text' && target.type === 'text') {
-      const last = index === actual.length - 1;
-      if (last ? !target.text.startsWith(incoming.text) : target.text !== incoming.text) {
-        return 'different';
-      }
-    } else if (!deepEqual(incoming, target)) {
-      return 'different';
-    }
-  }
-  if (actual.length !== expected.length) return 'prefix';
-  const lastActual = actual.at(-1);
-  const lastExpected = expected.at(-1);
-  if (lastActual?.type === 'text' && lastExpected?.type === 'text') {
-    return lastActual.text === lastExpected.text ? 'equal' : 'prefix';
-  }
-  return 'equal';
 }
 
 /** Shared JSON-object guard for `rawInput`/`rawOutput`: the protocol types
