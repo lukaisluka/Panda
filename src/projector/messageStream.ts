@@ -25,18 +25,23 @@ import type {
   RememberedPermissionResponse,
   PermissionRequest,
   PermissionState,
+  SelectedPermissionResponse,
   SessionDocument,
 } from '../protocol/types';
 
 /**
  * A permission as the message flow attaches it to a tool call (or renders it
  * as an independent card): pending waits for the user; denied settled by host
- * policy (issue #22). Minted by this projection with identity-stable wrappers.
+ * policy (issue #22); remembered replayed from session memory (issue #68);
+ * resolved is the user's own hand-picked answer kept as a settled record
+ * (issue #79 — the transcript's only trace of what the user approved).
+ * Minted by this projection with identity-stable wrappers.
  */
 export type AttachedPermission =
   | { state: 'pending'; request: PermissionRequest }
   | { state: 'denied'; request: PermissionRequest; response: DeniedPermissionResponse }
-  | { state: 'remembered'; request: PermissionRequest; response: RememberedPermissionResponse };
+  | { state: 'remembered'; request: PermissionRequest; response: RememberedPermissionResponse }
+  | { state: 'resolved'; request: PermissionRequest; response: SelectedPermissionResponse };
 
 export type BlockFlatItem = {
   key: string;
@@ -192,7 +197,10 @@ function attachedElicitations(record: Record<string, ElicitationState>): Attache
   return list;
 }
 
-/** Pending requests and policy-denied records — the renderable permission set. */
+/** Pending requests and settled records worth keeping — the renderable
+ * permission set. A user hand-picked answer stays visible (issue #79):
+ * without it the transcript has no trace of what the user approved, only
+ * of what was denied or auto-answered. */
 function attachedPermissions(record: Record<string, PermissionState>): AttachedPermission[] {
   const cached = attachedListCache.get(record);
   if (cached) return cached;
@@ -202,6 +210,7 @@ function attachedPermissions(record: Record<string, PermissionState>): AttachedP
     // A remembered settlement stays visible too (issue #68) — the auto-answer
     // must read as the user's replayed choice, never as a silent approval.
     if (permission.response?.outcome === 'remembered') return [attachedPermission(permission)];
+    if (permission.response?.outcome === 'selected') return [attachedPermission(permission)];
     return [];
   });
   attachedListCache.set(record, list);
@@ -217,7 +226,11 @@ function attachedPermission(permission: PermissionState): AttachedPermission {
     return wrapper;
   }
   const response = permission.response;
-  if (response?.outcome !== 'denied-by-policy' && response?.outcome !== 'remembered') {
+  if (
+    response?.outcome !== 'denied-by-policy' &&
+    response?.outcome !== 'remembered' &&
+    response?.outcome !== 'selected'
+  ) {
     // attachedPermissions filters to the renderable states; reaching here
     // means the filter and the wrapper drifted — fail loudly, never guess.
     throw new Error(`[projector] unexpected permission state to attach: ${permission.status}`);
@@ -225,7 +238,9 @@ function attachedPermission(permission: PermissionState): AttachedPermission {
   const wrapper: AttachedPermission =
     response.outcome === 'remembered'
       ? { state: 'remembered', request: permission.request, response }
-      : { state: 'denied', request: permission.request, response };
+      : response.outcome === 'selected'
+        ? { state: 'resolved', request: permission.request, response }
+        : { state: 'denied', request: permission.request, response };
   attachedCache.set(permission, wrapper);
   return wrapper;
 }

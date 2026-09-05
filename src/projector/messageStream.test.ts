@@ -328,8 +328,10 @@ describe('projection identity stability (ADR 0006)', () => {
 
     expect(after[0]).toBe(before[0]); // user block
     expect(after[1]).toBe(before[1]); // t-1 keeps its pending card
-    expect(after[2]).not.toBe(before[2]); // t-2 lost its card — its item changed
-    expect(blockItem(after[2]!).permission).toBeNull();
+    expect(after[2]).not.toBe(before[2]); // t-2's permission settled — its item changed
+    // Settled-by-hand answers now stay as a resolved record (issue #79) —
+    // the transcript keeps the approval trace instead of dropping it.
+    expect(blockItem(after[2]!).permission?.state).toBe('resolved');
   });
 
   it('flips streaming on only the trailing agent message when the turn runs', () => {
