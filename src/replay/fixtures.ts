@@ -546,14 +546,21 @@ export function mainScenario(): ReplayStep[] {
     updateStep({ sessionUpdate: 'plan', entries: planReading }, 350),
     toolCallStep('read-1', 'Read src/auth/session.ts', 'read', 'src/auth/session.ts', { path: 'src/auth/session.ts' }, 400),
     toolStatusStep('read-1', 'in_progress', 300),
-    toolResultStep(
-      'read-1',
-      'session.ts 共 18 行。HMAC 校验在 handleLogin 与 refreshToken 中各重复一份，且后者缺空值防护。文件无其他导出。',
-      650,
-    ),
+    // 工具结果是文件原文(#87:与随后 edit diff 的 oldText 同一份),不再
+    // 是散文总结——#83 起 read 结果按原文代码块渲染,假散文在 mono 框里失真
+    toolResultStep('read-1', OLD_SESSION_TS, 650),
     toolCallStep('search-1', 'Search references to the validation', 'search', 'src/auth/', { pattern: 'createHmac' }, 250),
     toolStatusStep('search-1', 'in_progress', 300),
-    toolResultStep('search-1', '2 处引用：handleLogin、refreshToken，均在 src/auth/session.ts 内。', 450),
+    // grep 风格的匹配行(#87):与 read 的原文渲染保持同一叙事
+    toolResultStep(
+      'search-1',
+      [
+        'src/auth/session.ts:1:9:import { createHmac, timingSafeEqual } from \'crypto\';',
+        'src/auth/session.ts:5:20:  const expected = createHmac(\'sha256\', secret).update(token).digest();',
+        'src/auth/session.ts:11:20:  const expected = createHmac(\'sha256\', secret).update(token).digest();',
+      ].join('\n'),
+      450,
+    ),
     ...streamText('agent_message_chunk', 'msg-1', messageAfterRead, { firstMs: 500 }),
     {
       kind: 'elicitation',
