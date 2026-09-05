@@ -20,6 +20,7 @@ import { useReplaySession } from './useReplaySession';
 import { useLiveSession } from './useLiveSession';
 import type { ForegroundSessionController } from './session-controller';
 import './App.css';
+import { useI18n } from './i18n/context';
 
 /** Route-level shell (IA refactor phase 1): `#/` is the session screen,
  * `#/settings` the settings screen. Everything session-related (both live
@@ -59,13 +60,14 @@ function MainScreen() {
   const lifecycle = useForegroundLifecycle();
   // The mode picker's view + write channel (protocol policy, not App's to derive).
   const sessionModes = useSessionModes(controller);
+  const { t } = useI18n();
 
   const activeSession = liveActive
     ? sessions.find((entry) => entry.sessionId === connection.sessionId)
     : undefined;
   const headerTitle = !liveActive
-    ? '重构 auth 校验'
-    : (activeSession?.title ?? connection.agentName ?? 'Live 会话');
+    ? t('app.demoHeaderTitle')
+    : (activeSession?.title ?? connection.agentName ?? t('app.liveSessionTitle'));
   const headerMeta = liveActive ? (connection.url ?? 'acp') : 'acp://claude-code · demo replay';
 
   return (
@@ -74,7 +76,7 @@ function MainScreen() {
         <button
           type="button"
           className="app-nav-overlay"
-          aria-label="关闭导航"
+          aria-label={t('app.closeNav')}
           onClick={() => setMobileNavigationOpen(false)}
         />
       )}
@@ -90,7 +92,7 @@ function MainScreen() {
             <button
               type="button"
               className="app-nav-toggle"
-              aria-label="打开导航"
+              aria-label={t('app.openNav')}
               onClick={() => setMobileNavigationOpen(true)}
             >
               <Menu size={18} />

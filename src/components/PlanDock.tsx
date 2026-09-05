@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Check, ChevronDown, Circle, CircleDot, ListTodo } from 'lucide-react';
 import type { AcpPlanEntry } from '../protocol/types';
 import './PlanDock.css';
+import { useI18n } from '../i18n/context';
 
 /**
  * The session's plan, docked in the content area's top-right corner
@@ -11,11 +12,12 @@ import './PlanDock.css';
  * the header keeps a `done/total` progress readout when folded.
  */
 export function PlanDock({ entries }: { entries: AcpPlanEntry[] }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(true);
   const done = entries.filter((entry) => entry.status === 'completed').length;
 
   return (
-    <aside className="plan-dock" aria-label="会话计划">
+    <aside className="plan-dock" aria-label={t('plan.dock')}>
       <button
         type="button"
         className="plan-dock-head"
@@ -23,7 +25,7 @@ export function PlanDock({ entries }: { entries: AcpPlanEntry[] }) {
         onClick={() => setOpen((o) => !o)}
       >
         <ListTodo size={14} className="plan-dock-head-icon" />
-        <span className="plan-dock-title">计划</span>
+        <span className="plan-dock-title">{t('plan.title')}</span>
         <span className="plan-dock-progress">{done}/{entries.length}</span>
         <ChevronDown size={14} className={`plan-dock-chevron ${open ? 'plan-dock-chevron--open' : ''}`} />
       </button>

@@ -30,15 +30,15 @@ describe('profileDraftErrors', () => {
 
   it('flags blank name and url', () => {
     expect(profileDraftErrors(draft({ name: '   ', url: '' }))).toEqual({
-      name: '配置名称不能为空',
-      url: '端点地址不能为空',
+      name: 'Profile name is required',
+      url: 'Endpoint is required',
     });
   });
 
   it('requires a path only for local-directory workspaces (无工作区 needs none, ADR 0005)', () => {
     expect(profileDraftErrors(draft({ workspace: { kind: 'none', path: '' } }))).toEqual({});
     expect(profileDraftErrors(draft({ workspace: { kind: 'local-directory', path: ' ' } }))).toEqual({
-      path: '本机文件夹需要路径',
+      path: 'A local directory needs a path',
     });
   });
 });
@@ -49,17 +49,17 @@ describe('mcpDraftErrors (issue #71)', () => {
   });
 
   it('flags a blank name', () => {
-    expect(mcpDraftErrors(mcpDraft({ name: ' ' }))).toEqual({ name: '服务器名称不能为空' });
+    expect(mcpDraftErrors(mcpDraft({ name: ' ' }))).toEqual({ name: 'Server name is required' });
   });
 
   it('stdio requires a command; args are optional', () => {
-    expect(mcpDraftErrors(mcpDraft({ command: '', args: '' }))).toEqual({ command: 'stdio 类型需要可执行命令' });
+    expect(mcpDraftErrors(mcpDraft({ command: '', args: '' }))).toEqual({ command: 'stdio type needs an executable command' });
   });
 
   it('http/sse require a url and not a command', () => {
     expect(mcpDraftErrors(mcpDraft({ type: 'http', command: '', url: 'https://x/mcp' }))).toEqual({});
     expect(mcpDraftErrors(mcpDraft({ type: 'sse', command: '', url: ' ' }))).toEqual({
-      url: '需要一个 URL',
+      url: 'A URL is required',
     });
   });
 });

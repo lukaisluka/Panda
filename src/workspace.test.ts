@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  NO_WORKSPACE_LABEL,
   WORKSPACE_NONE_CWD,
   cwdToWorkspace,
   isWorkspace,
@@ -19,7 +18,7 @@ describe('workspaceToCwd', () => {
 });
 
 describe('cwdToWorkspace', () => {
-  it("reads `/` back as 无工作区 (the accepted `/` ≡ none equivalence)", () => {
+  it("reads `/` back as no-workspace (the accepted `/` ≡ none equivalence)", () => {
     expect(cwdToWorkspace('/')).toEqual({ kind: 'none' });
     expect(cwdToWorkspace('/tmp/project')).toEqual({ kind: 'local-directory', path: '/tmp/project' });
   });
@@ -47,14 +46,13 @@ describe('isWorkspace', () => {
 });
 
 describe('workspaceLabel / workspaceDisplay', () => {
-  it('labels the placeholder as 无工作区 and other cwds by folder name', () => {
-    expect(workspaceLabel('/')).toBe(NO_WORKSPACE_LABEL);
-    expect(NO_WORKSPACE_LABEL).toBe('无工作区'); // the pinned UI literal
+  it('labels the placeholder as no-workspace and other cwds by folder name', () => {
+    expect(workspaceLabel('/')).toBe('No workspace'); // en default; zh goes through the i18n dictionary
     expect(workspaceLabel('/tmp/project')).toBe('project');
   });
 
-  it('displays a workspace as its path or 无工作区', () => {
+  it('displays a workspace as its path or no-workspace', () => {
     expect(workspaceDisplay({ kind: 'local-directory', path: '/tmp/project' })).toBe('/tmp/project');
-    expect(workspaceDisplay({ kind: 'none' })).toBe(NO_WORKSPACE_LABEL);
+    expect(workspaceDisplay({ kind: 'none' })).toBe('No workspace');
   });
 });

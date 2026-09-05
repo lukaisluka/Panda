@@ -17,6 +17,7 @@ import {
   type SessionNotification,
 } from '@agentclientprotocol/sdk';
 import type { AcpTransport } from './transport/AcpTransport';
+import { t } from '../i18n';
 import type {
   AcpAuthMethod,
   AcpConfigOption,
@@ -197,7 +198,7 @@ export const CONTROL_REQUEST_TIMEOUT_MS = 30_000;
  */
 export class ControlRequestTimeoutError extends Error {
   constructor(method: string, timeoutMs: number) {
-    super(`${method} 超过 ${timeoutMs / 1000}s 未应答`);
+    super(t('acp.timeout', { method, s: timeoutMs / 1000 }));
     this.name = 'ControlRequestTimeoutError';
   }
 }
@@ -446,7 +447,7 @@ export class LiveAcpClient {
       connection.closed
         .catch(() => {})
         .then(() => {
-          if (this.connection === connection) this.reportDisconnect('与服务器的连接已断开');
+          if (this.connection === connection) this.reportDisconnect(t('acp.disconnected'));
         });
 
       const init: InitializeResponse = await this.controlRequest(
@@ -473,7 +474,7 @@ export class LiveAcpClient {
       }
       if (init.protocolVersion !== PROTOCOL_VERSION) {
         throw new Error(
-          `agent 协商了协议 v${init.protocolVersion}，Panda 目前只支持 v${PROTOCOL_VERSION}`,
+          t('acp.protocolMismatch', { agent: init.protocolVersion, ours: PROTOCOL_VERSION }),
         );
       }
       const agentName = init.agentInfo?.title ?? init.agentInfo?.name ?? 'unknown agent';
@@ -544,11 +545,11 @@ export class LiveAcpClient {
         return;
       }
       if (isAuthRequired(err)) {
-        this.reportDisconnect('agent 要求认证，但没有提供浏览器可用的登录方式');
+        this.reportDisconnect(t('acp.authNoMethods'));
         return;
       }
       console.error('[panda/acp] connect failed', err);
-      this.reportDisconnect(`连接失败: ${describeError(err)}`);
+      this.reportDisconnect(t('acp.connectFailed', { error: describeError(err) }));
     }
   }
 
@@ -582,7 +583,7 @@ export class LiveAcpClient {
         return;
       }
       console.error('[panda/acp] session/new failed', err);
-      this.reportDisconnect(`新建会话失败: ${describeError(err)}`);
+      this.reportDisconnect(t('acp.newSessionFailed', { error: describeError(err) }));
     }
   }
 
@@ -627,7 +628,7 @@ export class LiveAcpClient {
         return;
       }
       console.error('[panda/acp] authenticate failed', err);
-      this.reportDisconnect(`登录失败: ${describeError(err)}`);
+      this.reportDisconnect(t('acp.loginFailed', { error: describeError(err) }));
     }
   }
 
@@ -738,7 +739,7 @@ export class LiveAcpClient {
         return;
       }
       console.error('[panda/acp] session/delete failed', err);
-      this.reportDisconnect(`删除会话失败: ${describeError(err)}`);
+      this.reportDisconnect(t('acp.deleteSessionFailed', { error: describeError(err) }));
     }
   }
 
@@ -843,11 +844,11 @@ export class LiveAcpClient {
     if (!image.available && content.some((block) => block.type === 'image')) {
       const cause =
         image.reason === 'unavailable-on-host'
-          ? '宿主不支持该能力'
+          ? t('acp.imageHostUnsupported')
           : image.reason === 'blocked-by-policy'
-            ? '策略已禁止该能力'
-            : 'agent 未声明 promptCapabilities.image';
-      throw new Error(`${cause}，拒绝发送图片`);
+            ? t('acp.imagePolicyBlocked')
+            : t('acp.imageNotDeclared');
+      throw new Error(t('acp.imageRejected', { cause }));
     }
     const generation = this.connectionGeneration;
     // The reducer is the only path that opens a user turn — echo locally as
@@ -1135,7 +1136,7 @@ export class LiveAcpClient {
         // No this.sessionId restore here: cleanup already nulled it and the
         // newer era owns the field (P1-1) — writing prevSessionId back would
         // re-route a dead era onto the new connection.
-        this.handlers.onSessionSwitchRollback('连接已被更新的连接替换', generation);
+        this.handlers.onSessionSwitchRollback(t('acp.superseded'), generation);
         return;
       }
       // The load's modes land before commit: the staged document is the one

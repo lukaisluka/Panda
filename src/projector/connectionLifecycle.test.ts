@@ -103,11 +103,11 @@ function foreground(overrides: Partial<ForegroundLifecycleInput>): ForegroundLif
 
 describe('foregroundLifecycle (demo replay)', () => {
   it('asks for approval while a permission is pending', () => {
-    expect(foregroundLifecycle(foreground({ mode: 'demo', docStatus: 'requires_action' })).hint).toBe('等待批准中…');
+    expect(foregroundLifecycle(foreground({ mode: 'demo', docStatus: 'requires_action' })).hint).toBe('Awaiting approval…');
   });
 
   it('announces work while the turn runs', () => {
-    expect(foregroundLifecycle(foreground({ mode: 'demo', docStatus: 'running' })).hint).toBe('Panda 正在工作…');
+    expect(foregroundLifecycle(foreground({ mode: 'demo', docStatus: 'running' })).hint).toBe('Panda is working…');
   });
 
   it('stays empty when idle', () => {
@@ -123,20 +123,20 @@ describe('foregroundLifecycle (demo replay)', () => {
 
 describe('foregroundLifecycle (live connection)', () => {
   it('leads with connection progress and failures before session state', () => {
-    expect(foregroundLifecycle(foreground({ connection: { status: 'connecting', error: null } })).hint).toBe('连接中…');
+    expect(foregroundLifecycle(foreground({ connection: { status: 'connecting', error: null } })).hint).toBe('Connecting…');
     expect(foregroundLifecycle(foreground({ connection: { status: 'error', error: 'boom' } })).hint).toBe(
-      '连接失败 — 在侧栏重连并恢复，或重新连接',
+      'Connection failed — reconnect & resume from the sidebar, or connect again',
     );
   });
 
   it('tells the user to connect when no session is possible', () => {
     expect(foregroundLifecycle(foreground({ connection: { status: 'disconnected', error: null } })).hint).toBe(
-      '未连接 ACP 服务 — 在侧栏连接',
+      'Not connected to an ACP service — connect from the sidebar',
     );
   });
 
   it('surfaces an in-flight session switch', () => {
-    expect(foregroundLifecycle(foreground({ switching: true })).hint).toBe('切换会话中…');
+    expect(foregroundLifecycle(foreground({ switching: true })).hint).toBe('Switching session…');
   });
 
   it('surfaces a non-fatal connection error on an otherwise healthy link', () => {
@@ -146,8 +146,8 @@ describe('foregroundLifecycle (live connection)', () => {
   });
 
   it('announces work for both running and awaiting-approval turns', () => {
-    expect(foregroundLifecycle(foreground({ docStatus: 'running' })).hint).toBe('Panda 正在工作…');
-    expect(foregroundLifecycle(foreground({ docStatus: 'requires_action' })).hint).toBe('Panda 正在工作…');
+    expect(foregroundLifecycle(foreground({ docStatus: 'running' })).hint).toBe('Panda is working…');
+    expect(foregroundLifecycle(foreground({ docStatus: 'requires_action' })).hint).toBe('Panda is working…');
   });
 
   it('stays empty when connected and idle', () => {

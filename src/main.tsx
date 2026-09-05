@@ -5,6 +5,7 @@ import './index.css';
 import App from './App';
 import { AstryxSmoke } from './dev/AstryxSmoke';
 import { loadThemeId, resolveTheme, subscribeTheme } from './theme';
+import { I18nProvider } from './i18n/context';
 import { parseDevPage } from './routes';
 
 const root = createRoot(document.getElementById('root')!);
@@ -20,7 +21,9 @@ function ThemeRoot() {
   const choice = resolveTheme(themeId);
   return (
     <Theme theme={choice.theme} mode={choice.darkOnly ? 'dark' : 'system'}>
-      <App />
+      <I18nProvider>
+        <App />
+      </I18nProvider>
     </Theme>
   );
 }

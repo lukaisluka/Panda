@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronUp } from 'lucide-react';
 import type { AcpSessionModeState } from '../protocol/types';
 import './ModePicker.css';
+import { useI18n } from '../i18n/context';
 
 /**
  * Session-mode picker for the composer's bottom-left slot (protocol/v1
@@ -15,6 +16,7 @@ export function ModePicker({ modes, onSetMode }: {
   modes: AcpSessionModeState;
   onSetMode: (modeId: string) => void;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const current = modes.availableModes.find((mode) => mode.id === modes.currentModeId);
@@ -50,7 +52,7 @@ export function ModePicker({ modes, onSetMode }: {
         <ChevronUp size={12} className={`mode-picker-chevron ${open ? 'mode-picker-chevron--open' : ''}`} />
       </button>
       {open && (
-        <div className="mode-picker-menu" role="menu" aria-label="会话模式">
+        <div className="mode-picker-menu" role="menu" aria-label={t('mode.menu')}>
           {modes.availableModes.map((mode) => {
             const isCurrent = mode.id === modes.currentModeId;
             return (

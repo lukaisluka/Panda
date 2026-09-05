@@ -19,6 +19,7 @@ import type {
   ToolCallLocation,
   ToolCallUpdate,
 } from '@agentclientprotocol/sdk';
+import { t } from '../i18n';
 import {
   isSessionStateKind,
   type AcpAvailableCommand,
@@ -468,7 +469,7 @@ function flattenSelectOptions(wire: unknown): AcpConfigChoice[] | null {
 export function toPermissionRequest(request: RequestPermissionRequest): PermissionRequest {
   return {
     toolCallId: request.toolCall.toolCallId,
-    title: request.toolCall.title ?? '未命名操作',
+    title: request.toolCall.title ?? t('wire.unnamedTool'),
     kind: request.toolCall.kind ?? undefined,
     options: request.options.map((option) => ({
       id: option.optionId,

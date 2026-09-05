@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import './ClampBox.css';
+import { useI18n } from '../i18n/context';
 
 /**
  * 展开区长内容钳制(#83):超过限高后渐隐截断 + 「展开全部/收起」。
@@ -15,6 +16,7 @@ import './ClampBox.css';
  * 浏览器实测。
  */
 export function ClampBox({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const bodyRef = useRef<HTMLDivElement>(null);
   const [overflows, setOverflows] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -47,7 +49,7 @@ export function ClampBox({ children }: { children: ReactNode }) {
           className="tool-clamp-toggle"
           onClick={() => setExpanded((e) => !e)}
         >
-          {expanded ? '收起' : '展开全部'}
+          {expanded ? t('clamp.collapse') : t('clamp.expand')}
         </button>
       )}
     </div>

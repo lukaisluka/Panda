@@ -10,8 +10,8 @@ describe('customEndpointErrors (phase 3: 自定义地址 form)', () => {
 
   it('blocks an empty url and a pathless local directory', () => {
     expect(customEndpointErrors({ url: '  ', workspace: { kind: 'local-directory', path: '' } })).toEqual({
-      url: '端点地址不能为空',
-      path: '本机文件夹需要路径',
+      url: 'Endpoint is required',
+      path: 'A local directory needs a path',
     });
   });
 

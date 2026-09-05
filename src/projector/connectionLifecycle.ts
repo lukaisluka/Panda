@@ -10,6 +10,7 @@
  */
 
 import type { SessionStatus } from '../protocol/types';
+import { t } from '../i18n';
 import type { ConnectionInfo, ConnectionState, ConnectionStatus, SessionMode } from '../store';
 
 /** 需要关注 sources (CONTEXT.md): reasons ride along instead of being
@@ -122,25 +123,25 @@ export type ForegroundLifecycle = {
 
 function hintFor(mode: SessionMode, phase: ConnectionPhase, error: string | null, docStatus: SessionStatus): string | undefined {
   if (mode !== 'live') {
-    if (docStatus === 'requires_action') return '等待批准中…';
-    if (docStatus === 'running') return 'Panda 正在工作…';
+    if (docStatus === 'requires_action') return t('lifecycle.awaitingApproval');
+    if (docStatus === 'running') return t('lifecycle.working');
     return undefined;
   }
   switch (phase) {
     case 'connecting':
-      return '连接中…';
+      return t('lifecycle.connecting');
     case 'error':
-      return '连接失败 — 在侧栏重连并恢复，或重新连接';
+      return t('lifecycle.connectFailed');
     case 'auth-required':
-      return '需要登录 — 在上方选择登录方式';
+      return t('lifecycle.authRequired');
     case 'disconnected':
-      return '未连接 ACP 服务 — 在侧栏连接';
+      return t('lifecycle.disconnected');
     case 'switching-session':
-      return '切换会话中…';
+      return t('lifecycle.switching');
     case 'connected-degraded':
       return error ?? undefined;
     case 'connected':
-      if (docStatus !== 'idle') return 'Panda 正在工作…';
+      if (docStatus !== 'idle') return t('lifecycle.working');
       return undefined;
   }
 }

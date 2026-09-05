@@ -6,6 +6,7 @@ import type { ConnectionInfo, SessionMode } from '../store';
 import { useForegroundLifecycle } from '../projector/hooks';
 import { ContentColumn } from './ContentColumn';
 import './StatusBar.css';
+import { useI18n } from '../i18n/context';
 
 const formatTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
@@ -21,6 +22,7 @@ export function StatusBar({ doc, connection, mode, onAuthenticate }: {
   /** v1 auth entry (#90): runs one agent-managed login method. */
   onAuthenticate?: (methodId: string) => void;
 }) {
+  const { t } = useI18n();
   const lifecycle = useForegroundLifecycle();
   const usage = doc.usage;
   const pct = usage.size > 0 ? Math.min(100, (usage.used / usage.size) * 100) : 0;
@@ -34,7 +36,7 @@ export function StatusBar({ doc, connection, mode, onAuthenticate }: {
               {lifecycle.phase === 'connecting' ? (
                 <>
                   <Spinner size="sm" />
-                  <span className="statusbar-faint">连接中…</span>
+                  <span className="statusbar-faint">{t('status.connecting')}</span>
                 </>
               ) : lifecycle.phase === 'error' ? (
                 <span className="truncate statusbar-error" title={lifecycle.error ?? undefined}>
@@ -42,14 +44,14 @@ export function StatusBar({ doc, connection, mode, onAuthenticate }: {
                 </span>
               ) : lifecycle.phase === 'auth-required' ? (
                 <span className="truncate statusbar-warn-text" title={lifecycle.error ?? undefined}>
-                  需要登录
+                  {t('conn.authRequired')}
                 </span>
               ) : lifecycle.phase === 'disconnected' ? (
-                <span className="statusbar-faint">未连接</span>
+                <span className="statusbar-faint">{t('conn.disconnected')}</span>
               ) : lifecycle.phase === 'switching-session' ? (
                 <>
                   <Spinner size="sm" />
-                  <span className="statusbar-faint">切换会话中…</span>
+                  <span className="statusbar-faint">{t('status.switching')}</span>
                 </>
               ) : lifecycle.phase === 'connected-degraded' ? (
                 // A failed switch (or similar non-fatal failure) leaves the
@@ -59,20 +61,21 @@ export function StatusBar({ doc, connection, mode, onAuthenticate }: {
                 </span>
               ) : (
                 <>
-                  <StatusDot variant="success" label="已连接" />
+                  <StatusDot variant="success" label={t('conn.connected')} />
                   <span className="truncate statusbar-agent" title={connection.url ?? undefined}>
                     {connection.agentName}
                   </span>
                   {connection.authedMethodId ? (
                     <span
                       className="statusbar-authed"
-                      title={`已通过「${
-                        connection.availableAuthMethods.find((m) => m.id === connection.authedMethodId)?.name ??
-                        connection.authedMethodId
-                      }」认证`}
+                      title={t('status.authenticatedVia', {
+                        name:
+                          connection.availableAuthMethods.find((m) => m.id === connection.authedMethodId)?.name ??
+                          connection.authedMethodId,
+                      })}
                     >
                       <BadgeCheck size={13} />
-                      已认证
+                      {t('status.authenticated')}
                     </span>
                   ) : (
                     connection.availableAuthMethods.length > 0 &&
@@ -85,11 +88,11 @@ export function StatusBar({ doc, connection, mode, onAuthenticate }: {
                         className="statusbar-auth-btn"
                         title={
                           connection.availableAuthMethods[0]!.description ??
-                          `通过「${connection.availableAuthMethods[0]!.name}」认证`
+                          t('status.authenticateVia', { name: connection.availableAuthMethods[0]!.name })
                         }
                         onClick={() => onAuthenticate(connection.availableAuthMethods[0]!.id)}
                       >
-                        <KeyRound size={12} /> 认证
+                        <KeyRound size={12} /> {t('status.authenticate')}
                       </button>
                     ) : (
                       connection.availableAuthMethods.map((method) => (
@@ -97,7 +100,7 @@ export function StatusBar({ doc, connection, mode, onAuthenticate }: {
                           key={method.id}
                           type="button"
                           className="statusbar-auth-btn"
-                          title={method.description ?? `通过「${method.name}」认证`}
+                          title={method.description ?? t('status.authenticateVia', { name: method.name })}
                           onClick={() => onAuthenticate(method.id)}
                         >
                           <KeyRound size={12} /> {method.name}
@@ -119,7 +122,7 @@ export function StatusBar({ doc, connection, mode, onAuthenticate }: {
             ) : lifecycle.docStatus === 'requires_action' ? (
               <>
                 <ShieldAlert size={13} className="statusbar-warn-icon" />
-                <span className="statusbar-warn-text">等待你的批准</span>
+                <span className="statusbar-warn-text">{t('status.awaitingApproval')}</span>
               </>
             ) : (
               <>

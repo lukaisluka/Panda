@@ -1,4 +1,5 @@
 import type { AcpContentBlock } from './protocol/types';
+import { t } from './i18n';
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const MAX_PROMPT_IMAGES = 4;
@@ -19,9 +20,9 @@ export function classifyAttachments(items: ImageAttachment[]): ClassifiedAttachm
     ...item,
     error:
       item.size > MAX_IMAGE_BYTES
-        ? '>5MB，不会发送'
+        ? t('attach.oversize')
         : index >= MAX_PROMPT_IMAGES
-          ? `最多 ${MAX_PROMPT_IMAGES} 张，不会发送`
+          ? t('attach.tooMany', { n: MAX_PROMPT_IMAGES })
           : null,
   }));
 }
@@ -51,12 +52,12 @@ function bytesToBase64(bytes: Uint8Array): string {
 /** Reads bytes without transcoding; MIME type and base64 payload go to ACP unchanged. */
 export async function fileToAttachment(file: File): Promise<ImageAttachment> {
   if (!file.type.startsWith('image/')) {
-    throw new Error(`不是图片文件: ${file.name}`);
+    throw new Error(t('attach.notImage', { name: file.name }));
   }
   const bytes = new Uint8Array(await file.arrayBuffer());
   return {
     id: globalThis.crypto.randomUUID(),
-    name: file.name || '粘贴的图片',
+    name: file.name || t('attach.pastedName'),
     mimeType: file.type,
     data: bytesToBase64(bytes),
     size: file.size,

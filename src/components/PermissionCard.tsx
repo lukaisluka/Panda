@@ -9,6 +9,7 @@ import type {
 } from '../protocol/types';
 import type { AttachedPermission } from '../projector/messageStream';
 import './PermissionCard.css';
+import { useI18n } from '../i18n/context';
 
 /** The option kinds Panda can actually answer; the wire stays open (the
  * parse layer is deliberately unvalidated), so anything else renders
@@ -23,11 +24,12 @@ export function PermissionCard({ request, onResolve }: {
   request: PermissionRequest;
   onResolve: (kind: PermissionOptionKind) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="permission-card">
       <div className="permission-head">
         <ShieldAlert size={14} />
-        Agent 请求批准
+        {t('perm.title')}
       </div>
       <p className="permission-title">{request.title}</p>
       <div className="permission-options">
@@ -36,7 +38,7 @@ export function PermissionCard({ request, onResolve }: {
             key={option.id}
             size="sm"
             variant={option.kind.startsWith('reject') ? 'secondary' : 'primary'}
-            label={ANSWERABLE_KINDS.has(option.kind) ? option.name : `${option.name}(未知选项类型)`}
+            label={ANSWERABLE_KINDS.has(option.kind) ? option.name : t('perm.unknownOption', { name: option.name })}
             isDisabled={!ANSWERABLE_KINDS.has(option.kind)}
             clickAction={() => onResolve(option.kind)}
           />
@@ -55,17 +57,18 @@ export function DeniedPermissionCard({ request, response }: {
   request: PermissionRequest;
   response: DeniedPermissionResponse;
 }) {
+  const { t } = useI18n();
   return (
     <div className="permission-card permission-card--denied">
       <div className="permission-head permission-head--denied">
         <ShieldBan size={14} />
-        已由策略拒绝
+        {t('perm.deniedByPolicy')}
       </div>
       <p className="permission-title permission-title--dim">{request.title}</p>
       <p className="permission-reason">
         {response.kind
-          ? `已代答 ${response.kind}（非用户决定）`
-          : 'agent 未提供拒绝选项，已代答 cancelled（非用户决定）'}
+          ? t('perm.autoAnswered', { kind: response.kind })
+          : t('perm.autoCancelled')}
       </p>
     </div>
   );
@@ -81,17 +84,18 @@ export function RememberedPermissionCard({ request, response }: {
   request: PermissionRequest;
   response: RememberedPermissionResponse;
 }) {
+  const { t } = useI18n();
   return (
     <div className="permission-card permission-card--remembered">
       <div className="permission-head permission-head--remembered">
         {response.kind === 'reject_always' ? <ShieldBan size={14} /> : <ShieldCheck size={14} />}
-        按本会话既往选择代答
+        {t('perm.byPriorChoice')}
       </div>
       <p className="permission-title permission-title--dim">{request.title}</p>
       <p className="permission-reason">
         {response.kind === 'reject_always'
-          ? '你本会话曾对同一操作选择 reject_always，已自动拒绝'
-          : '你本会话曾对同一操作选择 allow_always，已自动放行'}
+          ? t('perm.autoRejected')
+          : t('perm.autoAllowed')}
       </p>
     </div>
   );
@@ -108,17 +112,18 @@ export function ResolvedPermissionCard({ request, response }: {
   response: SelectedPermissionResponse;
 }) {
   const allowed = response.kind.startsWith('allow');
-  const KIND_LABEL: Record<string, string> = {
-    allow_once: '允许',
-    allow_always: '始终允许',
-    reject_once: '拒绝',
-    reject_always: '始终拒绝',
+  const { t } = useI18n();
+  const KIND_LABEL: Record<string, 'perm.allowOnce' | 'perm.allowAlways' | 'perm.rejectOnce' | 'perm.rejectAlways'> = {
+    allow_once: 'perm.allowOnce',
+    allow_always: 'perm.allowAlways',
+    reject_once: 'perm.rejectOnce',
+    reject_always: 'perm.rejectAlways',
   };
   return (
     <div className="permission-card permission-card--resolved">
       <div className="permission-head permission-head--resolved">
         {allowed ? <ShieldCheck size={14} /> : <ShieldBan size={14} />}
-        {allowed ? '已批准' : '已拒绝'} · {KIND_LABEL[response.kind] ?? String(response.kind)}
+        {allowed ? t('perm.approved') : t('perm.rejected')} · {KIND_LABEL[response.kind] ? t(KIND_LABEL[response.kind]!) : String(response.kind)}
       </div>
       <p className="permission-title permission-title--dim">{request.title}</p>
     </div>

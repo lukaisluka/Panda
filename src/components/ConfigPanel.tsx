@@ -1,5 +1,6 @@
 import type { AcpConfigChoice, AcpConfigOption } from '../protocol/types';
 import './ConfigPanel.css';
+import { useI18n } from '../i18n/context';
 
 /**
  * Regroups flattened choices back into `<optgroup>`-shaped buckets,
@@ -32,9 +33,10 @@ export function ConfigPanelCard({ options, disabled, onSetOption }: {
   disabled: boolean;
   onSetOption: (configId: string, value: string | boolean) => void;
 }) {
+  const { t } = useI18n();
   return (
-    <div className="config-panel-card" role="group" aria-label="会话设置">
-      <div className="config-panel-title">会话设置</div>
+    <div className="config-panel-card" role="group" aria-label={t('config.title')}>
+      <div className="config-panel-title">{t('config.title')}</div>
       {options.map((option) => (
         <div key={option.id} className="config-panel-row">
           <div className="config-panel-label">

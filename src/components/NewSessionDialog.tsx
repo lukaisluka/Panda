@@ -15,6 +15,8 @@ import type { AgentProfile } from '../profiles';
 import type { Workspace } from '../workspace';
 import type { LiveSessionFacade } from '../useLiveSession';
 import './NewSessionDialog.css';
+import { useI18n } from '../i18n/context';
+import { t } from '../i18n';
 
 /**
  * New-session picker (IA refactor phase 3): the entry that used to be
@@ -31,6 +33,7 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
   live: LiveSessionFacade;
   profiles: AgentProfile[];
 }) {
+  const { t } = useI18n();
   // Per-profile lifecycle phase, as flat arrays of primitives so the
   // selector's snapshot is shallow-stable (object values would re-create
   // every call and loop useSyncExternalStore). A connect in progress
@@ -65,11 +68,11 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
 
   return (
     <Dialog isOpen={isOpen} onOpenChange={onOpenChange} purpose="form" width={440}>
-      <DialogHeader title="新建会话" subtitle="选择要对话的 agent" onOpenChange={onOpenChange} />
+      <DialogHeader title={t('nsd.title')} subtitle={t('nsd.subtitle')} onOpenChange={onOpenChange} />
       <LayoutContent>
         <div className="nsd-list">
           {profiles.length === 0 && (
-            <p className="nsd-hint">还没有 Agent 配置 — 在设置页添加,或用下方自定义地址临时直连。</p>
+            <p className="nsd-hint">{t('nsd.empty')}</p>
           )}
           {profiles.map((profile, index) => {
             const phase = phases[index] ?? 'disconnected';
@@ -86,21 +89,21 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
                 }
                 title={
                   isLinkUp(phase)
-                    ? `在 ${profile.name} 中新建会话`
-                    : `连接 ${profile.name}(${profile.url})— 连接成功即进入新会话`
+                    ? t('nsd.newIn', { name: profile.name })
+                    : t('nsd.connect', { name: profile.name, url: profile.url })
                 }
               >
                 <span className="nsd-agent-status">
                   {phase === 'connecting' ? (
                     <Spinner size="sm" />
                   ) : isLinkUp(phase) ? (
-                    <StatusDot variant="success" label="已连接" />
+                    <StatusDot variant="success" label={t('conn.connected')} />
                   ) : phase === 'error' ? (
-                    <StatusDot variant="error" label="连接错误" />
+                    <StatusDot variant="error" label={t('conn.error')} />
                   ) : phase === 'auth-required' ? (
-                    <StatusDot variant="warning" label="需要登录" />
+                    <StatusDot variant="warning" label={t('conn.authRequired')} />
                   ) : (
-                    <StatusDot variant="neutral" label="未连接" />
+                    <StatusDot variant="neutral" label={t('conn.disconnected')} />
                   )}
                 </span>
                 <span className="nsd-agent-main">
@@ -114,10 +117,10 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
         </div>
 
         <div className="nsd-custom">
-          <span className="nsd-custom-title">自定义地址</span>
-          <p className="nsd-hint">临时直连,不保存为配置。</p>
+          <span className="nsd-custom-title">{t('nsd.custom')}</span>
+          <p className="nsd-hint">{t('nsd.customHint')}</p>
           <TextInput
-            label="端点地址"
+            label={t('nsd.endpoint')}
             value={customUrl}
             onChange={setCustomUrl}
             placeholder="ws://host:port/acp"
@@ -126,23 +129,23 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
           <div className="nsd-custom-fields">
             <div className="nsd-custom-kind">
               <Selector
-                label="工作区"
+                label={t('nsd.workspace')}
                 isLabelHidden
                 value={customWorkspace.kind}
                 onChange={(kind) =>
                   setCustomWorkspace(kind === 'none' ? { kind: 'none' } : { kind: 'local-directory', path: '' })
                 }
                 options={[
-                  { value: 'local-directory', label: '本机文件夹' },
-                  { value: 'none', label: '无工作区' },
+                  { value: 'local-directory', label: t('nsd.localDir') },
+                  { value: 'none', label: t('nsd.noWorkspace') },
                 ]}
-                labelTooltip="工作区:新会话在 agent 侧的工作上下文(ADR 0005)"
+                labelTooltip={t('nsd.workspaceTooltip')}
               />
             </div>
             {customWorkspace.kind === 'local-directory' && (
               <div className="nsd-custom-path">
                 <TextInput
-                  label="工作区路径"
+                  label={t('nsd.workspacePath')}
                   isLabelHidden
                   width="100%"
                   value={customWorkspace.path}
@@ -157,7 +160,7 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
             variant="secondary"
             size="sm"
             width="100%"
-            label="连接并开始"
+            label={t('nsd.connectStart')}
             icon={<PlugZap size={12} />}
             clickAction={() => {
               if (customErrors.url || customErrors.path) {
@@ -183,7 +186,7 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
 /** Field-level validation for the custom-address form (unit-tested). */
 export function customEndpointErrors(draft: { url: string; workspace: Workspace }): Partial<Record<'url' | 'path', string>> {
   const errors: Partial<Record<'url' | 'path', string>> = {};
-  if (!draft.url.trim()) errors.url = '端点地址不能为空';
-  if (draft.workspace.kind === 'local-directory' && !draft.workspace.path.trim()) errors.path = '本机文件夹需要路径';
+  if (!draft.url.trim()) errors.url = t('nsd.endpointRequired');
+  if (draft.workspace.kind === 'local-directory' && !draft.workspace.path.trim()) errors.path = t('nsd.pathRequired');
   return errors;
 }

@@ -9,6 +9,7 @@ import {
 import { Check, Copy } from 'lucide-react';
 import type { Components } from 'react-markdown';
 import { highlightCode, type TokenSpan } from '../highlight/highlighter';
+import { useI18n } from '../i18n/context';
 
 /**
  * Markdown fenced code block: shiki highlight with the same lazy language
@@ -17,6 +18,7 @@ import { highlightCode, type TokenSpan } from '../highlight/highlighter';
  * (an unclosed fence mid-chunk) never flashes empty.
  */
 export function CodeBlock({ lang, code }: { lang: string | null; code: string }) {
+  const { t } = useI18n();
   const [lines, setLines] = useState<TokenSpan[][] | null>(null);
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<number | null>(null);
@@ -61,7 +63,7 @@ export function CodeBlock({ lang, code }: { lang: string | null; code: string })
           type="button"
           onClick={() => void copy()}
           className="md-codeblock-copy"
-          aria-label="复制代码"
+          aria-label={t('code.copy')}
         >
           {copied ? <Check size={13} /> : <Copy size={13} />}
         </button>
