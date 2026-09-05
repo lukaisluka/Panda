@@ -25,7 +25,7 @@ import {
 } from './liveConnections';
 import type { AgentProfile } from './profiles';
 import { cwdToWorkspace, type Workspace } from './workspace';
-import type { AcpContentBlock, ElicitationResponse, PermissionOptionKind } from './protocol/types';
+import type { ForegroundSessionController } from './session-controller';
 
 /** Options for reconnecting the foreground slot. */
 export type ReconnectOptions = {
@@ -58,18 +58,11 @@ export function useLiveSession() {
     persistSessionsSnapshot(lists.map(([url, sessions]) => ({ url, sessions })));
   }, [sessionListsSnapshot]);
 
-  return useMemo(
+  return useMemo<LiveSessionFacade>(
     () => ({
-      /** 临时直连: a fresh anonymous slot that dies with its disconnect. */
       connectDirect: (url: string, workspace: Workspace) => connectLiveConnection(newDirectConnectionId(), url, workspace),
-      /** Connects an Agent 配置's slot with its stored url/workspace. */
       connectProfile: (profile: AgentProfile) =>
         connectLiveConnection(profile.id, profile.url, profile.workspace, { profileId: profile.id }),
-      /**
-       * Reconnects the foreground slot. Form-edited url/workspace override the
-       * slot's remembered values and — for a profile slot — are written back
-       * to the 配置 on a successful connect (配置编辑静默生效于下次连接).
-       */
       reconnectForeground: (opts?: ReconnectOptions) => {
         const state = usePanda.getState();
         const connectionId = state.activeConnectionId;
@@ -93,23 +86,50 @@ export function useLiveSession() {
       remove: removeLiveConnection,
       seedProfileSlots,
       foreground: foregroundConnection,
-      /** v1 auth recovery: run a login method on the foreground connection. */
       authenticate: (methodId: string) => authenticateLiveConnection(methodId),
-      /** v1 `logout` on the foreground connection (gated by auth.logout). */
       logout: () => logoutLiveConnection(),
       openSession: openLiveSession,
-      send: (content: AcpContentBlock[]) => sendLive(content),
-      resolvePermission: (toolCallId: string, kind: PermissionOptionKind) => resolveLivePermission(toolCallId, kind),
-      resolveElicitation: (id: string, response: ElicitationResponse) => resolveLiveElicitation(id, response),
-      openElicitationUrl: (id: string) => openLiveElicitationUrl(id),
+      send: (content) => sendLive(content),
+      resolvePermission: (toolCallId, kind) => resolveLivePermission(toolCallId, kind),
+      resolveElicitation: (id, response) => resolveLiveElicitation(id, response),
+      openElicitationUrl: (id) => openLiveElicitationUrl(id),
       cancel: cancelLiveTurn,
-      setMode: (modeId: string) => setLiveMode(modeId),
-      setConfigOption: (configId: string, value: string | boolean) => setLiveConfigOption(configId, value),
-      newSession: (cwd: string) => newLiveSession(cwd),
-      deleteSession: (connectionId: string, sessionId: string) => deleteLiveSession(connectionId, sessionId),
+      setMode: (modeId) => setLiveMode(modeId),
+      setConfigOption: (configId, value) => setLiveConfigOption(configId, value),
+      newSession: (cwd) => newLiveSession(cwd),
+      deleteSession: (connectionId, sessionId) => deleteLiveSession(connectionId, sessionId),
     }),
     [],
   );
 }
 
-export type LiveSessionFacade = ReturnType<typeof useLiveSession>;
+/**
+ * The live driver's full surface (#51): the foreground session controller
+ * (the seam it shares with the demo replay) plus the connection-level
+ * operations only a live connection can have. Handwritten so a renamed
+ * member fails here, at the hook, instead of at the call site.
+ */
+export interface LiveSessionFacade extends ForegroundSessionController {
+  /** 临时直连: a fresh anonymous slot that dies with its disconnect. */
+  connectDirect: (url: string, workspace: Workspace) => void;
+  /** Connects an Agent 配置's slot with its stored url/workspace. */
+  connectProfile: (profile: AgentProfile) => void;
+  /**
+   * Reconnects the foreground slot. Form-edited url/workspace override the
+   * slot's remembered values and — for a profile slot — are written back
+   * to the 配置 on a successful connect (配置编辑静默生效于下次连接).
+   */
+  reconnectForeground: (opts?: ReconnectOptions) => void;
+  disconnect: typeof disconnectLiveConnection;
+  remove: typeof removeLiveConnection;
+  seedProfileSlots: typeof seedProfileSlots;
+  foreground: typeof foregroundConnection;
+  /** v1 auth recovery: run a login method on the foreground connection. */
+  authenticate: (methodId: string) => void;
+  /** v1 `logout` on the foreground connection (gated by auth.logout). */
+  logout: () => void;
+  openSession: typeof openLiveSession;
+  cancel: typeof cancelLiveTurn;
+  newSession: (cwd: string) => void;
+  deleteSession: (connectionId: string, sessionId: string) => void;
+}

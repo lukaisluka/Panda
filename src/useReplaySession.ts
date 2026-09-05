@@ -3,6 +3,7 @@ import { DEMO_CONNECTION_ID, connectionStorePort, usePanda, type ConnectionStore
 import { ReplayDriver } from './replay/ReplayDriver';
 import { DEMO_CONFIG_OPTIONS, DEMO_MODES, followUpScenario, longScenario, mainScenario } from './replay/fixtures';
 import type { AcpConfigOption, AcpContentBlock, ElicitationResponse, PermissionOptionKind } from './protocol/types';
+import type { ForegroundSessionController } from './session-controller';
 
 /** `?demo=long` streams an 80-turn session instead — the virtualization calibration sample. */
 const demoScenario = () =>
@@ -21,7 +22,7 @@ const demoScenario = () =>
 /** The demo pseudo-connection slot; its document dies with the slot, not with mode switches. */
 const DEMO_SESSION_ID = 'demo';
 
-export function useReplaySession() {
+export function useReplaySession(): ForegroundSessionController {
   // Connection-scoped store port: handlers never touch global fields (#16).
   const portRef = useRef<ConnectionStorePort | null>(null);
   if (portRef.current === null) portRef.current = connectionStorePort(DEMO_CONNECTION_ID);
