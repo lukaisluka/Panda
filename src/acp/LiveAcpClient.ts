@@ -161,6 +161,28 @@ type PendingElicitation = {
 const CLIENT_INFO = { name: 'panda', title: 'Panda', version: '0.1.0' } as const;
 
 /**
+ * Control-plane requests (initialize, session lifecycle, config writes) must
+ * answer within this budget. `session/prompt` and `authenticate` are exempt
+ * by design — a turn runs as long as it runs (the cancel button bounds it)
+ * and an OAuth login waits on the user out-of-band while its url elicitation
+ * hangs. `session/close` carries its own 1500ms disconnect race.
+ */
+export const CONTROL_REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * The agent never answered a control-plane request. Distinct from a JSON-RPC
+ * rejection — a live agent saying "no" — in that no answer means the agent
+ * process is hung or dead, and every later request on this connection would
+ * hang the same way.
+ */
+export class ControlRequestTimeoutError extends Error {
+  constructor(method: string, timeoutMs: number) {
+    super(`${method} 超过 ${timeoutMs / 1000}s 未应答`);
+    this.name = 'ControlRequestTimeoutError';
+  }
+}
+
+/**
  * A new/load/set_config_option result's `configOptions` → UI model. Absent
  * (undefined/null) means "the agent advertises none" (null); present but
  * malformed is a protocol violation on the agent — warn loudly and treat as
@@ -381,21 +403,24 @@ export class LiveAcpClient {
           if (this.connection === connection) this.reportDisconnect('与服务器的连接已断开');
         });
 
-      const init: InitializeResponse = await connection.agent.request(methods.agent.initialize, {
-        protocolVersion: PROTOCOL_VERSION,
-        // Both elicitation modes are implemented — advertising per-mode keeps
-        // spec-compliant agents from sending what Panda cannot render. The
-        // same goes for boolean config options (select is always allowed),
-        // ID-addressed compaction updates (folded per compactionId), and the
-        // UNSTABLE plan_update/plan_removed kinds (items variant renders in
-        // the plan dock; file/markdown degrade to unsupported blocks).
-        clientCapabilities: {
-          elicitation: { form: {}, url: {} },
-          session: { configOptions: { boolean: {} }, compaction: {} },
-          plan: {},
-        },
-        clientInfo: CLIENT_INFO,
-      });
+      const init: InitializeResponse = await this.controlRequest(
+        'initialize',
+        connection.agent.request(methods.agent.initialize, {
+          protocolVersion: PROTOCOL_VERSION,
+          // Both elicitation modes are implemented — advertising per-mode keeps
+          // spec-compliant agents from sending what Panda cannot render. The
+          // same goes for boolean config options (select is always allowed),
+          // ID-addressed compaction updates (folded per compactionId), and the
+          // UNSTABLE plan_update/plan_removed kinds (items variant renders in
+          // the plan dock; file/markdown degrade to unsupported blocks).
+          clientCapabilities: {
+            elicitation: { form: {}, url: {} },
+            session: { configOptions: { boolean: {} }, compaction: {} },
+            plan: {},
+          },
+          clientInfo: CLIENT_INFO,
+        }),
+      );
       if (!isCurrent()) {
         discardSuperseded('initialize');
         return;
@@ -425,10 +450,13 @@ export class LiveAcpClient {
           // Transcript stays as-is: the agent context resumes without replay.
           this.sessionId = resume.sessionId;
           this.handlers.onSessionId(resume.sessionId, cwd);
-          await connection.agent.request(methods.agent.session.resume, {
-            sessionId: resume.sessionId,
-            cwd,
-          });
+          await this.controlRequest(
+            'session/resume',
+            connection.agent.request(methods.agent.session.resume, {
+              sessionId: resume.sessionId,
+              cwd,
+            }),
+          );
           if (!isCurrent()) {
             discardSuperseded('resume');
             return;
@@ -571,7 +599,7 @@ export class LiveAcpClient {
       return;
     }
     try {
-      await connection.agent.request(methods.agent.logout, {});
+      await this.controlRequest('logout', connection.agent.request(methods.agent.logout, {}));
       console.info('[panda/acp] logged out');
     } catch (err) {
       console.error('[panda/acp] logout failed', err);
@@ -640,7 +668,10 @@ export class LiveAcpClient {
       return;
     }
     try {
-      await connection.agent.request(methods.agent.session.delete, { sessionId });
+      await this.controlRequest(
+        'session/delete',
+        connection.agent.request(methods.agent.session.delete, { sessionId }),
+      );
       if (generation !== this.connectionGeneration) {
         // The delete succeeded on the old service but the era is gone — the
         // sidebar refresh of the new connection reflects reality; folding
@@ -680,7 +711,10 @@ export class LiveAcpClient {
     }
     const generation = this.connectionGeneration;
     try {
-      await connection.agent.request(methods.agent.session.setMode, { sessionId, modeId });
+      await this.controlRequest(
+        'session/set_mode',
+        connection.agent.request(methods.agent.session.setMode, { sessionId, modeId }),
+      );
       if (generation !== this.connectionGeneration) {
         // Superseded mid-request: the newer era owns the session state, a
         // late mode_changed would write into its document.
@@ -719,7 +753,10 @@ export class LiveAcpClient {
     // `type: "boolean"` (select writes carry no type).
     const params = typeof value === 'boolean' ? { sessionId, configId, value, type: 'boolean' } : { sessionId, configId, value };
     try {
-      const result = await connection.agent.request(methods.agent.session.setConfigOption, params);
+      const result = await this.controlRequest(
+        'session/set_config_option',
+        connection.agent.request(methods.agent.session.setConfigOption, params),
+      );
       if (generation !== this.connectionGeneration) {
         // Superseded mid-request: the newer era owns the session state, a
         // late config_options_update would write into its document.
@@ -935,6 +972,35 @@ export class LiveAcpClient {
   // -- internals ------------------------------------------------------------
 
   /**
+   * Bounds one control-plane request (see CONTROL_REQUEST_TIMEOUT_MS). A
+   * timeout means the agent did not answer at all, so the connection is torn
+   * down: the era bump inside reportDisconnect makes every in-flight flow of
+   * this connection settle as superseded, and the call sites' existing catch
+   * paths keep their meaning (a protocol rejection never passes through
+   * here). Promise.race keeps a handler on the raced request, so its late
+   * rejection during teardown can never surface as unhandled.
+   */
+  private async controlRequest<T>(method: string, request: Promise<T>): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        request,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new ControlRequestTimeoutError(method, CONTROL_REQUEST_TIMEOUT_MS)),
+            CONTROL_REQUEST_TIMEOUT_MS,
+          );
+        }),
+      ]);
+    } catch (err) {
+      if (err instanceof ControlRequestTimeoutError) this.reportDisconnect(`agent ${err.message}`);
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
    * One capability's effective verdict (issue #22): every capability
    * decision in this client — protocol method choice included — goes
    * through the single decision point, never the raw declaration.
@@ -948,10 +1014,13 @@ export class LiveAcpClient {
   }
 
   private async establishSession(connection: ClientConnection, cwd: string, generation: number): Promise<void> {
-    const session = await connection.agent.request(methods.agent.session.new, {
-      cwd,
-      mcpServers: [],
-    });
+    const session = await this.controlRequest(
+      'session/new',
+      connection.agent.request(methods.agent.session.new, {
+        cwd,
+        mcpServers: [],
+      }),
+    );
     if (generation !== this.connectionGeneration) {
       // Superseded mid-request (issue #19): the created session stays on the
       // agent (nothing to adopt here); the newer era establishes its own.
@@ -991,11 +1060,14 @@ export class LiveAcpClient {
       this.sessionId = sessionId;
       this.handlers.onSessionSwitchStage(sessionId, cwd, generation);
       this.handlers.onReplayStart();
-      const loaded = await connection.agent.request(methods.agent.session.load, {
-        sessionId,
-        cwd,
-        mcpServers: [],
-      });
+      const loaded = await this.controlRequest(
+        'session/load',
+        connection.agent.request(methods.agent.session.load, {
+          sessionId,
+          cwd,
+          mcpServers: [],
+        }),
+      );
       if (generation !== this.connectionGeneration) {
         console.warn(
           `[panda/acp] session/load for ${sessionId} completed after the connection was replaced — rolled back`,
@@ -1036,9 +1108,9 @@ export class LiveAcpClient {
       const entries: SessionSummary[] = [];
       let cursor: string | null = null;
       do {
-        const result: ListSessionsResponse = await connection.agent.request(
-          methods.agent.session.list,
-          { cursor },
+        const result: ListSessionsResponse = await this.controlRequest(
+          'session/list',
+          connection.agent.request(methods.agent.session.list, { cursor }),
         );
         // Defensive: a misbehaving service must not poison the session
         // list — drop entries without a sessionId, loudly.

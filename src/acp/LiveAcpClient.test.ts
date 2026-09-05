@@ -13,7 +13,7 @@ import {
   type RequestPermissionResponse,
   type Stream,
 } from '@agentclientprotocol/sdk';
-import { LiveAcpClient, type LiveClientHandlers } from './LiveAcpClient';
+import { CONTROL_REQUEST_TIMEOUT_MS, LiveAcpClient, type LiveClientHandlers } from './LiveAcpClient';
 import type { PermissionDecision } from '../policy';
 import { StreamTransport } from './transport/StreamTransport';
 import type { AcpTransport } from './transport/AcpTransport';
@@ -95,6 +95,8 @@ type FakeAgentOptions = {
   beforeLoad?: () => Promise<void>;
   /** Suspends every session/new until the returned promise resolves (supersede tests). */
   beforeNewSession?: () => Promise<void>;
+  /** Suspends initialize until the returned promise resolves (control-timeout tests). */
+  beforeInitialize?: () => Promise<void>;
   /** Reconnect target passed to LiveAcpClient.connect. */
   resume?: { sessionId: string };
   /** Sees every JSON-RPC message the fake agent sends (wire-level assertions). */
@@ -226,7 +228,8 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     };
   })();
   const serverConnection: AgentConnection = agent({ name: 'fake-agent' })
-    .onRequest(methods.agent.initialize, (ctx) => {
+    .onRequest(methods.agent.initialize, async (ctx) => {
+      await opts.beforeInitialize?.();
       agentState.initializeParams.push(ctx.params);
       return {
         protocolVersion: opts.protocolVersion ?? PROTOCOL_VERSION,
@@ -1438,6 +1441,75 @@ describe('LiveAcpClient', () => {
     ]);
     expect(h.statuses.at(-1)).toBe('idle');
     h.closeAll();
+  });
+
+  // -- control-plane request timeouts (issue #67) -----------------------------
+
+  /** A promise that never settles — the hung-agent stand-in. */
+  const never = () => new Promise<void>(() => {});
+
+  it('reports a timeout disconnect when initialize never answers (issue #67)', async () => {
+    vi.useFakeTimers();
+    try {
+      const harnessPromise = setup({ beforeInitialize: never });
+      await vi.advanceTimersByTimeAsync(0); // request reaches the wire, timer arms
+      await vi.advanceTimersByTimeAsync(CONTROL_REQUEST_TIMEOUT_MS + 100);
+      const h = await harnessPromise;
+      expect(h.disconnected).toEqual(['agent initialize 超过 30s 未应答']);
+      expect(h.connected).toEqual([]); // never got far enough to settle onConnected
+      h.closeAll();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports a timeout disconnect when session/new never answers (issue #67)', async () => {
+    vi.useFakeTimers();
+    try {
+      const harnessPromise = setup({ beforeNewSession: never });
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(CONTROL_REQUEST_TIMEOUT_MS + 100);
+      const h = await harnessPromise;
+      expect(h.disconnected).toEqual(['agent session/new 超过 30s 未应答']);
+      expect(h.connected).toEqual([]);
+      h.closeAll();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a long-running turn never trips the control timeout — prompt is exempt', async () => {
+    vi.useFakeTimers();
+    try {
+      const h = await setup({
+        onPrompt: () => new Promise<{ stopReason: 'end_turn' }>(() => {}),
+      });
+      void h.acpClient.send([{ type: 'text', text: 'take your time' }]);
+      await vi.advanceTimersByTimeAsync(CONTROL_REQUEST_TIMEOUT_MS * 3);
+      expect(h.disconnected).toEqual([]); // the turn is legitimately long; cancel() is the exit
+      expect(h.statuses).toContain('running');
+      h.closeAll();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('authenticate waiting on the user out-of-band never trips the control timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const h = await setup({
+        authGate: true,
+        authMethods: [{ id: 'm-1', name: 'Login' }],
+        onAuthenticate: never,
+      });
+      void h.acpClient.authenticate('m-1');
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(CONTROL_REQUEST_TIMEOUT_MS * 3);
+      expect(h.disconnected).toEqual([]); // OAuth pacing is the user's, not the clock's
+      h.closeAll();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
 // -- store integration (issue #16) ------------------------------------------
