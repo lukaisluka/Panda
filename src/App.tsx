@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Menu } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { MessageStream } from './components/MessageStream';
+import { AuthGate } from './components/AuthGate';
 import { StatusBar } from './components/StatusBar';
 import { Composer } from './components/Composer';
 import { PlanDock } from './components/PlanDock';
@@ -112,7 +113,18 @@ function MainScreen() {
           <span className="app-header-meta">{headerMeta}</span>
         </header>
         {doc.plan && doc.plan.length > 0 && <PlanDock entries={doc.plan} />}
-        <MessageStream onResolvePermission={resolvePermission} onResolveElicitation={resolveElicitation} onOpenElicitationUrl={openElicitationUrl} />
+        {liveActive && connection.status === 'auth_required' ? (
+          <AuthGate
+            methods={connection.authMethods ?? []}
+            message={connection.error}
+            elicitation={connection.authElicitation}
+            onAuthenticate={live.authenticate}
+            onResolveElicitation={resolveElicitation}
+            onOpenElicitationUrl={openElicitationUrl}
+          />
+        ) : (
+          <MessageStream onResolvePermission={resolvePermission} onResolveElicitation={resolveElicitation} onOpenElicitationUrl={openElicitationUrl} />
+        )}
         <StatusBar
           doc={doc}
           connection={connection}

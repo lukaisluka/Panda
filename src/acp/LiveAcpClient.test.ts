@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   PROTOCOL_VERSION,
+  RequestError,
   agent,
   methods,
+  type AuthMethod,
   type AgentConnection,
   type AgentRequestContext,
   type AnyMessage,
@@ -45,6 +47,10 @@ type Records = {
   sessionInfos: { sessionId: string; title?: string | null; updatedAt?: string | null }[];
   replays: number[];
   deletedSessions: string[];
+  /** onAuthChallenge emissions (v1 auth_required recovery). */
+  authChallenges: { methods: { id: string; name: string; description?: string }[]; message: string }[];
+  /** onAuthElicitation emissions (auth-phase request-scoped elicitations). */
+  authElicitations: (object | null)[];
   /**
    * Transactional switch records (issue #17), in emission order. `era` is the
    * client's connectionGeneration at transaction start (issue #19) — the
@@ -60,6 +66,8 @@ type Records = {
 type Harness = Records & {
   acpClient: LiveAcpClient;
   agentState: {
+    authenticated: boolean;
+    authenticateRequests: string[];
     cancelNotifications: { sessionId: string }[];
     permissionResponses: RequestPermissionResponse[];
     resumeRequests: string[];
@@ -92,6 +100,15 @@ type FakeAgentOptions = {
   onPrompt?: PromptHandler;
   /** Host policy injected into the client (issue #22); default = always ask. */
   clientPolicy?: (request: RequestPermissionRequest) => PermissionDecision;
+  /** authMethods advertised at initialize (v1 auth). */
+  authMethods?: AuthMethod[];
+  /** session/new rejects with auth_required until `authenticate` runs. */
+  authGate?: boolean;
+  /** Also advertise auth.logout support at initialize. */
+  authLogout?: boolean;
+  /** Runs inside the fake agent's authenticate handler (e.g. to send the
+   * request-scoped OAuth url elicitation before resolving). */
+  onAuthenticate?: (ctx: AgentRequestContext<{ methodId: string }>) => Promise<void>;
 };
 
 function streamPair(): { clientStream: Stream; serverStream: Stream } {
@@ -142,6 +159,8 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     sessionInfos: [],
     replays: [],
     deletedSessions: [],
+    authChallenges: [],
+    authElicitations: [],
     switchLog: [],
   };
   const handlers: LiveClientHandlers = {
@@ -152,6 +171,8 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     onConnected: (info) => records.connected.push(info),
     onSessionId: (id) => records.sessionIds.push(id),
     onDisconnected: (reason) => records.disconnected.push(reason),
+    onAuthChallenge: (challenge) => records.authChallenges.push(challenge),
+    onAuthElicitation: (request) => records.authElicitations.push(request),
     onCapabilities: (caps) => records.capabilities.push(caps),
     onSessions: (entries) => records.sessions.push(entries),
     onSessionInfo: (sessionId, info) => records.sessionInfos.push({ sessionId, ...info }),
@@ -163,6 +184,8 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
   };
 
   const agentState = {
+    authenticated: false,
+    authenticateRequests: [] as string[],
     cancelNotifications: [] as { sessionId: string }[],
     permissionResponses: [] as RequestPermissionResponse[],
     resumeRequests: [] as string[],
@@ -201,12 +224,24 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
         ...(caps.loadSession ? { loadSession: true } : {}),
         ...(caps.image ? { promptCapabilities: { image: true } } : {}),
         ...(Object.keys(sessionCaps).length > 0 ? { sessionCapabilities: sessionCaps } : {}),
+        ...(opts.authLogout ? { auth: { logout: {} } } : {}),
       },
+      ...(opts.authMethods ? { authMethods: opts.authMethods } : {}),
     }))
     .onRequest(methods.agent.session.new, async () => {
       await opts.beforeNewSession?.();
+      if (opts.authGate && !agentState.authenticated) {
+        throw RequestError.authRequired(undefined, 'run authenticate first');
+      }
       return { sessionId: 's-1' };
     })
+    .onRequest(methods.agent.authenticate, async (ctx) => {
+      agentState.authenticateRequests.push(ctx.params.methodId);
+      await opts.onAuthenticate?.(ctx);
+      agentState.authenticated = true;
+      return {};
+    })
+    .onRequest(methods.agent.logout, () => ({}))
     .onRequest(methods.agent.session.list, () => ({
       sessions: opts.listSessions ?? [],
     }))
@@ -1451,6 +1486,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
       onDisconnected: () => {},
+      onAuthChallenge: () => {},
+      onAuthElicitation: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1505,6 +1542,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
       onDisconnected: () => {},
+      onAuthChallenge: () => {},
+      onAuthElicitation: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1561,6 +1600,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
       onDisconnected: () => {},
+      onAuthChallenge: () => {},
+      onAuthElicitation: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1608,6 +1649,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
             ? { status: 'error', error: reason }
             : { status: 'disconnected', error: null, sessionId: null },
         ),
+      onAuthChallenge: () => {},
+      onAuthElicitation: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1660,6 +1703,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onConnected: (info) => connected.push(info.agentName),
       onSessionId: (id) => sessionIds.push(id),
       onDisconnected: (reason) => disconnected.push(reason),
+      onAuthChallenge: () => {},
+      onAuthElicitation: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1705,6 +1750,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onConnected: () => {},
       onSessionId: () => {},
       onDisconnected: (reason) => disconnected.push(reason),
+      onAuthChallenge: () => {},
+      onAuthElicitation: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1735,6 +1782,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onConnected: (info) => connected.push(info.agentName),
       onSessionId: () => {},
       onDisconnected: (reason) => disconnected.push(reason),
+      onAuthChallenge: () => {},
+      onAuthElicitation: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1916,6 +1965,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
             : { status: 'disconnected', error: null, sessionId: null },
         );
       },
+      onAuthChallenge: () => {},
+      onAuthElicitation: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1957,4 +2008,94 @@ describe('LiveAcpClient × connectionStorePort', () => {
     expect(disconnected).toEqual([]); // replacement ≠ disconnect
     acpClient.disconnect();
   });
+});
+
+describe('LiveAcpClient v1 authentication', () => {
+  const AUTH_METHODS: AuthMethod[] = [
+    { id: 'oauth-github', name: 'Sign in with GitHub', description: 'Opens the browser' },
+  ];
+
+  it('a gated session/new surfaces the auth methods instead of a dead error', async () => {
+    const h = await setup({ authMethods: AUTH_METHODS, authGate: true });
+    expect(h.authChallenges).toHaveLength(1);
+    expect(h.authChallenges[0]!.methods).toEqual([
+      { id: 'oauth-github', name: 'Sign in with GitHub', description: 'Opens the browser' },
+    ]);
+    // The wire stays open — no disconnect for a login gate.
+    expect(h.disconnected).toEqual([]);
+    h.closeAll();
+  });
+
+  it('terminal auth methods are filtered (a web client cannot run them)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const h = await setup({
+      authMethods: [
+        { id: 'oauth-github', name: 'Sign in with GitHub', description: 'Opens the browser' },
+        { id: 'tui', name: 'Terminal login', type: 'terminal' } as AuthMethod,
+      ],
+      authGate: true,
+    });
+    expect(h.authChallenges[0]!.methods.map((m) => m.id)).toEqual(['oauth-github']);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('terminal auth method'));
+    warnSpy.mockRestore();
+    h.closeAll();
+  });
+
+  it('auth_required with no usable methods reports a hard error', async () => {
+    const h = await setup({ authGate: true });
+    expect(h.authChallenges).toEqual([]);
+    expect(h.disconnected).toEqual(['agent 要求认证，但没有提供浏览器可用的登录方式']);
+    h.closeAll();
+  });
+
+  it('authenticate runs the method, then establishes the session and connects', async () => {
+    const h = await setup({ authMethods: AUTH_METHODS, authGate: true });
+    await h.acpClient.authenticate('oauth-github');
+    expect(h.agentState.authenticateRequests).toEqual(['oauth-github']);
+    expect(h.sessionIds).toContain('s-1');
+    expect(h.connected.map((c) => c.agentName)).toContain('Fake Agent');
+    // Success clears the (absent) auth card — nothing dangling.
+    expect(h.authElicitations).toEqual([null]);
+    h.closeAll();
+  });
+
+  it('a request-scoped url elicitation during auth lands on the auth card, then settles', async () => {
+    const h = await setup({
+      authMethods: AUTH_METHODS,
+      authGate: true,
+      onAuthenticate: async (ctx) => {
+        // Like a real OAuth flow: authenticate stays pending while the
+        // user handles the url elicitation.
+        await ctx.client.request(methods.client.elicitation.create, {
+          mode: 'url',
+          elicitationId: 'elicit-oauth',
+          url: 'https://example.test/oauth',
+          message: 'Authorize Panda',
+          requestId: 'req-1',
+        });
+      },
+    });
+    // authenticate hangs until the url elicitation settles — drive both.
+    const authenticating = h.acpClient.authenticate('oauth-github');
+    await waitFor(() => h.authElicitations.some((e) => e !== null));
+    expect(h.authElicitations.at(-1)).toMatchObject({ mode: 'url', url: 'https://example.test/oauth' });
+    // Decline from the auth card: settleElicitation clears the connection card.
+    h.acpClient.resolveElicitation('elicit-oauth', { outcome: 'declined' });
+    await waitFor(() => h.authElicitations.at(-1) === null);
+    await authenticating;
+    expect(h.agentState.authenticateRequests).toEqual(['oauth-github']);
+    expect(h.sessionIds).toContain('s-1');
+    h.closeAll();
+  });
+
+  it('authenticate with an unknown method id is refused loudly', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const h = await setup({ authMethods: AUTH_METHODS, authGate: true });
+    await h.acpClient.authenticate('nope');
+    expect(h.agentState.authenticateRequests).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('unknown method id'));
+    warnSpy.mockRestore();
+    h.closeAll();
+  });
+
 });

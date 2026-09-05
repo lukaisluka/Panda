@@ -64,6 +64,16 @@ export type AcpCost = { amount: number; currency: string };
 /** v1 PromptResponse.stopReason — why a prompt turn ended. */
 export type AcpStopReason = 'end_turn' | 'max_tokens' | 'max_turn_requests' | 'refusal' | 'cancelled';
 
+// -- auth (protocol/v1 authentication) ------------------------------------------
+
+/**
+ * v1 InitializeResponse.authMethods, whitelisted to the agent-managed
+ * variant (`authenticate`-able). The terminal variant is filtered in the
+ * client: a web client cannot reproduce the agent's TUI login and does not
+ * advertise the terminal auth capability, so a compliant agent never sends it.
+ */
+export type AcpAuthMethod = { id: string; name: string; description?: string };
+
 // -- elicitation (protocol/v1 elicitation, form mode) --------------------------
 
 /** A titled choice for enum-like fields. */
