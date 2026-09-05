@@ -13,8 +13,7 @@ import {
   useActiveSessions,
   usePanda,
 } from './store';
-import { useForegroundLifecycle } from './projector/hooks';
-import { modeStateFromConfigOptions } from './protocol/modes';
+import { useForegroundLifecycle, useSessionModes } from './projector/hooks';
 import { useHashRoute } from './routes';
 import { SettingsPage } from './components/SettingsPage';
 import { useReplaySession } from './useReplaySession';
@@ -58,11 +57,8 @@ function MainScreen() {
   // Status meaning comes from the lifecycle projection (#53) — busy,
   // composer gating, hint and the auth-gate branch are consumed, not derived.
   const lifecycle = useForegroundLifecycle();
-  // protocol/v1 session-config-options: a client with config options SHOULD
-  // use them exclusively and ignore `modes` — when the agent models its mode
-  // selector as a config option, the picker derives from it and writes go
-  // through set_config_option (one full-list response refreshes both views).
-  const derivedModes = modeStateFromConfigOptions(doc.configOptions);
+  // The mode picker's view + write channel (protocol policy, not App's to derive).
+  const sessionModes = useSessionModes(controller);
 
   const activeSession = liveActive
     ? sessions.find((entry) => entry.sessionId === connection.sessionId)
@@ -128,8 +124,8 @@ function MainScreen() {
           canAttachImages={!liveActive || effectiveCaps.image.available}
           canStop={lifecycle.canStop}
           onStop={live.cancel}
-          modes={derivedModes ?? doc.modes}
-          onSetMode={derivedModes ? (modeId: string) => controller.setConfigOption('mode', modeId) : controller.setMode}
+          modes={sessionModes.modes}
+          onSetMode={sessionModes.onSetMode}
           commands={doc.availableCommands}
           configOptions={doc.configOptions}
           onSetConfigOption={controller.setConfigOption}

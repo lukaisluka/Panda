@@ -510,6 +510,21 @@ export function seedProfileSlots(profiles: AgentProfile[], storage: SessionStora
 }
 
 /**
+ * Reconciles the store's connection topology with the profile list (#61):
+ * seed a disconnected slot (remembered sessions included) for every 配置 and
+ * drop slots whose 配置 was deleted — remembered sessions live per-endpoint
+ * in storage and survive both. The Sidebar mounts this on profile changes;
+ * the topology policy lives here, not in the component.
+ */
+export function reconcileProfileSlots(profiles: AgentProfile[]): void {
+  seedProfileSlots(profiles);
+  const known = new Set(profiles.map((profile) => profile.id));
+  for (const connectionId of Object.keys(usePanda.getState().connections)) {
+    if (!isDirectConnectionId(connectionId) && !known.has(connectionId)) removeLiveConnection(connectionId);
+  }
+}
+
+/**
  * Opens one session of any connection (sidebar click, issue #21's 双指针
  * 联动): the connection is foregrounded first, then — live connections
  * switch through the transactional session/load (a failure leaves the user
