@@ -98,6 +98,7 @@ Panda 的功能跟随 agent 在 `initialize` 时声明的能力走，**未声明
 | 切换/加载历史会话 | `loadSession` | 列表项禁用，悬停提示「agent 不支持历史回放」 |
 | 恢复会话（断线重连） | `sessionCapabilities.resume` | 降级为 `session/load` 重放；再不行则新会话 |
 | 删除会话 | `sessionCapabilities.delete` | 删除按钮不出现 |
+| 会话结束通知 | `sessionCapabilities.close` | 断开/切换/新建时**不发送** `session/close`——agent 侧会话状态自行保留 |
 | 收图片 | 无需声明（agent 发什么渲染什么） | — |
 | 发图片 | `promptCapabilities.image` | 图片入口保留但禁用，并说明 agent 未声明图片输入能力 |
 | 终端类工具内容 | 客户端须声明 terminal 能力 | **跳过并在控制台告警**——浏览器聊天客户端不执行 agent 机器上的命令，这是 v1 协议的语义 |

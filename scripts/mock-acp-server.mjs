@@ -94,7 +94,7 @@ function createMockAgent() {
       agentCapabilities: {
         loadSession: true,
         promptCapabilities: { image: true },
-        sessionCapabilities: { list: {}, resume: {}, delete: {} },
+        sessionCapabilities: { list: {}, resume: {}, delete: {}, close: {} },
       },
     }))
     .onRequest(methods.agent.session.new, (ctx) => {
@@ -148,6 +148,12 @@ function createMockAgent() {
       }
       saveSoon();
       console.log(`[mock] session/delete ${ctx.params.sessionId}`);
+      return {};
+    })
+    .onRequest(methods.agent.session.close, (ctx) => {
+      // 历史保留(session/load 重放要用),close 只告知会话结束——mock 没有
+      // 会话级运行态可清,日志留痕即可。
+      console.log(`[mock] session/close ${ctx.params.sessionId}`);
       return {};
     })
     .onNotification(methods.agent.session.cancel, (ctx) => {

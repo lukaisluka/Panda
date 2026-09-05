@@ -20,6 +20,8 @@ import type {
   AgentSideConnection,
   AuthenticateRequest,
   AuthenticateResponse,
+  CloseSessionRequest,
+  CloseSessionResponse,
   InitializeRequest,
   InitializeResponse,
   LoadSessionRequest,
@@ -629,6 +631,7 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
         agentCapabilities: {
           loadSession: true,
           promptCapabilities: { image: true },
+          sessionCapabilities: { close: {} },
         },
       };
     },
@@ -664,6 +667,19 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
       }
       deps.log(`loaded session ${record.sessionId} (thread ${record.threadId})`);
       return { modes: modeState(record), configOptions: configOptions(deps, record) };
+    },
+
+    async closeSession(params: CloseSessionRequest): Promise<CloseSessionResponse> {
+      const record = deps.store.get(params.sessionId);
+      if (!record) {
+        throw new Error(`Session not found: ${params.sessionId}`);
+      }
+      // 会话结束:释放这份连接里的运行态(计划草稿、命令许可记忆)。
+      // SQLite 历史刻意保留 —— session/load 重放这个会话不受影响。
+      sessionPlans.delete(record.sessionId);
+      allowedCommandTypes.delete(record.sessionId);
+      deps.log(`closed session ${record.sessionId} (runtime state released, history kept)`);
+      return {};
     },
 
     async prompt(params: PromptRequest): Promise<PromptResponse> {

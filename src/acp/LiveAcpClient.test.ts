@@ -100,6 +100,8 @@ type FakeAgentOptions = {
   beforeNewSession?: () => Promise<void>;
   /** Suspends initialize until the returned promise resolves (control-timeout tests). */
   beforeInitialize?: () => Promise<void>;
+  /** Session ids served by successive session/new calls (default ['s-1']). */
+  newSessionIds?: string[];
   /** Reconnect target passed to LiveAcpClient.connect. */
   resume?: { sessionId: string };
   /** Sees every JSON-RPC message the fake agent sends (wire-level assertions). */
@@ -256,7 +258,8 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
       if (opts.authGate && !agentState.authenticated) {
         throw RequestError.authRequired(undefined, 'run authenticate first');
       }
-      return { sessionId: 's-1' };
+      const ids = opts.newSessionIds ?? ['s-1'];
+      return { sessionId: ids[Math.min(agentState.newSessionParams.length - 1, ids.length - 1)]! };
     })
     .onRequest(methods.agent.authenticate, async (ctx) => {
       agentState.authenticateRequests.push(ctx.params.methodId);
@@ -1310,6 +1313,53 @@ describe('LiveAcpClient', () => {
     await waitFor(() => h.disconnected.includes(null));
     expect(h.agentState.closeRequests).toEqual([]);
     h.serverConnection.close();
+  });
+
+  it('newSession closes the previous session on the agent (#89)', async () => {
+    const h = await setup({ capabilities: { close: true }, newSessionIds: ['s-1', 's-2'] });
+    await h.acpClient.newSession('/tmp/project');
+    await waitFor(() => h.agentState.closeRequests.includes('s-1'));
+    expect(h.sessionIds.at(-1)).toBe('s-2');
+    // 只关被离开的会话,新会话不动
+    expect(h.agentState.closeRequests).toEqual(['s-1']);
+    h.closeAll();
+  });
+
+  it('a committed session/load switch closes the previous session (#89)', async () => {
+    const h = await setup({
+      capabilities: { close: true, loadSession: true },
+      newSessionIds: ['s-1'],
+      history: { 's-2': [{ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'hi' } }] },
+    });
+    await h.acpClient.loadSession('s-2', '/tmp/project');
+    await waitFor(() => h.agentState.closeRequests.includes('s-1'));
+    expect(h.agentState.closeRequests).toEqual(['s-1']);
+    h.closeAll();
+  });
+
+  it('a failed session/load switch does NOT close the previous session (#89)', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const h = await setup({
+      capabilities: { close: true, loadSession: true },
+      failLoadFor: ['s-missing'],
+    });
+    await h.acpClient.loadSession('s-missing', '/tmp/project');
+    // 回滚完成、旧会话保命:close 从未发出
+    expect(h.switchLog.at(-1)?.kind).toBe('rollback');
+    expect(h.agentState.closeRequests).toEqual([]);
+    errSpy.mockRestore();
+    h.closeAll();
+  });
+
+  it('switching without the close capability sends nothing', async () => {
+    const h = await setup({
+      capabilities: { loadSession: true },
+      history: { 's-2': [{ sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'hi' } }] },
+    });
+    await h.acpClient.loadSession('s-2', '/tmp/project');
+    expect(h.switchLog.at(-1)?.kind).toBe('commit');
+    expect(h.agentState.closeRequests).toEqual([]);
+    h.closeAll();
   });
 });
 

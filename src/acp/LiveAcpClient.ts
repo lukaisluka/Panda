@@ -1055,6 +1055,9 @@ export class LiveAcpClient {
   }
 
   private async establishSession(connection: ClientConnection, cwd: string, generation: number): Promise<void> {
+    // The session we are about to leave (null on a fresh connect — cleanup
+    // already cleared it). Kept for the post-adopt session/close (#89).
+    const prevSessionId = this.sessionId;
     const session = await this.controlRequest(
       'session/new',
       connection.agent.request(methods.agent.session.new, {
@@ -1072,6 +1075,12 @@ export class LiveAcpClient {
     this.handlers.onSessionId(session.sessionId, cwd);
     this.handlers.onSessionModes(toSessionModeState(session.modes));
     this.handlers.onSessionConfigOptions(sessionConfigOptions(session.configOptions, 'session/new'));
+    // Adopted: the previous session is settled business — tell the agent it
+    // may release its runtime state (its persisted history survives for a
+    // later session/load).
+    if (prevSessionId && prevSessionId !== session.sessionId) {
+      this.closeSessionQuietly(connection, prevSessionId);
+    }
   }
 
   /**
@@ -1124,6 +1133,11 @@ export class LiveAcpClient {
       this.handlers.onSessionModes(toSessionModeState(loaded.modes));
       this.handlers.onSessionConfigOptions(sessionConfigOptions(loaded.configOptions, 'session/load'));
       this.handlers.onSessionSwitchCommit(generation);
+      // Committed: the previous session is no longer routed here — close it
+      // on the agent. Only on the commit path: a rollback keeps using it.
+      if (prevSessionId !== null && prevSessionId !== sessionId) {
+        this.closeSessionQuietly(connection, prevSessionId);
+      }
     } catch (err) {
       if (generation !== this.connectionGeneration) {
         // The replacement's close() rejected the request — expected. Still
@@ -1142,6 +1156,20 @@ export class LiveAcpClient {
     } finally {
       this.sessionSwitch = false;
     }
+  }
+
+  /**
+   * Best-effort `session/close` for a session this connection just left
+   * (switch/new, #89). Fire-and-forget by design: the switch already
+   * committed, a slow or failed close must never block or undo it — the
+   * agent keeps its persisted history either way (session/load still works).
+   */
+  private closeSessionQuietly(connection: ClientConnection, sessionId: string): void {
+    if (!this.agentSupportsClose) return;
+    connection.agent
+      .request(methods.agent.session.close, { sessionId })
+      .then(() => console.info(`[panda/acp] session/close sent for superseded session ${sessionId}`))
+      .catch((err) => console.error(`[panda/acp] session/close for superseded session ${sessionId} failed`, err));
   }
 
   private async fetchSessionList(connection: ClientConnection, generation: number): Promise<void> {
