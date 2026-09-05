@@ -24,6 +24,7 @@ import { ElicitationUrlCard } from './ElicitationUrlCard';
 import { UnsupportedBlock } from './UnsupportedBlock';
 import { TurnNotice } from './TurnNotice';
 import { useMessageStreamItems } from '../projector/hooks';
+import { JANITOR_GAP_PX, scrollIntent, stickDecision, userScrollWindowEnd } from './scrollPolicy';
 import type { AttachedPermission, BlockFlatItem, FlatItem } from '../projector/messageStream';
 import './MessageStream.css';
 
@@ -37,30 +38,20 @@ const isToolItem = (item: FlatItem | undefined): item is BlockFlatItem =>
 /**
  * Scroll-following policy: stick to the bottom while the user is already
  * there; scrolling away detaches and floats the "jump to latest" button.
+ * The pin/unpin and rate-limit RULES live in scrollPolicy.ts (#65) as pure
+ * decision functions; this component owns their DOM execution.
  *
  * Long sessions are virtualized (react-virtuoso); the projection preserves
  * untouched item identities (ADR 0006) so memoized rows skip re-renders on
  * every streamed chunk.
  *
- * `pinned` semantics: unpinning requires USER intent (wheel/touch/key/
- * pointer input opens a short window in which scroll events may detach);
- * programmatic scrolls — our bottom-sticks and Virtuoso's size-recalc
- * position restores — can only ever re-pin. The bottom-stick itself goes
- * through Virtuoso's scrollToIndex (coordinated with its recalc machinery)
- * on every content change while pinned, rate-limited so burst replays
- * (session/load) don't choke it.
+ * `pinned` semantics: unpinning requires USER intent; programmatic scrolls
+ * — our bottom-sticks and Virtuoso's size-recalc position restores — can
+ * only ever re-pin. The bottom-stick itself goes through Virtuoso's
+ * scrollToIndex (coordinated with its recalc machinery) on every content
+ * change while pinned, rate-limited so burst replays (session/load) don't
+ * choke it.
  */
-/**
- * Bottom-stick rate limit: at burst frequency (session/load replays emit
- * hundreds of updates back-to-back) per-event scrolling chokes Virtuoso's
- * internal recalculation machinery and the view freezes behind the content.
- * Sticking at most every 40ms (leading + trailing) keeps normal streaming
- * effectively per-chunk while capping bursts at ~25Hz, which stays healthy.
- */
-const STICK_INTERVAL_MS = 40;
-
-const DETACH_DISTANCE_PX = 48;
-
 // Stable identities — changing component types in `components` remounts the
 // scroller and resets the scroll position.
 const StreamHeader = () => <div className="stream-header-space" />;
@@ -79,22 +70,21 @@ export function MessageStream({ onResolvePermission, onResolveElicitation, onOpe
 
   const items = useMessageStreamItems();
 
-  // Unpin is USER-intent only. Wheel/touch/key/pointer-down open a short
-  // "user is scrolling" window; scroll events inside that window may unpin,
-  // events outside it (our own sticks, Virtuoso's size-recalc position
-  // restores) can only re-pin. Without this, recalc restore steps read as
-  // upward scrolls and permanently detach the stream.
+  // Unpin is USER-intent only (the rule lives in scrollPolicy.ts, #65):
+  // wheel/touch/key/pointer-down open a short "user is scrolling" window;
+  // scroll events inside it may unpin, events outside it can only re-pin.
   const userScrollUntil = useRef(0);
   const markUserScroll = useCallback(() => {
-    userScrollUntil.current = performance.now() + 350;
+    userScrollUntil.current = userScrollWindowEnd(performance.now());
   }, []);
 
   const handleScroll = useCallback(() => {
     const el = scrollerRef.current;
     if (!el) return;
     const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (gap < DETACH_DISTANCE_PX) setPinned(true);
-    else if (performance.now() < userScrollUntil.current) setPinned(false);
+    const intent = scrollIntent(gap, performance.now(), userScrollUntil.current);
+    if (intent === 'pin') setPinned(true);
+    else if (intent === 'unpin') setPinned(false);
   }, []);
 
   // The Scroller component is created once per instance so it can capture
@@ -147,16 +137,17 @@ export function MessageStream({ onResolvePermission, onResolveElicitation, onOpe
   }, []);
 
   const stickToBottom = useCallback(() => {
-    const elapsed = performance.now() - lastStickAt.current;
-    if (elapsed >= STICK_INTERVAL_MS) {
+    const decision = stickDecision(performance.now(), lastStickAt.current, trailingTimer.current !== null);
+    if (decision.kind === 'now') {
       runStick();
       return;
     }
-    if (trailingTimer.current !== null) return;
-    trailingTimer.current = window.setTimeout(() => {
-      trailingTimer.current = null;
-      if (pinnedRef.current) runStick();
-    }, STICK_INTERVAL_MS - elapsed);
+    if (decision.kind === 'trailing') {
+      trailingTimer.current = window.setTimeout(() => {
+        trailingTimer.current = null;
+        if (pinnedRef.current) runStick();
+      }, decision.delayMs);
+    }
   }, [runStick]);
 
   useLayoutEffect(() => {
@@ -177,7 +168,7 @@ export function MessageStream({ onResolvePermission, onResolveElicitation, onOpe
     if (!pinned) return undefined;
     const id = window.setInterval(() => {
       const el = scrollerRef.current;
-      if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 8) runStick();
+      if (el && el.scrollHeight - el.scrollTop - el.clientHeight > JANITOR_GAP_PX) runStick();
     }, 300);
     return () => clearInterval(id);
   }, [pinned, runStick]);
