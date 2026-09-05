@@ -88,6 +88,15 @@
   color: var(--color-faint);
 }
 
+/* Line anchor in the file row (`base:line`, ZCode-style) — mono like the
+ * basename, but faint like the directory: an anchor, not content. */
+.tool-card-line {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--color-faint);
+}
+
 .tool-card-status {
   display: flex;
   align-items: center;

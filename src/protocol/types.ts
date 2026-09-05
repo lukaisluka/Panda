@@ -61,6 +61,26 @@ export type AcpPlanEntry = {
 
 export type AcpCost = { amount: number; currency: string };
 
+/** v1 PromptResponse.stopReason — why a prompt turn ended. */
+export type AcpStopReason = 'end_turn' | 'max_tokens' | 'max_turn_requests' | 'refusal' | 'cancelled';
+
+/**
+ * v1 CompactionStatus — the lifecycle of a context compaction. The wire type
+ * allows unknown strings (forward-compat); unknown ones render like
+ * in_progress until a terminal status lands.
+ */
+export type AcpCompactionStatus = 'in_progress' | 'completed' | 'failed' | 'cancelled' | (string & {});
+
+// -- auth (protocol/v1 authentication) ------------------------------------------
+
+/**
+ * v1 InitializeResponse.authMethods, whitelisted to the agent-managed
+ * variant (`authenticate`-able). The terminal variant is filtered in the
+ * client: a web client cannot reproduce the agent's TUI login and does not
+ * advertise the terminal auth capability, so a compliant agent never sends it.
+ */
+export type AcpAuthMethod = { id: string; name: string; description?: string };
+
 // -- elicitation (protocol/v1 elicitation, form mode) --------------------------
 
 /** A titled choice for enum-like fields. */
@@ -293,9 +313,14 @@ export type AcpSessionUpdate =
       /** Every field except toolCallId is optional; only changes are sent. */
       toolCallId: string;
       title?: string;
+      /** v1 ToolCallUpdate.kind — agents may classify the call only after
+       * creation; a late kind re-icons the existing card. */
+      kind?: AcpToolKind;
       status?: AcpToolCallStatus;
       content?: AcpToolCallContent[];
       locations?: AcpToolCallLocation[];
+      /** v1 ToolCallUpdate.rawInput — same merge rule as the create event. */
+      rawInput?: Record<string, unknown>;
       /** The tool's raw output object, when the agent reports it separately
        * from content (protocol v1 ToolCallUpdate.rawOutput). */
       rawOutput?: Record<string, unknown>;
@@ -311,6 +336,25 @@ export type AcpSessionUpdate =
    * plan panel; the raw notification is still recorded under its kind.
    */
   | { sessionUpdate: 'plan_removed'; raw?: SessionNotification }
+  /**
+   * A context compaction changed state (wire `compaction_update`). Wire patch
+   * semantics travel verbatim — omitted summary/error keeps the stored value,
+   * null clears, a value replaces — and the reducer folds per compactionId.
+   */
+  | {
+      sessionUpdate: 'compaction_update';
+      compactionId: string;
+      status: AcpCompactionStatus;
+      summary?: AcpContentBlock[] | null;
+      error?: string | null;
+      raw?: SessionNotification;
+    }
+  /**
+   * One content block appended to an in-progress compaction's summary (wire
+   * `compaction_summary_chunk`). No rendering of its own — it only feeds the
+   * stored summary the completed notice will be able to show.
+   */
+  | { sessionUpdate: 'compaction_summary_chunk'; compactionId: string; content: AcpContentBlock; raw?: SessionNotification }
   | {
       sessionUpdate: 'usage_update';
       used: number;
@@ -318,6 +362,14 @@ export type AcpSessionUpdate =
       cost?: AcpCost;
       raw?: SessionNotification;
     }
+  /**
+   * A prompt turn ended with a stop reason other than end_turn — the live
+   * driver translates the PromptResponse (not a wire notification, same
+   * pattern as modes_initialized). Rendered as a system row in the flow:
+   * refusal / max_tokens / max_turn_requests / cancelled must be visible,
+   * not silent.
+   */
+  | { sessionUpdate: 'turn_notice'; stopReason: Exclude<AcpStopReason, 'end_turn'> }
   /**
    * The session's mode state arrived (session/new or session/load result).
    * Not a wire notification — the drivers translate the RPC result into this
@@ -395,19 +447,14 @@ export type AcpSessionUpdate =
  * Session-level kinds mapped to `session_state` events (latest-wins recording,
  * no in-flow rendering). Single source of truth: adding a kind here updates
  * the wire mapping and the `latestNotifications` key type together.
- * `plan` / `plan_removed` / `usage_update` / `mode` are session-level too
- * (reducer records their latest alongside their dedicated events) but keep
- * dedicated wire cases. `available_commands` and `config_options` went
- * further — dedicated wire cases *and* dedicated document fields
- * (`availableCommands` / `configOptions`), so neither is part of this
- * fallback channel.
+ * `plan` / `plan_removed` / `plan_update` / `usage_update` / `mode` /
+ * `compaction_update` / `compaction_summary_chunk` are session-level too but
+ * own dedicated wire cases (compaction even owns a document field);
+ * `available_commands` and `config_options` went further — dedicated wire
+ * cases *and* dedicated document fields (`availableCommands` /
+ * `configOptions`), so neither is part of this fallback channel.
  */
-export const SESSION_STATE_KINDS = [
-  'plan_update',
-  'session_info_update',
-  'compaction_update',
-  'compaction_summary_chunk',
-] as const;
+export const SESSION_STATE_KINDS = ['session_info_update'] as const;
 
 /** All kinds that own a `latestNotifications` slot. */
 export type AcpSessionLevelKind =
@@ -467,6 +514,13 @@ export type Block =
       rawNotifications?: SessionNotification[];
     }
   | { kind: 'tool_call'; call: ToolCallState }
+  | { kind: 'turn_notice'; stopReason: Exclude<AcpStopReason, 'end_turn'> }
+  /**
+   * A compaction reached a terminal state — a system row in the flow, so the
+   * moment the context shrank stays visible (like turn_notice). Planted once
+   * per compactionId by the reducer's status transition, never re-fired.
+   */
+  | { kind: 'compaction_notice'; compactionId: string; outcome: 'completed' | 'failed'; error: string | null }
   | { kind: 'unsupported'; notification: SessionNotification };
 
 export type Turn = { id: string; blocks: Block[] };
@@ -475,6 +529,14 @@ export type Usage = {
   used: number;
   size: number;
   cost: AcpCost | null;
+};
+
+/** The folded state of one context compaction (patched per update). */
+export type CompactionState = {
+  status: AcpCompactionStatus;
+  /** Retained summary content — appended by summary chunks, replaced by updates. */
+  summary: AcpContentBlock[] | null;
+  error: string | null;
 };
 
 export type SessionDocument = {
@@ -487,6 +549,13 @@ export type SessionDocument = {
    * corner — plans are working state, not conversation flow.
    */
   plan: AcpPlanEntry[] | null;
+  /**
+   * Context compactions by their agent-owned compactionId (wire
+   * `compaction_update` patch + `compaction_summary_chunk` appends). The
+   * in_progress ones render as a live trailing row; terminal transitions
+   * plant a compaction_notice block in the flow.
+   */
+  compactions: Record<string, CompactionState>;
   /**
    * Session modes from the agent (session/new · session/load results, then
    * mode_changed updates). null until a result arrives — and permanently

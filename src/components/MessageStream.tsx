@@ -10,7 +10,8 @@ import {
   type HTMLAttributes,
 } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import { ArrowDown } from 'lucide-react';
+import { Archive, ArrowDown, TriangleAlert } from 'lucide-react';
+import { Spinner } from '@astryxdesign/core/Spinner';
 import type { Block, ElicitationResponse, PermissionOptionKind } from '../protocol/types';
 import { AgentMessage } from './AgentMessage';
 import { ThoughtBlock } from './ThoughtBlock';
@@ -21,6 +22,7 @@ import { AttachedPermissionCard } from './PermissionCard';
 import { ElicitationCard } from './ElicitationCard';
 import { ElicitationUrlCard } from './ElicitationUrlCard';
 import { UnsupportedBlock } from './UnsupportedBlock';
+import { TurnNotice } from './TurnNotice';
 import { useMessageStreamItems } from '../projector/hooks';
 import type { AttachedPermission, BlockFlatItem, FlatItem } from '../projector/messageStream';
 import './MessageStream.css';
@@ -222,6 +224,16 @@ export function MessageStream({ onResolvePermission, onResolveElicitation, onOpe
               </ContentColumn>
             );
           }
+          if (item.kind === 'compaction') {
+            return (
+              <ContentColumn>
+                <div className="turn-notice" role="status">
+                  <Spinner size="sm" className="turn-notice-icon" />
+                  <span>正在压缩上下文…</span>
+                </div>
+              </ContentColumn>
+            );
+          }
           return (
             <ContentColumn>
               <BlockView
@@ -284,6 +296,24 @@ const BlockView = memo(function BlockView({ block, streaming, permission, onReso
           // while a pending permission is attached.
           onResolvePermission={(kind) => onResolvePermission(permission?.request.toolCallId ?? '', kind)}
         />
+      );
+    case 'turn_notice':
+      return <TurnNotice block={block} />;
+    case 'compaction_notice':
+      return (
+        <div className="turn-notice" role="status">
+          {block.outcome === 'completed' ? (
+            <>
+              <Archive size={12} className="turn-notice-icon" />
+              <span>上下文已压缩</span>
+            </>
+          ) : (
+            <>
+              <TriangleAlert size={12} className="turn-notice-icon" />
+              <span>{block.error ? `上下文压缩失败：${block.error}` : '上下文压缩失败'}</span>
+            </>
+          )}
+        </div>
       );
     case 'unsupported':
       return <UnsupportedBlock block={block} />;

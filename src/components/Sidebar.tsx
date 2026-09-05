@@ -208,6 +208,9 @@ function saveDirectAsProfile(url: string, cwd: string | null): void {
   if (status === 'error') {
     return <StatusDot variant="error" label="连接错误" />;
   }
+  if (status === 'auth_required') {
+    return <StatusDot variant="warning" label="需要登录" />;
+  }
   if (status === 'connected') {
     return running
       ? <StatusDot variant="accent" isPulsing label="运行中" />

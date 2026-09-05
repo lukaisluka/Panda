@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   PROTOCOL_VERSION,
+  RequestError,
   agent,
   methods,
+  type AuthMethod,
   type AgentConnection,
   type AgentRequestContext,
   type AnyMessage,
@@ -30,7 +32,9 @@ import type { AcpSessionUpdate, SessionStatus } from '../protocol/types';
  */
 
 type PromptCtx = AgentRequestContext<PromptRequest>;
-type PromptHandler = (ctx: PromptCtx) => Promise<{ stopReason: 'end_turn' | 'cancelled' }>;
+type PromptHandler = (
+  ctx: PromptCtx,
+) => Promise<{ stopReason: 'end_turn' | 'cancelled' | 'refusal' | 'max_tokens' | 'max_turn_requests' }>;
 
 type Records = {
   updates: AcpSessionUpdate[];
@@ -43,6 +47,10 @@ type Records = {
   sessionInfos: { sessionId: string; title?: string | null; updatedAt?: string | null }[];
   replays: number[];
   deletedSessions: string[];
+  /** onAuthChallenge emissions (v1 auth_required recovery). */
+  authChallenges: { methods: { id: string; name: string; description?: string }[]; message: string }[];
+  /** onAuthElicitation emissions (auth-phase request-scoped elicitations). */
+  authElicitations: (object | null)[];
   /**
    * Transactional switch records (issue #17), in emission order. `era` is the
    * client's connectionGeneration at transaction start (issue #19) — the
@@ -58,6 +66,10 @@ type Records = {
 type Harness = Records & {
   acpClient: LiveAcpClient;
   agentState: {
+    authenticated: boolean;
+    authenticateRequests: string[];
+    initializeParams: { clientCapabilities?: Record<string, unknown> }[];
+    closeRequests: string[];
     cancelNotifications: { sessionId: string }[];
     permissionResponses: RequestPermissionResponse[];
     resumeRequests: string[];
@@ -72,7 +84,7 @@ type Harness = Records & {
 type FakeAgentOptions = {
   protocolVersion?: number;
   /** Capability gates advertised at initialize. */
-  capabilities?: { image?: boolean; loadSession?: boolean; list?: boolean; resume?: boolean; delete?: boolean };
+  capabilities?: { image?: boolean; loadSession?: boolean; list?: boolean; resume?: boolean; delete?: boolean; close?: boolean };
   /** Entries returned by session/list. */
   listSessions?: { sessionId: string; cwd: string; title?: string | null; updatedAt?: string | null }[];
   /** Per-session replay history served by session/load. */
@@ -90,6 +102,15 @@ type FakeAgentOptions = {
   onPrompt?: PromptHandler;
   /** Host policy injected into the client (issue #22); default = always ask. */
   clientPolicy?: (request: RequestPermissionRequest) => PermissionDecision;
+  /** authMethods advertised at initialize (v1 auth). */
+  authMethods?: AuthMethod[];
+  /** session/new rejects with auth_required until `authenticate` runs. */
+  authGate?: boolean;
+  /** Also advertise auth.logout support at initialize. */
+  authLogout?: boolean;
+  /** Runs inside the fake agent's authenticate handler (e.g. to send the
+   * request-scoped OAuth url elicitation before resolving). */
+  onAuthenticate?: (ctx: AgentRequestContext<{ methodId: string }>) => Promise<void>;
 };
 
 function streamPair(): { clientStream: Stream; serverStream: Stream } {
@@ -140,6 +161,8 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     sessionInfos: [],
     replays: [],
     deletedSessions: [],
+    authChallenges: [],
+    authElicitations: [],
     switchLog: [],
   };
   const handlers: LiveClientHandlers = {
@@ -150,6 +173,8 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     onConnected: (info) => records.connected.push(info),
     onSessionId: (id) => records.sessionIds.push(id),
     onDisconnected: (reason) => records.disconnected.push(reason),
+    onAuthChallenge: (challenge) => records.authChallenges.push(challenge),
+    onAuthElicitation: (request) => records.authElicitations.push(request),
     onCapabilities: (caps) => records.capabilities.push(caps),
     onSessions: (entries) => records.sessions.push(entries),
     onSessionInfo: (sessionId, info) => records.sessionInfos.push({ sessionId, ...info }),
@@ -161,6 +186,10 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
   };
 
   const agentState = {
+    authenticated: false,
+    authenticateRequests: [] as string[],
+    initializeParams: [] as { clientCapabilities?: Record<string, unknown> }[],
+    closeRequests: [] as string[],
     cancelNotifications: [] as { sessionId: string }[],
     permissionResponses: [] as RequestPermissionResponse[],
     resumeRequests: [] as string[],
@@ -172,6 +201,7 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     ...(caps.list ? { list: {} } : {}),
     ...(caps.resume ? { resume: {} } : {}),
     ...(caps.delete ? { delete: {} } : {}),
+    ...(caps.close ? { close: {} } : {}),
   };
 
   const { clientStream, serverStream: rawServerStream } = streamPair();
@@ -192,19 +222,34 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     };
   })();
   const serverConnection: AgentConnection = agent({ name: 'fake-agent' })
-    .onRequest(methods.agent.initialize, () => ({
-      protocolVersion: opts.protocolVersion ?? PROTOCOL_VERSION,
-      agentInfo: { name: 'fake-agent', title: 'Fake Agent', version: '0.0.0' },
-      agentCapabilities: {
-        ...(caps.loadSession ? { loadSession: true } : {}),
-        ...(caps.image ? { promptCapabilities: { image: true } } : {}),
-        ...(Object.keys(sessionCaps).length > 0 ? { sessionCapabilities: sessionCaps } : {}),
-      },
-    }))
+    .onRequest(methods.agent.initialize, (ctx) => {
+      agentState.initializeParams.push(ctx.params);
+      return {
+        protocolVersion: opts.protocolVersion ?? PROTOCOL_VERSION,
+        agentInfo: { name: 'fake-agent', title: 'Fake Agent', version: '0.0.0' },
+        agentCapabilities: {
+          ...(caps.loadSession ? { loadSession: true } : {}),
+          ...(caps.image ? { promptCapabilities: { image: true } } : {}),
+          ...(Object.keys(sessionCaps).length > 0 ? { sessionCapabilities: sessionCaps } : {}),
+          ...(opts.authLogout ? { auth: { logout: {} } } : {}),
+        },
+        ...(opts.authMethods ? { authMethods: opts.authMethods } : {}),
+      };
+    })
     .onRequest(methods.agent.session.new, async () => {
       await opts.beforeNewSession?.();
+      if (opts.authGate && !agentState.authenticated) {
+        throw RequestError.authRequired(undefined, 'run authenticate first');
+      }
       return { sessionId: 's-1' };
     })
+    .onRequest(methods.agent.authenticate, async (ctx) => {
+      agentState.authenticateRequests.push(ctx.params.methodId);
+      await opts.onAuthenticate?.(ctx);
+      agentState.authenticated = true;
+      return {};
+    })
+    .onRequest(methods.agent.logout, () => ({}))
     .onRequest(methods.agent.session.list, () => ({
       sessions: opts.listSessions ?? [],
     }))
@@ -228,6 +273,10 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     })
     .onRequest(methods.agent.session.delete, (ctx) => {
       agentState.deleteRequests.push(ctx.params.sessionId);
+      return {};
+    })
+    .onRequest(methods.agent.session.close, (ctx) => {
+      agentState.closeRequests.push(ctx.params.sessionId);
       return {};
     })
     .onNotification(methods.agent.session.cancel, (ctx) => {
@@ -337,6 +386,24 @@ describe('LiveAcpClient', () => {
     await h.acpClient.send([image]);
 
     expect(prompts).toEqual([[image]]);
+    h.closeAll();
+  });
+
+  it('emits a turn_notice for every stop reason except end_turn', async () => {
+    for (const stopReason of ['cancelled', 'refusal', 'max_tokens', 'max_turn_requests'] as const) {
+      const h = await setup({
+        onPrompt: async () => ({ stopReason }),
+      });
+      await h.acpClient.send([{ type: 'text', text: 'hi' }]);
+      expect(h.updates).toContainEqual({ sessionUpdate: 'turn_notice', stopReason });
+      h.closeAll();
+    }
+  });
+
+  it('end_turn emits no turn_notice (the unremarkable ending)', async () => {
+    const h = await setup({ onPrompt: async () => ({ stopReason: 'end_turn' }) });
+    await h.acpClient.send([{ type: 'text', text: 'hi' }]);
+    expect(h.updates.filter((u) => u.sessionUpdate === 'turn_notice')).toEqual([]);
     h.closeAll();
   });
 
@@ -995,6 +1062,15 @@ describe('LiveAcpClient', () => {
     h.closeAll();
   });
 
+  it('initialize advertises plan updates and ID-addressed compaction support', async () => {
+    const h = await setup({});
+    expect(h.agentState.initializeParams[0]?.clientCapabilities).toMatchObject({
+      plan: {},
+      session: { compaction: {} },
+    });
+    h.closeAll();
+  });
+
   it('reconnect-resume keeps the transcript (no replay) when the agent supports it', async () => {
     const h = await setup({
       capabilities: { resume: true },
@@ -1193,6 +1269,22 @@ describe('LiveAcpClient', () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('session/delete'));
     warnSpy.mockRestore();
     h.closeAll();
+  });
+
+  it('disconnect sends session/close when the agent advertises it, then reports', async () => {
+    const h = await setup({ capabilities: { close: true } });
+    h.acpClient.disconnect();
+    await waitFor(() => h.disconnected.includes(null));
+    expect(h.agentState.closeRequests).toEqual(['s-1']);
+    h.serverConnection.close();
+  });
+
+  it('disconnect without the capability (or a session) skips session/close', async () => {
+    const h = await setup();
+    h.acpClient.disconnect();
+    await waitFor(() => h.disconnected.includes(null));
+    expect(h.agentState.closeRequests).toEqual([]);
+    h.serverConnection.close();
   });
 });
 
@@ -1431,6 +1523,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
       onDisconnected: () => {},
+      onAuthChallenge: () => {},
+      onAuthElicitation: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1485,6 +1579,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
       onDisconnected: () => {},
+      onAuthChallenge: () => {},
+      onAuthElicitation: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1541,6 +1637,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
       onDisconnected: () => {},
+      onAuthChallenge: () => {},
+      onAuthElicitation: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1588,6 +1686,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
             ? { status: 'error', error: reason }
             : { status: 'disconnected', error: null, sessionId: null },
         ),
+      onAuthChallenge: () => {},
+      onAuthElicitation: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1640,6 +1740,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onConnected: (info) => connected.push(info.agentName),
       onSessionId: (id) => sessionIds.push(id),
       onDisconnected: (reason) => disconnected.push(reason),
+      onAuthChallenge: () => {},
+      onAuthElicitation: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1685,6 +1787,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onConnected: () => {},
       onSessionId: () => {},
       onDisconnected: (reason) => disconnected.push(reason),
+      onAuthChallenge: () => {},
+      onAuthElicitation: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1715,6 +1819,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onConnected: (info) => connected.push(info.agentName),
       onSessionId: () => {},
       onDisconnected: (reason) => disconnected.push(reason),
+      onAuthChallenge: () => {},
+      onAuthElicitation: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1896,6 +2002,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
             : { status: 'disconnected', error: null, sessionId: null },
         );
       },
+      onAuthChallenge: () => {},
+      onAuthElicitation: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1937,4 +2045,94 @@ describe('LiveAcpClient × connectionStorePort', () => {
     expect(disconnected).toEqual([]); // replacement ≠ disconnect
     acpClient.disconnect();
   });
+});
+
+describe('LiveAcpClient v1 authentication', () => {
+  const AUTH_METHODS: AuthMethod[] = [
+    { id: 'oauth-github', name: 'Sign in with GitHub', description: 'Opens the browser' },
+  ];
+
+  it('a gated session/new surfaces the auth methods instead of a dead error', async () => {
+    const h = await setup({ authMethods: AUTH_METHODS, authGate: true });
+    expect(h.authChallenges).toHaveLength(1);
+    expect(h.authChallenges[0]!.methods).toEqual([
+      { id: 'oauth-github', name: 'Sign in with GitHub', description: 'Opens the browser' },
+    ]);
+    // The wire stays open — no disconnect for a login gate.
+    expect(h.disconnected).toEqual([]);
+    h.closeAll();
+  });
+
+  it('terminal auth methods are filtered (a web client cannot run them)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const h = await setup({
+      authMethods: [
+        { id: 'oauth-github', name: 'Sign in with GitHub', description: 'Opens the browser' },
+        { id: 'tui', name: 'Terminal login', type: 'terminal' } as AuthMethod,
+      ],
+      authGate: true,
+    });
+    expect(h.authChallenges[0]!.methods.map((m) => m.id)).toEqual(['oauth-github']);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('terminal auth method'));
+    warnSpy.mockRestore();
+    h.closeAll();
+  });
+
+  it('auth_required with no usable methods reports a hard error', async () => {
+    const h = await setup({ authGate: true });
+    expect(h.authChallenges).toEqual([]);
+    expect(h.disconnected).toEqual(['agent 要求认证，但没有提供浏览器可用的登录方式']);
+    h.closeAll();
+  });
+
+  it('authenticate runs the method, then establishes the session and connects', async () => {
+    const h = await setup({ authMethods: AUTH_METHODS, authGate: true });
+    await h.acpClient.authenticate('oauth-github');
+    expect(h.agentState.authenticateRequests).toEqual(['oauth-github']);
+    expect(h.sessionIds).toContain('s-1');
+    expect(h.connected.map((c) => c.agentName)).toContain('Fake Agent');
+    // Success clears the (absent) auth card — nothing dangling.
+    expect(h.authElicitations).toEqual([null]);
+    h.closeAll();
+  });
+
+  it('a request-scoped url elicitation during auth lands on the auth card, then settles', async () => {
+    const h = await setup({
+      authMethods: AUTH_METHODS,
+      authGate: true,
+      onAuthenticate: async (ctx) => {
+        // Like a real OAuth flow: authenticate stays pending while the
+        // user handles the url elicitation.
+        await ctx.client.request(methods.client.elicitation.create, {
+          mode: 'url',
+          elicitationId: 'elicit-oauth',
+          url: 'https://example.test/oauth',
+          message: 'Authorize Panda',
+          requestId: 'req-1',
+        });
+      },
+    });
+    // authenticate hangs until the url elicitation settles — drive both.
+    const authenticating = h.acpClient.authenticate('oauth-github');
+    await waitFor(() => h.authElicitations.some((e) => e !== null));
+    expect(h.authElicitations.at(-1)).toMatchObject({ mode: 'url', url: 'https://example.test/oauth' });
+    // Decline from the auth card: settleElicitation clears the connection card.
+    h.acpClient.resolveElicitation('elicit-oauth', { outcome: 'declined' });
+    await waitFor(() => h.authElicitations.at(-1) === null);
+    await authenticating;
+    expect(h.agentState.authenticateRequests).toEqual(['oauth-github']);
+    expect(h.sessionIds).toContain('s-1');
+    h.closeAll();
+  });
+
+  it('authenticate with an unknown method id is refused loudly', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const h = await setup({ authMethods: AUTH_METHODS, authGate: true });
+    await h.acpClient.authenticate('nope');
+    expect(h.agentState.authenticateRequests).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('unknown method id'));
+    warnSpy.mockRestore();
+    h.closeAll();
+  });
+
 });

@@ -44,3 +44,21 @@
 .stream-jump:hover {
   color: var(--color-fg);
 }
+
+/* System row for an abnormally ended turn (stopReason ≠ end_turn). */
+
+.turn-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 10px 0 2px;
+  font-size: 12px;
+  color: var(--color-muted);
+  user-select: none;
+}
+
+.turn-notice-icon {
+  flex-shrink: 0;
+  color: var(--color-faint);
+}

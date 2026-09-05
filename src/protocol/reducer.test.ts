@@ -253,13 +253,13 @@ describe('reducer session-level latest notifications', () => {
   it('keeps only the newest notification per session-level kind', () => {
     const r1 = rawNote('config-1');
     const r2 = rawNote('config-2');
+    const r3 = rawNote('config-3');
     const doc = fold([
       { sessionUpdate: 'session_state', kind: 'session_info_update', raw: r1 },
       { sessionUpdate: 'session_state', kind: 'session_info_update', raw: r2 },
-      { sessionUpdate: 'session_state', kind: 'compaction_update', raw: r1 },
+      { sessionUpdate: 'session_state', kind: 'session_info_update', raw: r3 },
     ]);
-    expect(doc.latestNotifications.session_info_update).toBe(r2);
-    expect(doc.latestNotifications.compaction_update).toBe(r1);
+    expect(doc.latestNotifications.session_info_update).toBe(r3);
     expect(doc.turns).toHaveLength(0); // session_state never opens a turn
   });
 });
@@ -294,6 +294,81 @@ describe('reducer session plan (docked, not in-flow)', () => {
     expect(fold([{ sessionUpdate: 'plan', entries: [] }]).plan).toBeNull();
     const removed = applyUpdate(withPlan, { sessionUpdate: 'plan_removed' });
     expect(removed.plan).toBeNull();
+  });
+});
+
+describe('reducer context compaction (per-id fold, notices in flow)', () => {
+  const text = (t: string) => ({ type: 'text', text: t }) as const;
+
+  it('starts with no compactions; in_progress folds without entering the flow', () => {
+    expect(emptySession().compactions).toEqual({});
+    const doc = fold([
+      { sessionUpdate: 'compaction_update', compactionId: 'c-1', status: 'in_progress' },
+    ]);
+    expect(doc.compactions['c-1']).toEqual({ status: 'in_progress', summary: null, error: null });
+    expect(doc.turns).toHaveLength(0);
+  });
+
+  it('summary and error follow wire patch semantics across updates', () => {
+    const doc = fold([
+      { sessionUpdate: 'compaction_update', compactionId: 'c-1', status: 'in_progress' },
+      {
+        sessionUpdate: 'compaction_update',
+        compactionId: 'c-1',
+        status: 'in_progress',
+        summary: [text('first')],
+      },
+      { sessionUpdate: 'compaction_update', compactionId: 'c-1', status: 'in_progress' },
+      {
+        sessionUpdate: 'compaction_update',
+        compactionId: 'c-1',
+        status: 'failed',
+        summary: null,
+        error: 'boom',
+      },
+    ]);
+    expect(doc.compactions['c-1']).toEqual({ status: 'failed', summary: null, error: 'boom' });
+  });
+
+  it('the completed transition plants one notice block; re-sending completed does not duplicate', () => {
+    const doc = fold([
+      { sessionUpdate: 'compaction_update', compactionId: 'c-1', status: 'in_progress' },
+      { sessionUpdate: 'compaction_update', compactionId: 'c-1', status: 'completed' },
+      { sessionUpdate: 'compaction_update', compactionId: 'c-1', status: 'completed' },
+    ]);
+    const notices = doc.turns.flatMap((turn) => turn.blocks).filter((b) => b.kind === 'compaction_notice');
+    expect(notices).toEqual([
+      { kind: 'compaction_notice', compactionId: 'c-1', outcome: 'completed', error: null },
+    ]);
+  });
+
+  it('a failed transition carries the error into the notice block', () => {
+    const doc = fold([
+      { sessionUpdate: 'compaction_update', compactionId: 'c-9', status: 'failed', error: 'oom' },
+    ]);
+    const block = doc.turns[0]?.blocks[0];
+    expect(block).toEqual({ kind: 'compaction_notice', compactionId: 'c-9', outcome: 'failed', error: 'oom' });
+  });
+
+  it('a notice without a live turn opens its own — compaction may land between turns', () => {
+    const doc = fold([{ sessionUpdate: 'compaction_update', compactionId: 'c-1', status: 'completed' }]);
+    expect(doc.turns).toHaveLength(1);
+    expect(doc.turns[0]?.blocks[0]).toMatchObject({ kind: 'compaction_notice' });
+  });
+
+  it('summary chunks append to the stored summary, planting unknown ids as in_progress', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const doc = fold([
+      { sessionUpdate: 'compaction_update', compactionId: 'c-1', status: 'in_progress' },
+      { sessionUpdate: 'compaction_summary_chunk', compactionId: 'c-1', content: text('a') },
+      { sessionUpdate: 'compaction_summary_chunk', compactionId: 'c-1', content: text('b') },
+      { sessionUpdate: 'compaction_summary_chunk', compactionId: 'c-2', content: text('orphan') },
+    ]);
+    expect(doc.compactions['c-1']?.summary).toEqual([text('a'), text('b')]);
+    expect(doc.compactions['c-2']?.summary).toEqual([text('orphan')]);
+    expect(doc.compactions['c-2']?.status).toBe('in_progress');
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('c-2'));
+    warnSpy.mockRestore();
   });
 });
 
@@ -823,5 +898,52 @@ describe('reducer session config options', () => {
       { sessionUpdate: 'config_options_update', options: opts(false) },
     ]);
     expect(doc.turns).toHaveLength(0);
+  });
+});
+
+describe('reducer turn notices (PromptResponse.stopReason)', () => {
+  it('a notice stays inside the turn that just ended', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }] },
+      { sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: { type: 'text', text: '…' } },
+      { sessionUpdate: 'turn_notice', stopReason: 'refusal' },
+    ]);
+    expect(doc.turns).toHaveLength(1);
+    expect(doc.turns[0]!.blocks.at(-1)).toEqual({ kind: 'turn_notice', stopReason: 'refusal' });
+  });
+
+  it('a notice with no turn yet opens one rather than being dropped', () => {
+    const doc = fold([{ sessionUpdate: 'turn_notice', stopReason: 'max_tokens' }]);
+    expect(doc.turns).toHaveLength(1);
+    expect(doc.turns[0]!.blocks).toHaveLength(1);
+  });
+
+  it('every non-end_turn reason survives the fold (rendering covers all four)', () => {
+    for (const stopReason of ['cancelled', 'refusal', 'max_tokens', 'max_turn_requests'] as const) {
+      const doc = fold([{ sessionUpdate: 'turn_notice', stopReason }]);
+      expect(doc.turns[0]!.blocks[0]).toEqual({ kind: 'turn_notice', stopReason });
+    }
+  });
+});
+
+describe('reducer tool_call_update field merging', () => {
+  it('a late kind re-icons the call; late rawInput lands in the details', () => {
+    let doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'tool_call', toolCallId: 't-1', title: 'Working', kind: 'other', status: 'in_progress' },
+    ]);
+    doc = applyUpdate(doc, { sessionUpdate: 'tool_call_update', toolCallId: 't-1', kind: 'edit' });
+    doc = applyUpdate(doc, { sessionUpdate: 'tool_call_update', toolCallId: 't-1', rawInput: { file: 'a.ts' } });
+    const call = doc.turns[0]!.blocks.find((b) => b.kind === 'tool_call');
+    expect(call).toMatchObject({ kind: 'tool_call', call: { kind: 'edit', rawInput: { file: 'a.ts' }, title: 'Working' } });
+  });
+
+  it('absent fields keep the existing values (only changes are sent)', () => {
+    let doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'tool_call', toolCallId: 't-1', title: 'Read', kind: 'read', rawInput: { path: '/x' } },
+    ]);
+    doc = applyUpdate(doc, { sessionUpdate: 'tool_call_update', toolCallId: 't-1', status: 'completed' });
+    expect(doc.turns[0]!.blocks.find((b) => b.kind === 'tool_call')).toMatchObject({ kind: 'tool_call', call: { kind: 'read', rawInput: { path: '/x' } } });
   });
 });

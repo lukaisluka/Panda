@@ -1,0 +1,69 @@
+/* Auth gate (v1 auth_required): centered login card replacing the
+ * transcript until a login method succeeds. */
+
+.auth-gate {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 20px;
+}
+
+.auth-gate-card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 26px 24px 22px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-xl);
+  background: var(--color-raised);
+  box-shadow: var(--shadow-high);
+  text-align: center;
+}
+
+.auth-gate-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--panda-radius-full);
+  background: color-mix(in oklab, var(--color-accent) 15%, transparent);
+  color: var(--color-accent);
+}
+
+.auth-gate-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.auth-gate-message {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--color-muted);
+}
+
+.auth-gate-methods {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.auth-gate-methods > * {
+  width: 100%;
+}
+
+.auth-gate-none {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--color-muted);
+}

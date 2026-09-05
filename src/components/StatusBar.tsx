@@ -54,6 +54,10 @@ export function StatusBar({ doc, connection, mode, switching }: {
                 <span className="truncate statusbar-error" title={connection.error ?? undefined}>
                   {connection.error}
                 </span>
+              ) : connection.status === 'auth_required' ? (
+                <span className="truncate statusbar-warn-text" title={connection.error ?? undefined}>
+                  需要登录
+                </span>
               ) : (
                 <span className="statusbar-faint">未连接</span>
               )}

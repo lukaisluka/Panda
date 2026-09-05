@@ -2,7 +2,9 @@ import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { applyUpdate, emptySession } from './protocol/reducer';
 import type {
+  AcpAuthMethod,
   AcpSessionUpdate,
+  ElicitationRequest,
   SessionDocument,
   SessionStatus,
 } from './protocol/types';
@@ -23,7 +25,12 @@ import {
  * `applyUpdate`, and connection/session bookkeeping is set by the drivers.
  */
 
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+export type ConnectionStatus =
+  | 'disconnected'
+  | 'connecting'
+  | 'connected'
+  | 'auth_required'
+  | 'error';
 
 export type ConnectionInfo = {
   status: ConnectionStatus;
@@ -39,6 +46,18 @@ export type ConnectionInfo = {
   protocolVersion: number | null;
   /** Session id returned by `session/new`, null while no session exists. */
   sessionId: string | null;
+  /**
+   * v1 auth challenge: the agent-managed login methods offered when
+   * `session/new` was rejected with auth_required. Only meaningful while
+   * status is 'auth_required' — cleared when the connection settles either
+   * way. null = no challenge.
+   */
+  authMethods: AcpAuthMethod[] | null;
+  /**
+   * The auth phase's request-scoped elicitation (OAuth url / key form) —
+   * rendered on the auth card, latest-wins, null = none pending.
+   */
+  authElicitation: ElicitationRequest | null;
   /** Last connection failure, shown in the status bar. */
   error: string | null;
 };
@@ -184,6 +203,8 @@ const initialConnection: ConnectionInfo = {
   agentName: null,
   protocolVersion: null,
   sessionId: null,
+  authMethods: null,
+  authElicitation: null,
   error: null,
 };
 
@@ -738,5 +759,10 @@ export function hasPendingPermission(slot: ConnectionState): boolean {
  * document and `connection.status` stay the single sources of truth.
  */
 export function needsAttention(slot: ConnectionState): boolean {
-  return slot.unreadCompletion || slot.connection.status === 'error' || hasPendingPermission(slot);
+  return (
+    slot.unreadCompletion ||
+    slot.connection.status === 'error' ||
+    slot.connection.status === 'auth_required' ||
+    hasPendingPermission(slot)
+  );
 }

@@ -68,7 +68,18 @@ export type StandaloneElicitationItem = {
   elicitation: AttachedElicitation;
 };
 
-export type FlatItem = BlockFlatItem | StandalonePermissionItem | StandaloneElicitationItem;
+/** An in-progress context compaction — a live trailing row under the flow. */
+export type CompactionItem = {
+  key: string;
+  kind: 'compaction';
+  compactionId: string;
+};
+
+export type FlatItem =
+  | BlockFlatItem
+  | StandalonePermissionItem
+  | StandaloneElicitationItem
+  | CompactionItem;
 
 // Identity-stable wrappers. All WeakMaps: keys are session-owned objects, so
 // caches are scoped per session graph and collected with it. The base variant
@@ -147,6 +158,12 @@ export function projectMessageStream(doc: SessionDocument): FlatItem[] {
   // Elicitations always trail the flow as independent cards, record order.
   for (const elicitation of attachedElicitations(doc.elicitations)) {
     items.push(standaloneElicitationItem(elicitation));
+  }
+  // In-progress compactions trail everything — live status rows, not history.
+  for (const compactionId of Object.keys(doc.compactions)) {
+    if (doc.compactions[compactionId]!.status === 'in_progress') {
+      items.push({ key: `compaction-${compactionId}`, kind: 'compaction', compactionId });
+    }
   }
 
   docItemsCache.set(doc, items);

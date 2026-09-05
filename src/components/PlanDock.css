@@ -100,3 +100,9 @@
   color: var(--color-faint);
   text-decoration: line-through;
 }
+
+/* Pending high-priority entries read one step louder than their siblings —
+ * fg color only, no badge: the dock stays grayscale hierarchy (ZCode-style). */
+.plan-dock-item-text--high {
+  color: var(--color-fg);
+}

@@ -2,12 +2,14 @@ import { useEffect, useMemo } from 'react';
 import { usePanda } from './store';
 import type { SessionEntry } from './store';
 import {
+  authenticateLiveConnection,
   cancelLiveTurn,
   connectLiveConnection,
   deleteLiveSession,
   disconnectLiveConnection,
   foregroundConnection,
   isDirectConnectionId,
+  logoutLiveConnection,
   newDirectConnectionId,
   newLiveSession,
   openLiveSession,
@@ -91,6 +93,10 @@ export function useLiveSession() {
       remove: removeLiveConnection,
       seedProfileSlots,
       foreground: foregroundConnection,
+      /** v1 auth recovery: run a login method on the foreground connection. */
+      authenticate: (methodId: string) => authenticateLiveConnection(methodId),
+      /** v1 `logout` on the foreground connection (gated by auth.logout). */
+      logout: () => logoutLiveConnection(),
       openSession: openLiveSession,
       send: (content: AcpContentBlock[]) => sendLive(content),
       resolvePermission: (toolCallId: string, kind: PermissionOptionKind) => resolveLivePermission(toolCallId, kind),

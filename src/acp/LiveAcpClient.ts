@@ -1,8 +1,10 @@
 import {
   PROTOCOL_VERSION,
+  RequestError,
   client,
   methods,
   type AgentCapabilities,
+  type AuthMethod,
   type ClientConnection,
   type CompleteElicitationNotification,
   type ContentBlock,
@@ -16,10 +18,12 @@ import {
 } from '@agentclientprotocol/sdk';
 import type { AcpTransport } from './transport/AcpTransport';
 import type {
+  AcpAuthMethod,
   AcpConfigOption,
   AcpContentBlock,
   AcpSessionModeState,
   AcpSessionUpdate,
+  ElicitationRequest,
   ElicitationResponse,
   PermissionOptionKind,
   PermissionResponse,
@@ -97,6 +101,18 @@ export type LiveClientHandlers = {
   onSessionConfigOptions(options: AcpConfigOption[] | null): void;
   /** null reason = clean disconnect; a string = failure shown to the user. */
   onDisconnected(reason: string | null): void;
+  /**
+   * `session/new` (or resume/load) was rejected with auth_required (-32000):
+   * the transport and initialize are fine, the session waits for login. The
+   * connection stays open so `authenticate` can run. Empty methods = the
+   * agent demands auth but offered nothing a web client can run.
+   */
+  onAuthChallenge(challenge: { methods: AcpAuthMethod[]; message: string }): void;
+  /**
+   * A request-scoped (pre-session) elicitation — auth-phase user input (url
+   * OAuth flow or a form, e.g. an API key). Latest-wins; null clears it.
+   */
+  onAuthElicitation(request: ElicitationRequest | null): void;
   onCapabilities(caps: AgentCaps): void;
   /** Server-side session list (session/list, all pages). */
   onSessions(entries: SessionSummary[]): void;
@@ -137,6 +153,9 @@ type PendingPermission = {
 };
 
 type PendingElicitation = {
+  /** Session elicitations settle into the document; auth-phase (request-
+   * scoped) ones clear the connection-level challenge card instead. */
+  scope: 'session' | 'auth';
   resolve: (response: CreateElicitationResponse) => void;
 };
 
@@ -205,6 +224,34 @@ function readCaps(caps: AgentCapabilities | null | undefined): AgentCaps {
   };
 }
 
+/**
+ * Whitelists initialize's authMethods to the agent-managed variant. The
+ * terminal variant means "run the agent program in a TUI" — Panda never
+ * advertises the terminal auth capability, so a compliant agent sends none;
+ * a violating one gets them filtered with a warn instead of a dead button.
+ */
+function toAuthMethods(list: AuthMethod[] | null | undefined): AcpAuthMethod[] {
+  if (list == null) return [];
+  const methods: AcpAuthMethod[] = [];
+  for (const entry of list) {
+    if ((entry as { type?: unknown }).type === 'terminal') {
+      console.warn(`[panda/acp] terminal auth method "${entry.name}" is not runnable in a web client — filtered`);
+      continue;
+    }
+    methods.push({
+      id: entry.id,
+      name: entry.name,
+      description: entry.description ?? undefined,
+    });
+  }
+  return methods;
+}
+
+/** v1 auth_required: the JSON-RPC code RequestError.authRequired mints. */
+function isAuthRequired(err: unknown): boolean {
+  return err instanceof RequestError && err.code === -32000;
+}
+
 export class LiveAcpClient {
   private readonly handlers: LiveClientHandlers;
   /** Host-side permission policy (issue #22); default hands every decision to the user. */
@@ -234,6 +281,16 @@ export class LiveAcpClient {
   private permissionWaiters = new Map<string, PendingPermission>();
   /** Pending elicitations keyed by the Panda-local request id. */
   private elicitationWaiters = new Map<string, PendingElicitation>();
+  /** Agent-managed login methods from initialize (-32000 recovery). */
+  private authMethods: AcpAuthMethod[] = [];
+  /** Whether the agent advertised `auth.logout` — gates the logout method. */
+  private agentSupportsLogout = false;
+  /** session/close advertised (sessionCapabilities.close) — sent before teardown. */
+  private agentSupportsClose = false;
+  /** initialize's identity, cached to settle onConnected after authenticate. */
+  private initInfo: { agentName: string; protocolVersion: number } | null = null;
+  /** cwd of the last connect/newSession — authenticate retries with it. */
+  private lastCwd: string | null = null;
   /** Local id mint for elicitation/create requests (form mode carries no wire id). */
   private elicitationSeq = 0;
   /** A transactional session/load switch is in flight (issue #17). */
@@ -348,10 +405,14 @@ export class LiveAcpClient {
         protocolVersion: PROTOCOL_VERSION,
         // Both elicitation modes are implemented — advertising per-mode keeps
         // spec-compliant agents from sending what Panda cannot render. The
-        // same goes for boolean config options (select is always allowed).
+        // same goes for boolean config options (select is always allowed),
+        // ID-addressed compaction updates (folded per compactionId), and the
+        // UNSTABLE plan_update/plan_removed kinds (items variant renders in
+        // the plan dock; file/markdown degrade to unsupported blocks).
         clientCapabilities: {
           elicitation: { form: {}, url: {} },
-          session: { configOptions: { boolean: {} } },
+          session: { configOptions: { boolean: {} }, compaction: {} },
+          plan: {},
         },
         clientInfo: CLIENT_INFO,
       });
@@ -367,6 +428,11 @@ export class LiveAcpClient {
       const agentName = init.agentInfo?.title ?? init.agentInfo?.name ?? 'unknown agent';
 
       this.capabilities = readCaps(init.agentCapabilities);
+      this.authMethods = toAuthMethods(init.authMethods);
+      this.agentSupportsLogout = init.agentCapabilities?.auth?.logout != null;
+      this.agentSupportsClose = init.agentCapabilities?.sessionCapabilities?.close != null;
+      this.initInfo = { agentName, protocolVersion: init.protocolVersion };
+      this.lastCwd = cwd;
       this.handlers.onCapabilities(this.capabilities);
       if (this.can('list')) await this.fetchSessionList(connection, generation);
       if (!isCurrent()) {
@@ -416,6 +482,16 @@ export class LiveAcpClient {
         console.info('[panda/acp] superseded connect failed after replacement — failure discarded');
         return;
       }
+      if (isAuthRequired(err) && this.authMethods.length > 0) {
+        // The wire is fine, the session is gated on login: keep the
+        // connection open and hand the methods to the user (v1 auth).
+        this.handlers.onAuthChallenge({ methods: this.authMethods, message: describeError(err) });
+        return;
+      }
+      if (isAuthRequired(err)) {
+        this.reportDisconnect('agent 要求认证，但没有提供浏览器可用的登录方式');
+        return;
+      }
       console.error('[panda/acp] connect failed', err);
       this.reportDisconnect(`连接失败: ${describeError(err)}`);
     }
@@ -433,6 +509,7 @@ export class LiveAcpClient {
       console.warn('[panda/acp] newSession ignored: a session switch is still in flight');
       return;
     }
+    this.lastCwd = cwd;
     try {
       await this.establishSession(connection, cwd, generation);
     } catch (err) {
@@ -443,8 +520,81 @@ export class LiveAcpClient {
         console.info('[panda/acp] superseded newSession failed after replacement — failure discarded');
         return;
       }
+      if (isAuthRequired(err) && this.authMethods.length > 0) {
+        // Credentials can expire mid-connection; the login card replaces the
+        // composer until a method succeeds.
+        this.handlers.onAuthChallenge({ methods: this.authMethods, message: describeError(err) });
+        return;
+      }
       console.error('[panda/acp] session/new failed', err);
       this.reportDisconnect(`新建会话失败: ${describeError(err)}`);
+    }
+  }
+
+  /**
+   * Runs one agent-managed login method (v1 `authenticate`) and re-attempts
+   * session establishment on success. While the RPC is pending the agent may
+   * send a request-scoped url elicitation (OAuth link) — it renders on the
+   * auth card via onAuthElicitation.
+   */
+  async authenticate(methodId: string): Promise<void> {
+    const connection = this.connection;
+    const generation = this.connectionGeneration;
+    if (!connection) {
+      console.warn('[panda/acp] authenticate ignored: not connected');
+      return;
+    }
+    if (!this.authMethods.some((method) => method.id === methodId)) {
+      console.warn(`[panda/acp] authenticate ignored: unknown method id "${methodId}"`);
+      return;
+    }
+    try {
+      await connection.agent.request(methods.agent.authenticate, { methodId });
+      if (generation !== this.connectionGeneration) {
+        console.info('[panda/acp] superseded authenticate completed after replacement — discarded');
+        return;
+      }
+      await this.establishSession(connection, this.lastCwd ?? '/', generation);
+      if (generation !== this.connectionGeneration) return;
+      // establishSession superseded-returns silently; only a live era settles.
+      if (this.initInfo) this.handlers.onConnected(this.initInfo);
+      this.handlers.onAuthElicitation(null);
+      console.info(`[panda/acp] authenticated via "${methodId}", session established`);
+    } catch (err) {
+      if (generation !== this.connectionGeneration) {
+        console.info('[panda/acp] superseded authenticate failed after replacement — failure discarded');
+        return;
+      }
+      if (isAuthRequired(err) && this.authMethods.length > 0) {
+        // Still (or again) locked out — the card stays up for another pick.
+        this.handlers.onAuthChallenge({ methods: this.authMethods, message: describeError(err) });
+        return;
+      }
+      console.error('[panda/acp] authenticate failed', err);
+      this.reportDisconnect(`登录失败: ${describeError(err)}`);
+    }
+  }
+
+  /**
+   * v1 `logout` — only when the agent advertised `auth.logout`. Fire-and-
+   * report: logging out never tears the connection down; the next session/new
+   * will surface a fresh auth challenge if the agent requires one.
+   */
+  async logout(): Promise<void> {
+    const connection = this.connection;
+    if (!connection) {
+      console.warn('[panda/acp] logout ignored: not connected');
+      return;
+    }
+    if (!this.agentSupportsLogout) {
+      console.warn('[panda/acp] logout ignored: agent did not advertise auth.logout');
+      return;
+    }
+    try {
+      await connection.agent.request(methods.agent.logout, {});
+      console.info('[panda/acp] logged out');
+    } catch (err) {
+      console.error('[panda/acp] logout failed', err);
     }
   }
 
@@ -650,6 +800,18 @@ export class LiveAcpClient {
     try {
       const response = await prompt;
       console.info(`[panda/acp] turn complete: ${response.stopReason}`);
+      // end_turn is the unremarkable ending; every other stop reason is a
+      // user-visible fact about why the turn stopped (refusal, limits,
+      // cancellation). A superseded era must not write into the new one.
+      //
+      // response.usage (UNSTABLE) is NOT mapped: it is a cumulative token
+      // tally (total/input/output/thought/cache), not the context-occupancy
+      // pair (used/size) the usage_update event and the status bar model.
+      // Forcing it in would render a bogus window meter; it needs its own
+      // UI surface first.
+      if (response.stopReason !== 'end_turn' && generation === this.connectionGeneration) {
+        this.handlers.onUpdate({ sessionUpdate: 'turn_notice', stopReason: response.stopReason });
+      }
     } catch (err) {
       if (generation !== this.connectionGeneration) {
         // The turn outlived its era: the replacement's close() rejected the
@@ -711,7 +873,7 @@ export class LiveAcpClient {
    * refusal (declined) — url-mode decline routes here too. Cancellations
    * without a user decision arrive via settleElicitation instead.
    */
-  resolveElicititation(id: string, response: ElicitationResponse): void {
+  resolveElicitation(id: string, response: ElicitationResponse): void {
     if (!this.elicitationWaiters.has(id)) {
       console.warn(`[panda/acp] resolveElicitation ignored: no pending request ${id}`);
       return;
@@ -762,8 +924,34 @@ export class LiveAcpClient {
     this.finishAllElicitations();
   }
 
-  /** Cleanly closes the connection; safe to call repeatedly. */
+  /**
+   * Cleanly closes the connection; safe to call repeatedly. When the agent
+   * advertised `session/close` and a session lives, the close request goes
+   * out before the wire drops (bounded — an unresponsive agent must not
+   * hang the disconnect), so the agent can release its session-side state.
+   */
   disconnect(): void {
+    void this.disconnectAsync();
+  }
+
+  private async disconnectAsync(): Promise<void> {
+    if (this.disconnectReported) return;
+    const connection = this.connection;
+    const sessionId = this.sessionId;
+    const generation = this.connectionGeneration;
+    if (connection && sessionId && this.agentSupportsClose) {
+      try {
+        await Promise.race([
+          connection.agent.request(methods.agent.session.close, { sessionId }),
+          new Promise<void>((resolve) => setTimeout(resolve, 1500)),
+        ]);
+      } catch (err) {
+        console.warn('[panda/acp] session/close failed (disconnecting anyway)', err);
+      }
+      // A reconnect while the close was in flight superseded this era — the
+      // newer connection owns the state now, never report on its behalf.
+      if (this.disconnectReported || generation !== this.connectionGeneration) return;
+    }
     this.reportDisconnect(null);
   }
 
@@ -1151,10 +1339,13 @@ export class LiveAcpClient {
       return Promise.resolve({ action: 'decline' });
     }
     // The scope union: session-scoped carries sessionId, request-scoped
-    // (pre-session) does not — both foreign to this client's session.
+    // (pre-session) does not. A request-scoped elicitation while no session
+    // lives is the auth phase (v1: OAuth url / API-key form) — it renders on
+    // the connection's auth card instead of a session document.
     const scopedSessionId =
       'sessionId' in params && typeof params.sessionId === 'string' ? params.sessionId : null;
-    if (this.sessionId === null || scopedSessionId !== this.sessionId) {
+    const authScoped = scopedSessionId === null && this.sessionId === null;
+    if (!authScoped && (this.sessionId === null || scopedSessionId !== this.sessionId)) {
       const scope = scopedSessionId ?? 'request-scoped (pre-session)';
       console.warn(
         `[panda/acp] elicitation/create for ${scope} (expected session ${this.sessionId ?? 'none'}) — answered cancel`,
@@ -1173,12 +1364,10 @@ export class LiveAcpClient {
       console.warn(`[panda/acp] elicitation/create reuses pending id ${request.id} — declined`);
       return Promise.resolve({ action: 'decline' });
     }
-    this.handlers.onUpdate({
-      sessionUpdate: 'elicitation_requested',
-      request,
-    });
+    if (authScoped) this.handlers.onAuthElicitation(request);
+    else this.handlers.onUpdate({ sessionUpdate: 'elicitation_requested', request });
     return new Promise((resolve) => {
-      const waiter: PendingElicitation = { resolve };
+      const waiter: PendingElicitation = { scope: authScoped ? 'auth' : 'session', resolve };
       this.elicitationWaiters.set(request.id, waiter);
       const settleAborted = () => {
         if (this.elicitationWaiters.get(request.id) !== waiter) return;
@@ -1186,8 +1375,10 @@ export class LiveAcpClient {
         this.settleElicitation(request.id, { outcome: 'cancelled' });
       };
       signal.addEventListener('abort', settleAborted);
+      // Auth-phase elicitations have no document to mark requires_action —
+      // the connection is already in auth_required state.
       if (signal.aborted) settleAborted();
-      else this.handlers.onStatus('requires_action');
+      else if (!authScoped) this.handlers.onStatus('requires_action');
     });
   }
 
@@ -1195,6 +1386,19 @@ export class LiveAcpClient {
     const waiter = this.elicitationWaiters.get(id);
     if (!waiter) return;
     this.elicitationWaiters.delete(id);
+    if (waiter.scope === 'auth') {
+      // Auth-phase cards live on the connection, not a document — clear the
+      // challenge card; no document status to re-derive.
+      this.handlers.onAuthElicitation(null);
+      waiter.resolve(
+        response.outcome === 'accepted'
+          ? { action: 'accept', content: response.content }
+          : response.outcome === 'declined'
+            ? { action: 'decline' }
+            : { action: 'cancel' },
+      );
+      return;
+    }
     this.handlers.onUpdate({ sessionUpdate: 'elicitation_resolved', elicitationId: id, response });
     waiter.resolve(
       response.outcome === 'accepted'

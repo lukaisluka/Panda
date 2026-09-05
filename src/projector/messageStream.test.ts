@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { projectMessageStream } from './messageStream';
-import type { FlatItem } from './messageStream';
+import type { BlockFlatItem, FlatItem } from './messageStream';
 import { applyUpdate, emptySession } from '../protocol/reducer';
 import type {
   PermissionRequest,
@@ -40,6 +40,7 @@ function documentWith(...calls: ToolCallState[]): SessionDocument {
     status: 'requires_action',
     usage: { used: 0, size: 0, cost: null },
     plan: null,
+    compactions: {},
     modes: null,
     availableCommands: [],
     configOptions: null,
@@ -211,6 +212,7 @@ describe('projection unsupported fallback blocks', () => {
       status: 'idle',
       usage: { used: 0, size: 0, cost: null },
       plan: null,
+    compactions: {},
       modes: null,
       availableCommands: [],
       configOptions: null,
@@ -345,5 +347,33 @@ describe('projection identity stability (ADR 0006)', () => {
   it('yields equal output for structurally equal input (fresh identities, no cache)', () => {
     const doc = seed();
     expect(projectMessageStream(structuredClone(doc))).toEqual(projectMessageStream(doc));
+  });
+});
+
+describe('projection context compaction rows', () => {
+  const fold = (updates: Parameters<typeof applyUpdate>[1][]) =>
+    updates.reduce(applyUpdate, emptySession());
+
+  it('an in-progress compaction trails the flow as a live compaction item', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'compaction_update', compactionId: 'c-1', status: 'in_progress' },
+    ]);
+    const items = projectMessageStream(doc);
+    expect(items.at(-1)).toEqual({ key: 'compaction-c-1', kind: 'compaction', compactionId: 'c-1' });
+  });
+
+  it('a completed compaction keeps its notice block in flow and drops the live row', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'compaction_update', compactionId: 'c-1', status: 'in_progress' },
+      { sessionUpdate: 'compaction_update', compactionId: 'c-1', status: 'completed' },
+    ]);
+    const items = projectMessageStream(doc);
+    expect(items.some((item) => item.kind === 'compaction')).toBe(false);
+    const notice = items
+      .filter((item): item is BlockFlatItem => item.kind === 'block')
+      .find((item) => item.block.kind === 'compaction_notice');
+    expect(notice?.block).toMatchObject({ kind: 'compaction_notice', outcome: 'completed' });
   });
 });

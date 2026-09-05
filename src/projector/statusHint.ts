@@ -27,6 +27,7 @@ export function statusHint({ mode, docStatus, connection, switching }: StatusHin
   }
   if (connection.status === 'connecting') return '连接中…';
   if (connection.status === 'error') return '连接失败 — 在侧栏重连并恢复，或重新连接';
+  if (connection.status === 'auth_required') return '需要登录 — 在上方选择登录方式';
   if (connection.status !== 'connected') return '未连接 ACP 服务 — 在侧栏连接';
   if (switching) return '切换会话中…';
   if (connection.error) return connection.error;

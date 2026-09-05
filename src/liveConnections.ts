@@ -2,10 +2,12 @@ import type { RequestPermissionRequest } from '@agentclientprotocol/sdk';
 import { LiveAcpClient } from './acp/LiveAcpClient';
 import { WebSocketTransport } from './acp/transport/WebSocketTransport';
 import type {
+  AcpAuthMethod,
   AcpConfigOption,
   AcpContentBlock,
   AcpSessionModeState,
   AcpSessionUpdate,
+  ElicitationRequest,
   ElicitationResponse,
   PermissionOptionKind,
   SessionStatus,
@@ -249,6 +251,8 @@ function wireHandlers(entry: LiveConnection) {
         agentName: info.agentName,
         protocolVersion: info.protocolVersion,
         error: null,
+        authMethods: null,
+        authElicitation: null,
       });
       // "默认工作区" = what the last successful connect used (issue #2, #23).
       const pending = entry.pendingProfile;
@@ -271,9 +275,22 @@ function wireHandlers(entry: LiveConnection) {
       abandonStagedSwitch(entry, 'disconnect');
       port.setConnection(
         reason
-          ? { status: 'error', error: reason }
-          : { status: 'disconnected', error: null, sessionId: null },
+          ? { status: 'error', error: reason, authMethods: null, authElicitation: null }
+          : { status: 'disconnected', error: null, sessionId: null, authMethods: null, authElicitation: null },
       );
+    },
+    // v1 auth_required: the session waits for login; the auth card takes over
+    // the main view until a method succeeds (or the failure settles).
+    onAuthChallenge: (challenge: { methods: AcpAuthMethod[]; message: string }) => {
+      port.setConnection({
+        status: 'auth_required',
+        authMethods: challenge.methods,
+        authElicitation: null,
+        error: challenge.message,
+      });
+    },
+    onAuthElicitation: (request: ElicitationRequest | null) => {
+      port.setConnection({ authElicitation: request });
     },
     onCapabilities: (caps: {
       image: boolean;
@@ -550,13 +567,30 @@ export function resolveLivePermission(toolCallId: string, kind: PermissionOption
 }
 
 /**
+ * Runs one login method on the foreground connection (v1 `authenticate`),
+ * then re-establishes the session — the connect flow's auth_required
+ * recovery. LiveAcpClient owns the retry; the store settles via the usual
+ * onConnected / onAuthChallenge handlers.
+ */
+export function authenticateLiveConnection(methodId: string): void {
+  const entry = foregroundEntry('authenticate');
+  if (entry) void entry.client.authenticate(methodId);
+}
+
+/** v1 `logout` on the foreground connection (gated by auth.logout). */
+export function logoutLiveConnection(): void {
+  const entry = foregroundEntry('logout');
+  if (entry) void entry.client.logout();
+}
+
+/**
  * Answers one pending `elicitation/create` (form submit/decline, url decline
  * / cancel) on the foreground connection. Form ids are Panda-local mints
  * (`elicit-N`); url ids are the wire's opaque elicitationIds.
  */
 export function resolveLiveElicitation(id: string, response: ElicitationResponse): void {
   const entry = foregroundEntry('resolveElicitation');
-  if (entry) entry.client.resolveElicititation(id, response);
+  if (entry) entry.client.resolveElicitation(id, response);
 }
 
 /**
