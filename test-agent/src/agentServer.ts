@@ -127,6 +127,8 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
   // 会话内(=子进程内)状态:切连接即清空,与 Python 版一致
   const sessionPlans = new Map<string, Todo[]>();
   const allowedCommandTypes = new Map<string, Set<string>>();
+  /** 假实现:v1 authenticate 无条件成功,这里只记录哪些方法被用过(#90)。 */
+  const authenticatedMethodIds = new Set<string>();
   const activeToolCalls = new Map<string, { name: string; args: Record<string, unknown> }>();
   const agents = new Map<string, ReturnType<typeof buildDeepAgent>>();
   let cancelled = false;
@@ -633,10 +635,21 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
           promptCapabilities: { image: true },
           sessionCapabilities: { close: {} },
         },
+        // v1 auth(#90):声明 agent 托管登录方式。假实现,无条件成功——
+        // Panda 的认证入口/记录链路以此演练。
+        authMethods: [
+          {
+            id: 'panda-token',
+            name: 'Panda 访问令牌',
+            description: '测试用登录方式:点击即认证成功(假实现,不校验凭据)',
+          },
+        ],
       };
     },
 
-    async authenticate(_params: AuthenticateRequest): Promise<AuthenticateResponse> {
+    async authenticate(params: AuthenticateRequest): Promise<AuthenticateResponse> {
+      authenticatedMethodIds.add(params.methodId);
+      deps.log(`authenticated via "${params.methodId}" (fake, always succeeds)`);
       return {};
     },
 

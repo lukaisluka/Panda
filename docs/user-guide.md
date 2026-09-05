@@ -72,7 +72,7 @@ Panda 连接后依次执行：`initialize`（协商协议版本、读取能力�
 
 ### 状态栏
 
-左侧是连接状态（agent 名 / 连接中 / 错误详情）和会话状态（**Ready** / **Working…** / **等待你的批准**）；右侧是 token 用量条和成本，数据来自 agent 的 `usage_update` 上报（agent 不报就不显示）。
+左侧是连接状态（agent 名 / 连接中 / 错误详情）和会话状态（**Ready** / **Working…** / **等待你的批准**）；右侧是 token 用量条和成本，数据来自 agent 的 `usage_update` 上报（agent 不报就不显示）。agent 在 `initialize` 声明了登录方式（`authMethods`）时，连接状态旁出现「认证」入口（未认证才显示）——点击即调 `authenticate`，成功后同一位置留「已认证 · 方式名」记录；被 agent 以 auth_required 拦下时则是整页登录卡，两条路走的是同一个认证方法。
 
 ### 输入框
 

@@ -53,6 +53,15 @@ export type ConnectionInfo = {
    */
   authMethods: AcpAuthMethod[] | null;
   /**
+   * Agent-managed login methods the agent advertised at initialize (v1 auth,
+   * #90) — the always-visible basis for proactive authentication. Empty
+   * array = none declared (no UI entry). Contrast `authMethods`, which is
+   * the transient challenge state below.
+   */
+  availableAuthMethods: AcpAuthMethod[];
+  /** The method id of the last successful `authenticate` (#90); null = none. */
+  authedMethodId: string | null;
+  /**
    * The auth phase's request-scoped elicitation (OAuth url / key form) —
    * rendered on the auth card, latest-wins, null = none pending.
    */
@@ -203,6 +212,8 @@ const initialConnection: ConnectionInfo = {
   protocolVersion: null,
   sessionId: null,
   authMethods: null,
+  availableAuthMethods: [],
+  authedMethodId: null,
   authElicitation: null,
   error: null,
 };

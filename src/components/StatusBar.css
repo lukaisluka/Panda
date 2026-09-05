@@ -51,6 +51,31 @@
   color: var(--color-faint);
 }
 
+/* v1 认证入口与已认证记录(#90)。 */
+.statusbar-auth-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-full);
+  color: var(--color-muted);
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+}
+.statusbar-auth-btn:hover {
+  color: var(--color-fg);
+  border-color: color-mix(in oklab, var(--color-accent) 50%, var(--color-border));
+}
+
+.statusbar-authed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-accent);
+}
+
 .statusbar-warn-icon { color: var(--color-warn); }
 .statusbar-warn-text {
   font-weight: 500;
