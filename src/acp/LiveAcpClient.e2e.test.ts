@@ -241,7 +241,7 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
       });
       expect(initialized.agentCapabilities?.promptCapabilities?.image).toBe(true);
       expect(initialized.agentCapabilities?.loadSession).toBe(true);
-      expect(initialized.agentCapabilities?.sessionCapabilities).toBeUndefined();
+      expect(initialized.agentCapabilities?.sessionCapabilities).toEqual({ close: {} });
 
       const session = await connection.agent.request(methods.agent.session.new, {
         cwd: '/tmp/project',
@@ -409,6 +409,14 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
     const updateCountBefore = records.updates.length;
 
     acpClient.disconnect();
+    // 断开时 agent 收到 session/close(声明了 sessionCapabilities.close,
+    // #89):运行态释放、历史保留,下面的 load 重放就是证明。
+    const logBefore = serverLog.length;
+    await waitFor(
+      () => serverLog.slice(logBefore).includes(`closed session ${sessionId}`),
+      5_000,
+      'disconnect 的 session/close 日志',
+    );
     await acpClient.connect(
       new StreamTransport(createWebSocketStream(`ws://127.0.0.1:${port}/acp`)),
       '/tmp/project',
@@ -534,4 +542,23 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
       expect(records.statuses.at(-1)).toBe('idle');
     },
   );
+
+  it('切换/新建会话时 agent 对被离开的会话收到 session/close(#89)', { timeout: 90_000 }, async () => {
+    // 当前活跃会话(上一用例留下的)
+    const previousId = records.sessionIds.at(-1)!;
+    const logBefore = serverLog.length;
+
+    await acpClient.newSession('/tmp/project');
+    expect(records.sessionIds.at(-1)).not.toBe(previousId);
+    await waitFor(
+      () => serverLog.slice(logBefore).includes(`closed session ${previousId}`),
+      5_000,
+      '切换会话的 session/close 日志',
+    );
+
+    // 被关的会话历史仍可 load 重放:close 只清运行态,不动 SQLite。
+    const replaysBefore = records.replayStarts;
+    await acpClient.loadSession(previousId, '/tmp/project');
+    expect(records.replayStarts).toBe(replaysBefore + 1);
+  });
 });
