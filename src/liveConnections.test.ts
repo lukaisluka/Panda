@@ -13,11 +13,12 @@ import {
   newLiveSession,
   openLiveSession,
   persistSessionsSnapshot,
-  seedProfileSlots,
   removeLiveConnection,
+  restoreEndpointSessions,
+  seedProfileSlots,
   type SessionStorage,
 } from './liveConnections';
-import { connectionStorePort, usePanda } from './store';
+import { connectionStorePort, usePanda, type SessionEntry } from './store';
 import { loadProfiles, saveProfiles, type AgentProfile } from './profiles';
 import { WORKSPACE_NONE_CWD, type Workspace } from './workspace';
 
@@ -381,6 +382,25 @@ describe('per-endpoint session persistence (issue #21)', () => {
       sessionId: string;
     }>;
     expect(after.map((entry) => entry.sessionId)).toEqual(['s-keep']);
+  });
+
+  it('restoreEndpointSessions restores only the selected endpoint cache (relocated from useLiveSession.test.ts, #61)', () => {
+    const storage = new MemoryStorage();
+    const previous: SessionEntry[] = [
+      { sessionId: 'from-previous-endpoint', cwd: '/previous', title: null, updatedAt: null },
+    ];
+    const selected: SessionEntry[] = [
+      { sessionId: 'from-selected-endpoint', cwd: '/selected', title: 'Selected', updatedAt: null },
+    ];
+    storage.setItem('panda.sessions:ws://previous/acp', JSON.stringify(previous));
+    storage.setItem('panda.sessions:ws://selected/acp', JSON.stringify(selected));
+
+    let visible = previous;
+    restoreEndpointSessions('ws://selected/acp', (sessions) => {
+      visible = sessions;
+    }, storage);
+
+    expect(visible).toEqual(selected);
   });
 });
 

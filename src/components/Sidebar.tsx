@@ -21,7 +21,7 @@ import {
 } from '../store';
 import { useConnectionLifecycle } from '../projector/hooks';
 import { isLinkUp, type AttentionReason, type ConnectionPhase } from '../projector/connectionLifecycle';
-import { isDirectConnectionId } from '../liveConnections';
+import { isDirectConnectionId, reconcileProfileSlots } from '../liveConnections';
 import { effectiveCapability, PANDA_HOST_CAPABILITIES } from '../capabilities';
 import type { AgentProfile } from '../profiles';
 import { loadProfiles, newProfileId, saveProfiles, subscribeProfiles } from '../profiles';
@@ -53,16 +53,11 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
   // source, the subscription keeps this copy from diverging.
   useEffect(() => subscribeProfiles(setProfiles), []);
 
-  // Offline agent sections: seed a disconnected slot (remembered sessions
-  // included) for every 配置, and drop slots whose 配置 was deleted —
-  // remembered sessions live per-endpoint in storage and survive both.
+  // Offline agent sections: the store's connection topology follows the
+  // profile list (seed + prune) — the policy lives in liveConnections (#61).
   useEffect(() => {
-    live.seedProfileSlots(profiles);
-    const known = new Set(profiles.map((profile) => profile.id));
-    for (const connectionId of Object.keys(usePanda.getState().connections)) {
-      if (!isDirectConnectionId(connectionId) && !known.has(connectionId)) live.remove(connectionId);
-    }
-  }, [profiles, live]);
+    reconcileProfileSlots(profiles);
+  }, [profiles]);
 
   const liveMode = mode === 'live';
   const activeConnectionId = usePanda((s) => s.activeConnectionId);
