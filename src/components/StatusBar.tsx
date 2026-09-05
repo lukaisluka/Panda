@@ -1,4 +1,4 @@
-import { CircleDot, ShieldAlert } from 'lucide-react';
+import { BadgeCheck, CircleDot, KeyRound, ShieldAlert } from 'lucide-react';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import type { SessionDocument } from '../protocol/types';
@@ -12,12 +12,14 @@ const formatTokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : S
 /** Session state + live connection on the left, context-usage meter and cost
  * on the right. Status meaning comes from the lifecycle projection (#53):
  * this component only maps a ConnectionPhase to pixels. */
-export function StatusBar({ doc, connection, mode }: {
+export function StatusBar({ doc, connection, mode, onAuthenticate }: {
   doc: SessionDocument;
   /** Display facts (agentName, url) — the status interpretation lives in
    * the lifecycle projection, consumed below. */
   connection: ConnectionInfo;
   mode: SessionMode;
+  /** v1 auth entry (#90): runs one agent-managed login method. */
+  onAuthenticate?: (methodId: string) => void;
 }) {
   const lifecycle = useForegroundLifecycle();
   const usage = doc.usage;
@@ -61,6 +63,48 @@ export function StatusBar({ doc, connection, mode }: {
                   <span className="truncate statusbar-agent" title={connection.url ?? undefined}>
                     {connection.agentName}
                   </span>
+                  {connection.authedMethodId ? (
+                    <span
+                      className="statusbar-authed"
+                      title={`已通过「${
+                        connection.availableAuthMethods.find((m) => m.id === connection.authedMethodId)?.name ??
+                        connection.authedMethodId
+                      }」认证`}
+                    >
+                      <BadgeCheck size={13} />
+                      已认证
+                    </span>
+                  ) : (
+                    connection.availableAuthMethods.length > 0 &&
+                    onAuthenticate &&
+                    // 单方法收进一个「认证」按钮;多方法各按方法名成组
+                    // (agent 声明的方法通常个位数,状态栏撑得住)。
+                    (connection.availableAuthMethods.length === 1 ? (
+                      <button
+                        type="button"
+                        className="statusbar-auth-btn"
+                        title={
+                          connection.availableAuthMethods[0]!.description ??
+                          `通过「${connection.availableAuthMethods[0]!.name}」认证`
+                        }
+                        onClick={() => onAuthenticate(connection.availableAuthMethods[0]!.id)}
+                      >
+                        <KeyRound size={12} /> 认证
+                      </button>
+                    ) : (
+                      connection.availableAuthMethods.map((method) => (
+                        <button
+                          key={method.id}
+                          type="button"
+                          className="statusbar-auth-btn"
+                          title={method.description ?? `通过「${method.name}」认证`}
+                          onClick={() => onAuthenticate(method.id)}
+                        >
+                          <KeyRound size={12} /> {method.name}
+                        </button>
+                      ))
+                    ))
+                  )}
                 </>
               )}
             </span>

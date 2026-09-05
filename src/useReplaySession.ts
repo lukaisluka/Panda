@@ -68,6 +68,8 @@ export function useReplaySession(): ForegroundSessionController {
       agentName: null,
       protocolVersion: null,
       sessionId: null,
+      availableAuthMethods: [],
+      authedMethodId: null,
       error: null,
     });
     // The pseudo session/new result: modes arrive exactly where the live

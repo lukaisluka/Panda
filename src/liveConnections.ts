@@ -258,6 +258,7 @@ function wireHandlers(entry: LiveConnection) {
         protocolVersion: info.protocolVersion,
         error: null,
         authMethods: null,
+        authedMethodId: null,
         authElicitation: null,
       });
       // "默认工作区" = what the last successful connect used (issue #2, #23).
@@ -281,8 +282,8 @@ function wireHandlers(entry: LiveConnection) {
       abandonStagedSwitch(entry, 'disconnect');
       port.setConnection(
         reason
-          ? { status: 'error', error: reason, authMethods: null, authElicitation: null }
-          : { status: 'disconnected', error: null, sessionId: null, authMethods: null, authElicitation: null },
+          ? { status: 'error', error: reason, authMethods: null, availableAuthMethods: [], authedMethodId: null, authElicitation: null }
+          : { status: 'disconnected', error: null, sessionId: null, authMethods: null, availableAuthMethods: [], authedMethodId: null, authElicitation: null },
       );
     },
     // v1 auth_required: the session waits for login; the auth card takes over
@@ -297,6 +298,14 @@ function wireHandlers(entry: LiveConnection) {
     },
     onAuthElicitation: (request: ElicitationRequest | null) => {
       port.setConnection({ authElicitation: request });
+    },
+    // initialize's standing offer (#90): powers the status-bar auth entry.
+    onAuthMethods: (methods: AcpAuthMethod[]) => {
+      port.setConnection({ availableAuthMethods: methods });
+    },
+    // onConnected just nulled the record; a live era settles it right after.
+    onAuthenticated: (methodId: string) => {
+      port.setConnection({ authedMethodId: methodId });
     },
     onCapabilities: (caps: {
       image: boolean;
@@ -420,6 +429,8 @@ export async function connectLiveConnection(
     agentName: null,
     protocolVersion: null,
     sessionId: resumeSessionId,
+    availableAuthMethods: [],
+    authedMethodId: null,
   });
   // Seed the sidebar with sessions remembered for this service; the server
   // list (if any) merges on top. A replacing connect replaces the old
@@ -512,6 +523,8 @@ export function seedProfileSlots(profiles: AgentProfile[], storage: SessionStora
       agentName: null,
       protocolVersion: null,
       sessionId: null,
+      availableAuthMethods: [],
+      authedMethodId: null,
       error: null,
     });
   }

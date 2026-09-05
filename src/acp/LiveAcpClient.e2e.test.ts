@@ -50,6 +50,10 @@ type Records = {
   sessionIds: string[];
   sessionInfos: { sessionId: string; title?: string | null; updatedAt?: string | null }[];
   replayStarts: number;
+  /** initialize 的常驻登录方式(#90)。 */
+  authMethodOffers: { id: string; name: string; description?: string }[][];
+  /** authenticate 成功的方法 id(#90)。 */
+  authedMethodIds: string[];
 };
 
 async function waitFor(predicate: () => boolean, timeoutMs: number, what: string): Promise<void> {
@@ -112,6 +116,8 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
     sessionIds: [],
     sessionInfos: [],
     replayStarts: 0,
+    authMethodOffers: [],
+    authedMethodIds: [],
   };
 
   beforeAll(async () => {
@@ -171,6 +177,8 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
       onDisconnected: () => {},
       onAuthChallenge: () => {},
       onAuthElicitation: () => {},
+      onAuthMethods: (methods) => records.authMethodOffers.push(methods),
+      onAuthenticated: (methodId) => records.authedMethodIds.push(methodId),
       onCapabilities: (capabilities) => records.capabilities.push(capabilities),
       onSessions: () => {},
       onSessionInfo: (sessionId, info) => records.sessionInfos.push({ sessionId, ...info }),
@@ -560,5 +568,33 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
     const replaysBefore = records.replayStarts;
     await acpClient.loadSession(previousId, '/tmp/project');
     expect(records.replayStarts).toBe(replaysBefore + 1);
+  });
+
+  it('主动认证:authMethods 上报、authenticate 往返、落已认证记录(#90)', { timeout: 90_000 }, async () => {
+    // test-agent 在 initialize 声明了 panda-token(假实现,无条件成功);
+    // e2e 全程多次重连,每次 initialize 的 offer 必须一致
+    const expectedOffer = [
+      {
+        id: 'panda-token',
+        name: 'Panda 访问令牌',
+        description: '测试用登录方式:点击即认证成功(假实现,不校验凭据)',
+      },
+    ];
+    expect(records.authMethodOffers.length).toBeGreaterThan(0);
+    for (const offer of records.authMethodOffers) {
+      expect(offer).toEqual(expectedOffer);
+    }
+
+    const logBefore = serverLog.length;
+    await acpClient.authenticate('panda-token');
+    // agent 侧收到并记录
+    await waitFor(
+      () => serverLog.slice(logBefore).includes('authenticated via "panda-token"'),
+      5_000,
+      'authenticate 日志',
+    );
+    // 客户端落「已认证」记录,且新会话已重建(会话 id 换新)
+    expect(records.authedMethodIds).toEqual(['panda-token']);
+    expect(records.sessionIds.length).toBeGreaterThan(1);
   });
 });

@@ -116,6 +116,7 @@ function MainScreen() {
           doc={doc}
           connection={connection}
           mode={mode}
+          onAuthenticate={live.authenticate}
         />
         <Composer
           onSend={controller.send}

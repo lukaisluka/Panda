@@ -113,6 +113,14 @@ export type LiveClientHandlers = {
    */
   onAuthElicitation(request: ElicitationRequest | null): void;
   onCapabilities(caps: AgentCaps): void;
+  /**
+   * Agent-managed login methods advertised at initialize (v1 auth) — the
+   * always-visible entry for proactive authentication. Empty array = the
+   * agent declared none (no UI change).
+   */
+  onAuthMethods(methods: AcpAuthMethod[]): void;
+  /** `authenticate(methodId)` succeeded and a session now lives (#90). */
+  onAuthenticated(methodId: string): void;
   /** Server-side session list (session/list, all pages). */
   onSessions(entries: SessionSummary[]): void;
   /** Live session metadata (session_info_update); undefined fields = untouched. */
@@ -477,6 +485,7 @@ export class LiveAcpClient {
       this.initInfo = { agentName, protocolVersion: init.protocolVersion };
       this.lastCwd = cwd;
       this.handlers.onCapabilities(this.capabilities);
+      this.handlers.onAuthMethods(this.authMethods);
       if (this.can('list')) await this.fetchSessionList(connection, generation);
       if (!isCurrent()) {
         discardSuperseded('session list');
@@ -605,6 +614,7 @@ export class LiveAcpClient {
       // establishSession superseded-returns silently; only a live era settles.
       if (this.initInfo) this.handlers.onConnected(this.initInfo);
       this.handlers.onAuthElicitation(null);
+      this.handlers.onAuthenticated(methodId);
       console.info(`[panda/acp] authenticated via "${methodId}", session established`);
     } catch (err) {
       if (generation !== this.connectionGeneration) {

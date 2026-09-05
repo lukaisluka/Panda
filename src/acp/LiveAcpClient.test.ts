@@ -50,6 +50,10 @@ type Records = {
   deletedSessions: string[];
   /** onAuthChallenge emissions (v1 auth_required recovery). */
   authChallenges: { methods: { id: string; name: string; description?: string }[]; message: string }[];
+  /** initialize 的常驻登录方式(#90)。 */
+  authMethodOffers: { id: string; name: string; description?: string }[][];
+  /** authenticate 成功的方法 id(#90)。 */
+  authedMethodIds: string[];
   /** onAuthElicitation emissions (auth-phase request-scoped elicitations). */
   authElicitations: (object | null)[];
   /**
@@ -171,6 +175,8 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     replays: [],
     deletedSessions: [],
     authChallenges: [],
+    authMethodOffers: [],
+    authedMethodIds: [],
     authElicitations: [],
     switchLog: [],
   };
@@ -188,6 +194,8 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     onDisconnected: (reason) => records.disconnected.push(reason),
     onAuthChallenge: (challenge) => records.authChallenges.push(challenge),
     onAuthElicitation: (request) => records.authElicitations.push(request),
+    onAuthMethods: (methods) => records.authMethodOffers.push(methods),
+    onAuthenticated: (methodId) => records.authedMethodIds.push(methodId),
     onCapabilities: (caps) => records.capabilities.push(caps),
     onSessions: (entries) => records.sessions.push(entries),
     onSessionInfo: (sessionId, info) => records.sessionInfos.push({ sessionId, ...info }),
@@ -1880,6 +1888,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onDisconnected: () => {},
       onAuthChallenge: () => {},
       onAuthElicitation: () => {},
+      onAuthMethods: () => {},
+      onAuthenticated: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1935,6 +1945,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onDisconnected: () => {},
       onAuthChallenge: () => {},
       onAuthElicitation: () => {},
+      onAuthMethods: () => {},
+      onAuthenticated: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -1992,6 +2004,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onDisconnected: () => {},
       onAuthChallenge: () => {},
       onAuthElicitation: () => {},
+      onAuthMethods: () => {},
+      onAuthenticated: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -2040,6 +2054,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
         ),
       onAuthChallenge: () => {},
       onAuthElicitation: () => {},
+      onAuthMethods: () => {},
+      onAuthenticated: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -2093,6 +2109,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onDisconnected: (reason) => disconnected.push(reason),
       onAuthChallenge: () => {},
       onAuthElicitation: () => {},
+      onAuthMethods: () => {},
+      onAuthenticated: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -2139,6 +2157,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onDisconnected: (reason) => disconnected.push(reason),
       onAuthChallenge: () => {},
       onAuthElicitation: () => {},
+      onAuthMethods: () => {},
+      onAuthenticated: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -2170,6 +2190,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onDisconnected: (reason) => disconnected.push(reason),
       onAuthChallenge: () => {},
       onAuthElicitation: () => {},
+      onAuthMethods: () => {},
+      onAuthenticated: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -2352,6 +2374,8 @@ describe('LiveAcpClient × connectionStorePort', () => {
       },
       onAuthChallenge: () => {},
       onAuthElicitation: () => {},
+      onAuthMethods: () => {},
+      onAuthenticated: () => {},
       onCapabilities: () => {},
       onSessions: () => {},
       onSessionInfo: () => {},
@@ -2408,6 +2432,26 @@ describe('LiveAcpClient v1 authentication', () => {
     ]);
     // The wire stays open — no disconnect for a login gate.
     expect(h.disconnected).toEqual([]);
+    h.closeAll();
+  });
+
+  it('initialize offers the auth methods for proactive login (#90)', async () => {
+    const h = await setup({ authMethods: AUTH_METHODS });
+    // 无 gate:连接正常建立,但常驻方式照样上报(UI 入口的依据)
+    expect(h.connected).toHaveLength(1);
+    expect(h.authMethodOffers).toEqual([
+      [{ id: 'oauth-github', name: 'Sign in with GitHub', description: 'Opens the browser' }],
+    ]);
+    expect(h.authChallenges).toHaveLength(0);
+    h.closeAll();
+  });
+
+  it('a proactive authenticate settles onAuthenticated with a fresh session (#90)', async () => {
+    const h = await setup({ authMethods: AUTH_METHODS, newSessionIds: ['s-1', 's-2'] });
+    await h.acpClient.authenticate('oauth-github');
+    expect(h.agentState.authenticateRequests).toEqual(['oauth-github']);
+    expect(h.authedMethodIds).toEqual(['oauth-github']);
+    expect(h.sessionIds.at(-1)).toBe('s-2'); // 认证后重建会话
     h.closeAll();
   });
 
