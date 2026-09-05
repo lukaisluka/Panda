@@ -1,0 +1,34 @@
+{
+  "name": "panda-test-agent",
+  "version": "0.1.0",
+  "description": "Test-dedicated ACP agent for Panda, built on deepagents (TypeScript)",
+  "license": "Apache-2.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "serve": "tsx src/main.ts serve",
+    "stdio": "tsx src/main.ts stdio",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "^1.4.0",
+    "@langchain/core": "^1.2.9",
+    "@langchain/langgraph": "^1.4.13",
+    "@langchain/langgraph-checkpoint": "^1.1.5",
+    "deepagents": "^1.13.3",
+    "langchain": "^1.5.10",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@langchain/openai": "^1.5.11",
+    "@types/node": "^26.4.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}

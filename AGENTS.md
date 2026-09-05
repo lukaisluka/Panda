@@ -27,9 +27,11 @@ migration tracked in #32; dev-only self-check at `#/astryx-smoke`.
 
 ### Test ACP agent
 
-`test-agent/` is an isolated Python 3.11+ project managed by `uv`. It runs the
-real deepagents/deepagents-acp stack behind Panda's WebSocket transport; only
-the default chat model is deterministic. Keep the pinned ACP dependency trio in
-`test-agent/pyproject.toml` aligned, because deepagents-acp 0.0.11 imports APIs
-removed by newer agent-client-protocol releases. Runtime sandboxes and SQLite
-state belong under ignored `test-agent/sandbox/` and `test-agent/.state/`.
+`test-agent/` is a TypeScript pnpm-workspace package (`panda-test-agent`, Node
+>= 22.5 for `node:sqlite`) running the real deepagents JS stack behind an ACP
+shell built directly on `@agentclientprotocol/sdk` (the same SDK Panda uses);
+only the default chat model is deterministic (scripted). The npm
+`deepagents-acp` server is intentionally NOT used — its sessions live in
+process memory and its permission flow never resumes the graph. Runtime
+sandboxes and SQLite state belong under ignored `test-agent/sandbox*/` and
+`test-agent/.state*/`.

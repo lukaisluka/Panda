@@ -1,3 +1,6 @@
+packages:
+  - test-agent
 # @astryxdesign/core postinstall only prints an "astryx init" nudge — nothing to build.
 allowBuilds:
   '@astryxdesign/core': false
+  esbuild: true
