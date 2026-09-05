@@ -27,7 +27,6 @@ import type {
   ElicitationResponse,
   PermissionOptionKind,
   PermissionResponse,
-  SessionStatus,
 } from '../protocol/types';
 import {
   echoRelation,
@@ -83,7 +82,6 @@ export type SessionSummary = {
 
 export type LiveClientHandlers = {
   onUpdate(update: AcpSessionUpdate): void;
-  onStatus(status: SessionStatus): void;
   onConnected(info: { agentName: string; protocolVersion: number }): void;
   onSessionId(sessionId: string, cwd: string): void;
   /**
@@ -790,7 +788,7 @@ export class LiveAcpClient {
     const pendingOutbound: PendingOutbound = { prompt: content, buffered: [], echoWindowClosed: false };
     this.pendingOutbound = pendingOutbound;
     this.handlers.onUpdate({ sessionUpdate: 'user_message', content, optimistic: true });
-    this.handlers.onStatus('running');
+    this.handlers.onUpdate({ sessionUpdate: 'status_changed', status: 'running' });
     const wirePrompt: ContentBlock[] = content;
     const prompt = this.connection.agent.request(methods.agent.session.prompt, {
       sessionId: this.sessionId,
@@ -836,7 +834,7 @@ export class LiveAcpClient {
         // pending state — with or without protocol confirmation.
         this.settlePendingOutbound();
       }
-      if (this.pendingPrompt === null) this.handlers.onStatus('idle');
+      if (this.pendingPrompt === null) this.handlers.onUpdate({ sessionUpdate: 'status_changed', status: 'idle' });
     }
   }
 
@@ -900,13 +898,7 @@ export class LiveAcpClient {
     // out-of-band.
     waiter.resolve({ action: 'accept' });
     this.handlers.onUpdate({ sessionUpdate: 'elicitation_url_opened', elicitationId: id });
-    this.handlers.onStatus(
-      this.elicitationWaiters.size > 0 || this.permissionWaiters.size > 0
-        ? 'requires_action'
-        : this.pendingPrompt
-          ? 'running'
-          : 'idle',
-    );
+    this.convergeStatus();
   }
 
   /** Cancels the in-flight turn: `session/cancel` + cancelled permission outcomes. */
@@ -1262,7 +1254,7 @@ export class LiveAcpClient {
       };
       signal.addEventListener('abort', settleAborted);
       if (signal.aborted) settleAborted();
-      else this.handlers.onStatus('requires_action');
+      else this.convergeStatus();
     });
   }
 
@@ -1313,13 +1305,7 @@ export class LiveAcpClient {
       toolCallId,
       response: uiResponse,
     });
-    this.handlers.onStatus(
-      this.permissionWaiters.size > 0
-        ? 'requires_action'
-        : this.pendingPrompt
-          ? 'running'
-          : 'idle',
-    );
+    this.convergeStatus();
   }
 
   /**
@@ -1378,7 +1364,7 @@ export class LiveAcpClient {
       // Auth-phase elicitations have no document to mark requires_action —
       // the connection is already in auth_required state.
       if (signal.aborted) settleAborted();
-      else if (!authScoped) this.handlers.onStatus('requires_action');
+      else if (!authScoped) this.convergeStatus();
     });
   }
 
@@ -1407,13 +1393,25 @@ export class LiveAcpClient {
           ? { action: 'decline' }
           : { action: 'cancel' },
     );
-    this.handlers.onStatus(
-      this.elicitationWaiters.size > 0 || this.permissionWaiters.size > 0
-        ? 'requires_action'
-        : this.pendingPrompt
-          ? 'running'
-          : 'idle',
-    );
+    this.convergeStatus();
+  }
+
+  /**
+   * Converges the turn status after waiter state changed (#55): any pending
+   * permission/elicitation holds the turn at requires_action, else the
+   * in-flight prompt decides. Emitted as a status_changed event — the
+   * document's status is a fact in the event stream, never a side channel.
+   */
+  private convergeStatus(): void {
+    this.handlers.onUpdate({
+      sessionUpdate: 'status_changed',
+      status:
+        this.elicitationWaiters.size > 0 || this.permissionWaiters.size > 0
+          ? 'requires_action'
+          : this.pendingPrompt
+            ? 'running'
+            : 'idle',
+    });
   }
 
   /** Cancels every pending elicitation (turn cancel, dead turn, disconnect). */
@@ -1438,13 +1436,7 @@ export class LiveAcpClient {
       console.warn(`[panda/acp] elicitation/complete for ${id} that was never opened — answering accept`);
       this.elicitationWaiters.delete(id);
       waiter.resolve({ action: 'accept' });
-      this.handlers.onStatus(
-        this.elicitationWaiters.size > 0 || this.permissionWaiters.size > 0
-          ? 'requires_action'
-          : this.pendingPrompt
-            ? 'running'
-            : 'idle',
-      );
+      this.convergeStatus();
     }
     this.handlers.onUpdate({ sessionUpdate: 'elicitation_url_completed', elicitationId: id });
   }

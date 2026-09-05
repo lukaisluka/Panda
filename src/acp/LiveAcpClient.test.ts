@@ -166,10 +166,14 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
     switchLog: [],
   };
   const handlers: LiveClientHandlers = {
-    onUpdate: (update) => records.updates.push(update),
+    onUpdate: (update) => {
+      records.updates.push(update);
+      // Status rides the update stream (#55) — keep the statuses record so
+      // existing assertions read the same timeline.
+      if (update.sessionUpdate === 'status_changed') records.statuses.push(update.status);
+    },
     onSessionModes: () => {},
     onSessionConfigOptions: () => {},
-    onStatus: (status) => records.statuses.push(status),
     onConnected: (info) => records.connected.push(info),
     onSessionId: (id) => records.sessionIds.push(id),
     onDisconnected: (reason) => records.disconnected.push(reason),
@@ -322,6 +326,12 @@ function permissionEvents(h: Harness) {
     (u): u is Extract<typeof u, { sessionUpdate: 'permission_requested' | 'permission_resolved' }> =>
       u.sessionUpdate === 'permission_requested' || u.sessionUpdate === 'permission_resolved',
   );
+}
+
+/** The update stream minus status_changed (#55): content-ordering
+ * assertions read this; status timing is covered by h.statuses. */
+function contentEvents(h: Harness) {
+  return h.updates.filter((u) => u.sessionUpdate !== 'status_changed');
 }
 
 /** Waits until the document stream has seen `n` permission events. */
@@ -1307,7 +1317,7 @@ describe('LiveAcpClient', () => {
     const h = await setup({ onPrompt });
     await h.acpClient.send([{ type: 'text', text: 'hi' }]);
 
-    expect(h.updates).toEqual([
+    expect(contentEvents(h)).toEqual([
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }], optimistic: true },
       {
         sessionUpdate: 'user_message_confirmed',
@@ -1351,23 +1361,23 @@ describe('LiveAcpClient', () => {
     const h = await setup({ onPrompt });
     await h.acpClient.send([{ type: 'text', text: 'hello world' }]);
 
-    expect(h.updates[0]).toEqual({
+    expect(contentEvents(h)[0]).toEqual({
       sessionUpdate: 'user_message',
       content: [{ type: 'text', text: 'hello world' }],
       optimistic: true,
     });
     // The partial echo renders as its own protocol message, in wire order,
     // and the echo window stays closed for the chunk that follows.
-    expect(h.updates[1]).toMatchObject({
+    expect(contentEvents(h)[1]).toMatchObject({
       sessionUpdate: 'user_message',
       content: [{ type: 'text', text: 'hello ' }],
     });
-    expect(h.updates[2]).toMatchObject({ sessionUpdate: 'agent_thought_chunk' });
-    expect(h.updates[3]).toMatchObject({
+    expect(contentEvents(h)[2]).toMatchObject({ sessionUpdate: 'agent_thought_chunk' });
+    expect(contentEvents(h)[3]).toMatchObject({
       sessionUpdate: 'user_message',
       content: [{ type: 'text', text: 'world' }],
     });
-    expect(h.updates.some((u) => u.sessionUpdate === 'user_message_confirmed')).toBe(false);
+    expect(contentEvents(h).some((u) => u.sessionUpdate === 'user_message_confirmed')).toBe(false);
     h.closeAll();
   });
 
@@ -1383,7 +1393,7 @@ describe('LiveAcpClient', () => {
     const h = await setup({ onPrompt });
     await h.acpClient.send([{ type: 'text', text: 'hi' }]);
 
-    expect(h.updates).toEqual([
+    expect(contentEvents(h)).toEqual([
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }], optimistic: true },
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: '别的' }], raw: expect.any(Object) },
     ]);
@@ -1403,7 +1413,7 @@ describe('LiveAcpClient', () => {
     await h.acpClient.send([{ type: 'text', text: 'hello' }]);
 
     // The partial echo was held (prefix); the turn ending must render it.
-    expect(h.updates).toEqual([
+    expect(contentEvents(h)).toEqual([
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hello' }], optimistic: true },
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hel' }], raw: expect.any(Object) },
     ]);
@@ -1422,7 +1432,7 @@ describe('LiveAcpClient', () => {
     const h = await setup({ onPrompt });
     await h.acpClient.send([{ type: 'text', text: 'hello' }]);
 
-    expect(h.updates).toEqual([
+    expect(contentEvents(h)).toEqual([
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hello' }], optimistic: true },
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hel' }], raw: expect.any(Object) },
     ]);
@@ -1519,7 +1529,6 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onUpdate: (update) => port.update(update),
       onSessionModes: () => {},
       onSessionConfigOptions: () => {},
-      onStatus: () => {},
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
       onDisconnected: () => {},
@@ -1575,7 +1584,6 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onUpdate: (update) => port.update(update),
       onSessionModes: () => {},
       onSessionConfigOptions: () => {},
-      onStatus: () => {},
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
       onDisconnected: () => {},
@@ -1633,7 +1641,6 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onUpdate: (update) => port.update(update),
       onSessionModes: () => {},
       onSessionConfigOptions: () => {},
-      onStatus: () => {},
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
       onDisconnected: () => {},
@@ -1677,7 +1684,6 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onUpdate: (update) => port.update(update),
       onSessionModes: () => {},
       onSessionConfigOptions: () => {},
-      onStatus: () => {},
       onConnected: () => {},
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),
       onDisconnected: (reason) =>
@@ -1736,7 +1742,6 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onUpdate: () => {},
       onSessionModes: () => {},
       onSessionConfigOptions: () => {},
-      onStatus: () => {},
       onConnected: (info) => connected.push(info.agentName),
       onSessionId: (id) => sessionIds.push(id),
       onDisconnected: (reason) => disconnected.push(reason),
@@ -1783,7 +1788,6 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onUpdate: () => {},
       onSessionModes: () => {},
       onSessionConfigOptions: () => {},
-      onStatus: () => {},
       onConnected: () => {},
       onSessionId: () => {},
       onDisconnected: (reason) => disconnected.push(reason),
@@ -1815,7 +1819,6 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onUpdate: () => {},
       onSessionModes: () => {},
       onSessionConfigOptions: () => {},
-      onStatus: () => {},
       onConnected: (info) => connected.push(info.agentName),
       onSessionId: () => {},
       onDisconnected: (reason) => disconnected.push(reason),
@@ -1876,7 +1879,7 @@ describe('LiveAcpClient × connectionStorePort', () => {
     releaseChunk();
     await turn;
 
-    expect(h.updates).toEqual([
+    expect(contentEvents(h)).toEqual([
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }], optimistic: true },
     ]);
     expect(warnSpy).toHaveBeenCalledWith(
@@ -1990,7 +1993,6 @@ describe('LiveAcpClient × connectionStorePort', () => {
       onUpdate: (update) => port.update(update),
       onSessionModes: () => {},
       onSessionConfigOptions: () => {},
-      onStatus: () => {},
       onConnected: (info) =>
         port.setConnection({ status: 'connected', agentName: info.agentName, protocolVersion: info.protocolVersion, error: null }),
       onSessionId: (id, cwd) => port.adoptSession(id, cwd),

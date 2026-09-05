@@ -4,13 +4,11 @@ import type {
   ElicitationResponse,
   PermissionOptionKind,
   PermissionRequest,
-  SessionStatus,
 } from '../protocol/types';
 import type { ReplayStep } from './types';
 
 export type DriverHandlers = {
   onUpdate(update: AcpSessionUpdate): void;
-  onStatus(status: SessionStatus): void;
 };
 
 /**
@@ -131,11 +129,11 @@ export class ReplayDriver {
           this.tick();
           break;
         case 'status':
-          this.handlers.onStatus(step.status);
+          this.handlers.onUpdate({ sessionUpdate: 'status_changed', status: step.status });
           this.tick();
           break;
         case 'permission':
-          this.handlers.onStatus('requires_action');
+          this.handlers.onUpdate({ sessionUpdate: 'status_changed', status: 'requires_action' });
           this.waitingPermission = { request: step.request, onResolve: step.onResolve };
           this.handlers.onUpdate({
             sessionUpdate: 'permission_requested',
@@ -143,7 +141,7 @@ export class ReplayDriver {
           });
           break;
         case 'elicitation':
-          this.handlers.onStatus('requires_action');
+          this.handlers.onUpdate({ sessionUpdate: 'status_changed', status: 'requires_action' });
           this.waitingElicitation = { kind: 'form', request: step.request, onResolve: step.onResolve };
           this.handlers.onUpdate({
             sessionUpdate: 'elicitation_requested',
@@ -151,7 +149,7 @@ export class ReplayDriver {
           });
           break;
         case 'elicitation_url':
-          this.handlers.onStatus('requires_action');
+          this.handlers.onUpdate({ sessionUpdate: 'status_changed', status: 'requires_action' });
           this.waitingElicitation = { kind: 'url', request: step.request, onResolve: step.onResolve, onOpen: step.onOpen };
           this.handlers.onUpdate({
             sessionUpdate: 'elicitation_requested',

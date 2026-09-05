@@ -10,7 +10,6 @@ import type {
   ElicitationRequest,
   ElicitationResponse,
   PermissionOptionKind,
-  SessionStatus,
 } from './protocol/types';
 import { connectionStorePort, usePanda, type ConnectionStorePort, type SessionEntry, type SessionSwitchSnapshot } from './store';
 import { updateProfileFields, type AgentProfile } from './profiles';
@@ -244,7 +243,6 @@ function wireHandlers(entry: LiveConnection) {
   const { connectionId, port } = entry;
   return {
     onUpdate: (update: AcpSessionUpdate) => port.update(update),
-    onStatus: (status: SessionStatus) => port.setStatus(status),
     onConnected: (info: { agentName: string; protocolVersion: number }) => {
       port.setConnection({
         status: 'connected',

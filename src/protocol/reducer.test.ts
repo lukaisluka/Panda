@@ -38,6 +38,20 @@ const rawNote = (label: string): SessionNotification =>
 const carryingRaw = (update: AcpSessionUpdate, raw: SessionNotification): AcpSessionUpdate =>
   ({ ...update, raw }) as AcpSessionUpdate;
 
+describe('reducer status_changed (#55)', () => {
+  it('folds a status transition — status is a fact in the event stream', () => {
+    const doc = applyUpdate(emptySession(), { sessionUpdate: 'status_changed', status: 'running' });
+    expect(doc.status).toBe('running');
+    const settled = applyUpdate(doc, { sessionUpdate: 'status_changed', status: 'idle' });
+    expect(settled.status).toBe('idle');
+  });
+
+  it('is idempotent by reference: a redundant convergence keeps the doc identity', () => {
+    const doc = applyUpdate(emptySession(), { sessionUpdate: 'status_changed', status: 'requires_action' });
+    expect(applyUpdate(doc, { sessionUpdate: 'status_changed', status: 'requires_action' })).toBe(doc);
+  });
+});
+
 describe('reducer content parts', () => {
   it('concatenates text chunks of the same messageId into one part', () => {
     const doc = fold([textChunk('m1', 'a'), textChunk('m1', 'b')]);

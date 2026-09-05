@@ -168,8 +168,8 @@ describe('parallel connections (issue #21)', () => {
     await connectedStub('agent-b', stubs, 's-b');
     foregroundConnection('agent-a'); // B is now background
 
-    stubs[1]!.handlers.onStatus('running');
-    stubs[1]!.handlers.onStatus('idle');
+    stubs[1]!.handlers.onUpdate({ sessionUpdate: 'status_changed', status: 'running' });
+    stubs[1]!.handlers.onUpdate({ sessionUpdate: 'status_changed', status: 'idle' });
     expect(usePanda.getState().connections['agent-b']!.unreadCompletion).toBe(true);
 
     foregroundConnection('agent-b');

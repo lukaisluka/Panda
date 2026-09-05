@@ -121,6 +121,12 @@ export function applyUpdate(
         update.raw,
       );
 
+    case 'status_changed':
+      // Idempotent fold: an unchanged value keeps the doc's identity — the
+      // projector/memo contract (ADR 0006) survives redundant convergence.
+      if (doc.status === update.status) return doc;
+      return { ...doc, status: update.status };
+
     case 'turn_notice':
       // Stays inside the turn that just ended — a system row, never a new turn.
       return appendBlock(doc, { kind: 'turn_notice', stopReason: update.stopReason }, false);
