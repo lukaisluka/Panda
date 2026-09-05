@@ -384,7 +384,7 @@ describe('selection generation (issue #19)', () => {
     // The delete bumped the generation: the commit is superseded — it must
     // not route the connection onto a world whose predecessor was deleted.
     expect(state.activeSessionId).toBeNull(); // cleared by the delete itself
-    expect(state.connections['live']!.connection.sessionId).toBe('s-1'); // untouched by the stale commit
+    expect(state.connections['live']!.connection.sessionId).toBeNull(); // unanchored by the delete (#59), untouched by the stale commit
     expect(state.connections['live']!.switching).toBeNull();
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('superseded'));
     warnSpy.mockRestore();
@@ -520,5 +520,105 @@ describe('multi-connection foreground (issue #21)', () => {
     expect(connectionLifecycle(usePanda.getState().connections['live']!).attention).toContain('connection-error');
     port.setConnection({ status: 'connected', error: null });
     expect(connectionLifecycle(usePanda.getState().connections['live']!).attention).toEqual([]);
+  });
+});
+
+describe('selection pointer invariants (#59)', () => {
+  /** activeSessionId must mirror the foreground connection's anchor. */
+  const expectPointerMirrorsAnchor = () => {
+    const s = usePanda.getState();
+    const anchor =
+      s.activeConnectionId !== null
+        ? (s.connections[s.activeConnectionId]?.connection.sessionId ?? null)
+        : null;
+    expect(s.activeSessionId).toBe(anchor);
+  };
+
+  it('adopt on the foreground connection moves both pointers together', () => {
+    usePanda.getState().ensureConnection('live');
+    connectionStorePort('live').adoptSession('s-1', '/a');
+    expectPointerMirrorsAnchor();
+    expect(usePanda.getState().activeSessionId).toBe('s-1');
+  });
+
+  it('adopt on a background connection leaves the UI pointer alone', () => {
+    usePanda.getState().ensureConnection('fg');
+    const fg = connectionStorePort('fg');
+    fg.adoptSession('s-1', '/a');
+    usePanda.getState().seedConnection('bg');
+    connectionStorePort('bg').adoptSession('s-2', '/b');
+    expectPointerMirrorsAnchor();
+    expect(usePanda.getState().activeSessionId).toBe('s-1');
+  });
+
+  it('a committed switch moves both pointers; a rollback moves neither', () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+    const committed = port.stageSession('s-2', '/b');
+    expect(usePanda.getState().activeSessionId).toBe('s-1'); // in flight: UI stays put
+    port.commitStagedSession(committed);
+    expectPointerMirrorsAnchor();
+    expect(usePanda.getState().activeSessionId).toBe('s-2');
+
+    const rolledBack = port.stageSession('s-1', '/a');
+    port.rollbackStagedSession(rolledBack);
+    expectPointerMirrorsAnchor();
+    expect(usePanda.getState().activeSessionId).toBe('s-2');
+  });
+
+  it('deleting the session the UI is looking at clears the pointer AND the anchor (#59 dangling fix)', () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+    port.removeSession('s-1');
+    expect(usePanda.getState().activeSessionId).toBe(null);
+    expect(usePanda.getState().connections['live']!.connection.sessionId).toBe(null);
+    expectPointerMirrorsAnchor();
+  });
+
+  it('deleting a background connection’s session unanchors it without touching the foreground', () => {
+    usePanda.getState().ensureConnection('fg');
+    connectionStorePort('fg').adoptSession('s-1', '/a');
+    usePanda.getState().seedConnection('bg');
+    const bg = connectionStorePort('bg');
+    bg.adoptSession('s-2', '/b');
+    bg.removeSession('s-2');
+    expect(usePanda.getState().connections['bg']!.connection.sessionId).toBe(null);
+    expect(usePanda.getState().activeSessionId).toBe('s-1');
+    expectPointerMirrorsAnchor();
+  });
+
+  it('closing the foreground connection clears both pointers', () => {
+    usePanda.getState().ensureConnection('live');
+    connectionStorePort('live').adoptSession('s-1', '/a');
+    usePanda.getState().closeConnection('live');
+    expect(usePanda.getState().activeSessionId).toBe(null);
+    expectPointerMirrorsAnchor();
+  });
+
+  it('switching the foreground re-derives the UI pointer from the target’s anchor', () => {
+    usePanda.getState().ensureConnection('a');
+    connectionStorePort('a').adoptSession('s-1', '/a');
+    usePanda.getState().ensureConnection('b');
+    connectionStorePort('b').adoptSession('s-2', '/b');
+    usePanda.getState().setActiveConnection('b');
+    expectPointerMirrorsAnchor();
+    expect(usePanda.getState().activeSessionId).toBe('s-2');
+    // Switching to an anchorless connection settles on nothing.
+    usePanda.getState().seedConnection('fresh');
+    usePanda.getState().setActiveConnection('fresh');
+    expectPointerMirrorsAnchor();
+    expect(usePanda.getState().activeSessionId).toBe(null);
+  });
+
+  it('retained-document viewing is the explicit divergence: the UI pointer shows the requested session, the anchor does not move', () => {
+    usePanda.getState().ensureConnection('live');
+    connectionStorePort('live').adoptSession('s-1', '/a');
+    connectionStorePort('live').adoptSession('s-2', '/b');
+    connectionStorePort('live').adoptSession('s-1', '/a');
+    usePanda.getState().setActiveConnection('live', 's-2');
+    expect(usePanda.getState().activeSessionId).toBe('s-2');
+    expect(usePanda.getState().connections['live']!.connection.sessionId).toBe('s-1');
   });
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { DEMO_CONNECTION_ID, connectionStorePort, usePanda, type ConnectionStorePort } from './store';
+import { DEMO_CONNECTION_ID, connectionStorePort, foregroundSessionId, usePanda, type ConnectionStorePort } from './store';
 import { ReplayDriver } from './replay/ReplayDriver';
 import { DEMO_CONFIG_OPTIONS, DEMO_MODES, followUpScenario, longScenario, mainScenario } from './replay/fixtures';
 import type { AcpConfigOption, AcpContentBlock, ElicitationResponse, PermissionOptionKind } from './protocol/types';
@@ -58,7 +58,10 @@ export function useReplaySession(): ForegroundSessionController {
     usePanda.getState().ensureConnection(DEMO_CONNECTION_ID);
     port.adoptSession(DEMO_SESSION_ID, 'demo');
     port.resetDocument();
-    // The replay owns the session — connection state must not leak in.
+    // The replay owns the session — connection state must not leak in. This
+    // nulling is the design-sanctioned pointer divergence (#59): the UI
+    // pointer stays 'demo' (set by adoptSession above) while the anchor is
+    // cleared — the demo session is intentionally unanchored.
     port.setConnection({
       status: 'disconnected',
       url: null,
@@ -83,8 +86,9 @@ export function useReplaySession(): ForegroundSessionController {
             : null;
         usePanda.setState({
           activeConnectionId: target,
-          activeSessionId:
-            target !== null ? usePanda.getState().connections[target]!.connection.sessionId ?? null : null,
+          // Single write channel (#59): the handed-back pointer mirrors the
+          // restored foreground's anchor.
+          activeSessionId: target !== null ? foregroundSessionId(usePanda.getState(), target) : null,
         });
       }
     };
