@@ -51,6 +51,57 @@ export function computeRows(oldText: string, newText: string): DiffRow[] {
 }
 
 /**
+ * Standard unified patch (`git diff` format, #84):3 行上下文,相邻变更
+ * (间隔 ≤ 2×context 行 ctx)合入同一 hunk,可直接 `git apply`。行数据
+ * 复用 computeRows,两侧行号不会漂。空文本的行号起点是 0(新文件
+ * `-0,0`),与 git 行为一致。
+ */
+export function unifiedPatch(path: string, oldText: string, newText: string, context = 3): string {
+  const rows = computeRows(oldText, newText);
+  const hunks: DiffRow[][] = [];
+
+  let i = 0;
+  while (i < rows.length) {
+    if (rows[i]!.type === 'ctx') {
+      i++;
+      continue;
+    }
+    const first = Math.max(0, i - context);
+    // lastChange 只记最后一个变更行——桥接 ctx 段时不推进它,否则尾部
+    // 上下文会超过 context 行(能 apply 但与 git 产出不一致)
+    let lastChange = i;
+    let scan = i + 1;
+    while (scan < rows.length) {
+      if (rows[scan]!.type !== 'ctx') {
+        lastChange = scan;
+        scan++;
+        continue;
+      }
+      let ctxRun = 0;
+      while (scan + ctxRun < rows.length && rows[scan + ctxRun]!.type === 'ctx') ctxRun++;
+      if (ctxRun > context * 2) break;
+      scan += ctxRun;
+    }
+    const end = Math.min(rows.length - 1, lastChange + context);
+    hunks.push(rows.slice(first, end + 1));
+    i = end + 1;
+  }
+
+  const lines: string[] = [`--- a/${path}`, `+++ b/${path}`];
+  for (const hunk of hunks) {
+    const oldStart = hunk.find((r) => r.oldNo !== null)?.oldNo ?? 0;
+    const newStart = hunk.find((r) => r.newNo !== null)?.newNo ?? 0;
+    const oldCount = hunk.filter((r) => r.type !== 'add').length;
+    const newCount = hunk.filter((r) => r.type !== 'del').length;
+    lines.push(`@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`);
+    for (const row of hunk) {
+      lines.push((row.type === 'add' ? '+' : row.type === 'del' ? '-' : ' ') + row.text);
+    }
+  }
+  return lines.join('\n') + '\n';
+}
+
+/**
  * Pairs adjacent del-runs with their add-runs and fills in word-level spans.
  *
  * Alignment follows the classic trim technique: identical leading/trailing

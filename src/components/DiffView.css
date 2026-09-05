@@ -10,13 +10,15 @@
 .diff-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   border-bottom: 1px solid var(--color-border);
   padding: 8px 14px; /* px-3.5 py-2 */
   background: color-mix(in oklab, var(--color-raised) 40%, transparent);
 }
 
+/* 路径靠左(margin-right auto);统计与复制按钮(#84)成组靠右。 */
 .diff-header-path {
+  margin-right: auto;
   font-family: var(--font-mono);
   font-size: 14px;
   color: var(--color-muted);

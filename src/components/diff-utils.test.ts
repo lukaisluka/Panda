@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeRows, intersectSpans, withWordSpans } from './diff-utils';
+import { computeRows, intersectSpans, unifiedPatch, withWordSpans } from './diff-utils';
 
 describe('computeRows', () => {
   it('produces a unified row list with dual line numbers', () => {
@@ -119,5 +119,70 @@ describe('intersectSpans', () => {
 
   it('returns an empty list for two empty inputs', () => {
     expect(intersectSpans(null, undefined)).toEqual([]);
+  });
+});
+describe('unifiedPatch', () => {
+  it('produces a git-style single hunk with 3 context lines', () => {
+    const old = Array.from({ length: 12 }, (_, i) => `line ${i + 1}`);
+    const next = old.map((l, i) => (i === 5 ? 'line 6 CHANGED' : l));
+    const patch = unifiedPatch('a.txt', old.join('\n'), next.join('\n'));
+    expect(patch).toBe(
+      [
+        '--- a/a.txt',
+        '+++ b/a.txt',
+        '@@ -3,7 +3,7 @@',
+        ' line 3',
+        ' line 4',
+        ' line 5',
+        '-line 6',
+        '+line 6 CHANGED',
+        ' line 7',
+        ' line 8',
+        ' line 9',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('splits hunks when the context gap exceeds 2×context', () => {
+    const old = Array.from({ length: 20 }, (_, i) => `l${i + 1}`);
+    const next = old.map((l, i) => (i === 2 || i === 17 ? l + '!' : l));
+    const patch = unifiedPatch('a.txt', old.join('\n'), next.join('\n'));
+    expect(patch.match(/@@ -\d+,\d+ \+\d+,\d+ @@/g)).toEqual(['@@ -1,6 +1,6 @@', '@@ -15,6 +15,6 @@']);
+  });
+
+  it('merges nearby changes into one hunk', () => {
+    const old = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    const next = ['a', 'B', 'c', 'd', 'e', 'f', 'G', 'h'];
+    const patch = unifiedPatch('a.txt', old.join('\n'), next.join('\n'));
+    expect(patch.match(/@@ /g)).toHaveLength(1); // 间隔 4 行 ctx ≤ 2×3,合成一个 hunk
+    expect(patch).toContain('-b\n+B');
+    expect(patch).toContain('-g\n+G');
+  });
+
+  it('new file renders as -0,0 with only additions', () => {
+    const patch = unifiedPatch('new.ts', '', 'const a = 1;\nconst b = 2;\n');
+    expect(patch).toBe(
+      [
+        '--- a/new.ts',
+        '+++ b/new.ts',
+        '@@ -0,0 +1,2 @@',
+        '+const a = 1;',
+        '+const b = 2;',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('pure deletion renders as +0,0-tail hunk', () => {
+    const patch = unifiedPatch('gone.txt', 'x\ny\n', '');
+    expect(patch).toBe(
+      ['--- a/gone.txt', '+++ b/gone.txt', '@@ -1,2 +0,0 @@', '-x', '-y', ''].join('\n'),
+    );
+  });
+
+  it('identical texts produce an empty body (headers only)', () => {
+    const patch = unifiedPatch('same.txt', 'a\nb', 'a\nb');
+    expect(patch).toBe(['--- a/same.txt', '+++ b/same.txt', ''].join('\n'));
   });
 });
