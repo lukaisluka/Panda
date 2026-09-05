@@ -13,6 +13,7 @@ import type {
 } from './protocol/types';
 import { connectionStorePort, usePanda, type ConnectionStorePort, type SessionEntry, type SessionSwitchSnapshot } from './store';
 import { updateProfileFields, type AgentProfile } from './profiles';
+import { loadMcpServers } from './mcpServers';
 import { cwdToWorkspace, workspaceToCwd, type Workspace } from './workspace';
 import { alwaysAskPolicy, type PermissionDecision, type PermissionPolicy } from './policy';
 
@@ -233,7 +234,14 @@ function ensureEntry(connectionId: string): LiveConnection {
   const factory =
     clientFactories.get(connectionId) ??
     defaultClientFactory ??
-    ((handlers) => new LiveAcpClient(handlers, { policy: bindPolicyToConnection(connectionId) }));
+    ((handlers) =>
+      new LiveAcpClient(handlers, {
+        policy: bindPolicyToConnection(connectionId),
+        // The real MCP source (issue #71): read fresh at every session
+        // establishment, so config edits apply to the next session. Injected
+        // as a provider — the client itself stays storage-free.
+        mcpServers: loadMcpServers,
+      }));
   entry.client = factory(wireHandlers(entry));
   liveConnections.set(connectionId, entry);
   return entry;

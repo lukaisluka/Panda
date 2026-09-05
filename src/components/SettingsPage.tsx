@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Bot, Check, Palette, Pencil, Play, Plus, Terminal, Trash2 } from 'lucide-react';
+import { ArrowLeft, Bot, Check, Palette, Pencil, Play, Plug, Plus, Terminal, Trash2 } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { IconButton } from '@astryxdesign/core/IconButton';
 import { Selector } from '@astryxdesign/core/Selector';
@@ -12,6 +12,13 @@ import {
   updateProfileFields,
   type AgentProfile,
 } from '../profiles';
+import {
+  loadMcpServers,
+  newMcpServerId,
+  saveMcpServers,
+  subscribeMcpServers,
+  type McpServerConfig,
+} from '../mcpServers';
 import { navigate } from '../routes';
 import { isThemeId, loadThemeId, saveThemeId, subscribeTheme, THEMES, EXPOSED_THEME_IDS } from '../theme';
 import { workspaceDisplay } from '../workspace';
@@ -55,6 +62,8 @@ export function SettingsPage() {
         </section>
 
         <ProfileCard profiles={profiles} />
+
+        <McpCard />
 
         {import.meta.env.DEV && (
           <section className="settings-card settings-card--muted">
@@ -226,10 +235,231 @@ function ProfileCard({ profiles }: { profiles: AgentProfile[] }) {
   );
 }
 
-/** Shape the form edits — name/url/workspace (path rides on the workspace). */
-export type ProfileDraft = { name: string; url: string; workspace: { kind: string; path: string } };
+/** The MCP 服务器 card (issue #71): the v1 execution surface — configured
+ * servers ride every session/new · session/load to the agent. Same in-place
+ * edit pattern as the Agent 配置 card. */
+function McpCard() {
+  const [servers, setServers] = useState<McpServerConfig[]>(() => loadMcpServers());
+  useEffect(() => subscribeMcpServers(setServers), []);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  return (
+    <section className="settings-card">
+      <div className="settings-card-head">
+        <span className="settings-card-icon" aria-hidden>
+          <Plug size={15} />
+        </span>
+        <h2 className="settings-card-title">MCP 服务器</h2>
+        {!creating && (
+          <div className="settings-card-actions">
+            <Button
+              variant="secondary"
+              size="sm"
+              label="新增服务器"
+              icon={<Plus size={12} />}
+              clickAction={() => {
+                setEditingId(null);
+                setCreating(true);
+              }}
+            />
+          </div>
+        )}
+      </div>
+      <p className="settings-card-desc">
+        配置的工具服务会随每个新建/载入的会话下发给 agent,由 agent 侧连接并取得工具;stdio 命令在
+        agent 所在主机上执行。修改对下一个会话生效。
+      </p>
+
+      {creating ? (
+        <McpForm
+          onCancel={() => setCreating(false)}
+          onSave={(server) => {
+            saveMcpServers([...loadMcpServers(), server]);
+            setCreating(false);
+          }}
+        />
+      ) : servers.length === 0 ? (
+        <div className="settings-profile-empty">
+          <Plug size={22} className="settings-profile-empty-icon" />
+          <p className="settings-profile-empty-title">还没有 MCP 服务器</p>
+          <p className="settings-profile-empty-desc">新增一条,agent 就能在会话里用到它提供的工具。</p>
+        </div>
+      ) : (
+        <div className="settings-profile-list">
+          {servers.map((server) =>
+            editingId === server.id ? (
+              <McpForm
+                key={server.id}
+                initial={server}
+                onCancel={() => setEditingId(null)}
+                onSave={(fields) => {
+                  saveMcpServers(loadMcpServers().map((entry) => (entry.id === server.id ? fields : entry)));
+                  setEditingId(null);
+                }}
+              />
+            ) : (
+              <div key={server.id} className="settings-profile-row">
+                <span className="settings-profile-avatar" aria-hidden>
+                  <Plug size={13} />
+                </span>
+                <div className="settings-profile-main">
+                  <span className="settings-profile-name truncate">{server.name}</span>
+                  <span
+                    className="settings-profile-meta truncate"
+                    title={mcpServerSummary(server)}
+                  >
+                    {mcpServerSummary(server)}
+                  </span>
+                </div>
+                <div className="settings-profile-actions">
+                  <IconButton
+                    variant="ghost"
+                    size="sm"
+                    icon={<Pencil size={12} />}
+                    label="编辑服务器"
+                    tooltip="编辑名称、类型或启动参数"
+                    clickAction={() => {
+                      setCreating(false);
+                      setEditingId(server.id);
+                    }}
+                  />
+                  <IconButton
+                    variant="ghost"
+                    size="sm"
+                    icon={<Trash2 size={12} />}
+                    label="删除服务器"
+                    tooltip="删除这条 MCP 服务器配置(不影响已建立的会话)"
+                    clickAction={() => {
+                      if (window.confirm(`删除 MCP 服务器「${server.name}」?`)) {
+                        saveMcpServers(loadMcpServers().filter((entry) => entry.id !== server.id));
+                        if (editingId === server.id) setEditingId(null);
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            ),
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** One-line summary for the row meta: transport plus its address. */
+export function mcpServerSummary(server: McpServerConfig): string {
+  return server.type === 'stdio'
+    ? `stdio · ${server.command}${server.args.trim() ? ` ${server.args.trim()}` : ''}`
+    : `${server.type} · ${server.url}`;
+}
+
+/** Shape the MCP form edits. */
+export type McpDraft = {
+  name: string;
+  type: 'stdio' | 'http' | 'sse';
+  command: string;
+  args: string;
+  url: string;
+};
 
 /** Field-level validation, shared by unit tests: every key names a field the
+ * form must block saving on. */
+export function mcpDraftErrors(draft: McpDraft): Partial<Record<'name' | 'command' | 'url', string>> {
+  const errors: Partial<Record<'name' | 'command' | 'url', string>> = {};
+  if (!draft.name.trim()) errors.name = '服务器名称不能为空';
+  if (draft.type === 'stdio' && !draft.command.trim()) errors.command = 'stdio 类型需要可执行命令';
+  if ((draft.type === 'http' || draft.type === 'sse') && !draft.url.trim()) errors.url = '需要一个 URL';
+  return errors;
+}
+
+function McpForm({ initial, onSave, onCancel }: {
+  initial?: McpServerConfig;
+  onSave(server: McpServerConfig): void;
+  onCancel(): void;
+}) {
+  const [draft, setDraft] = useState<McpDraft>(() => ({
+    name: initial?.name ?? '',
+    type: initial?.type ?? 'stdio',
+    command: initial?.type === 'stdio' ? initial.command : '',
+    args: initial?.type === 'stdio' ? initial.args : '',
+    url: initial && initial.type !== 'stdio' ? initial.url : '',
+  }));
+  const [showErrors, setShowErrors] = useState(false);
+  const errors = mcpDraftErrors(draft);
+  const statusOf = (field: 'name' | 'command' | 'url') =>
+    showErrors && errors[field] ? { type: 'error' as const, message: errors[field] } : undefined;
+
+  const set = (patch: Partial<McpDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
+  const submit = () => {
+    if (Object.keys(errors).length > 0) {
+      setShowErrors(true);
+      return;
+    }
+    onSave(
+      draft.type === 'stdio'
+        ? { id: initial?.id ?? newMcpServerId(), name: draft.name.trim(), type: 'stdio', command: draft.command.trim(), args: draft.args.trim() }
+        : { id: initial?.id ?? newMcpServerId(), name: draft.name.trim(), type: draft.type, url: draft.url.trim() },
+    );
+  };
+
+  return (
+    <div className="settings-profile-form">
+      <TextInput
+        label="服务器名称"
+        value={draft.name}
+        onChange={(name) => set({ name })}
+        placeholder="如:filesystem"
+        status={statusOf('name')}
+        hasAutoFocus={!initial}
+      />
+      <Selector
+        label="类型"
+        value={draft.type}
+        onChange={(type) => set({ type: type === 'http' || type === 'sse' ? type : 'stdio' })}
+        options={[
+          { value: 'stdio', label: 'stdio(agent 主机命令)' },
+          { value: 'http', label: 'HTTP(Streamable)' },
+          { value: 'sse', label: 'SSE' },
+        ]}
+        labelTooltip="stdio 由 agent 所在主机拉起进程;HTTP/SSE 由 agent 侧按 URL 拨号"
+      />
+      {draft.type === 'stdio' ? (
+        <>
+          <TextInput
+            label="命令"
+            value={draft.command}
+            onChange={(command) => set({ command })}
+            placeholder="如:npx -y @modelcontextprotocol/server-filesystem"
+            status={statusOf('command')}
+          />
+          <TextInput
+            label="参数(空格分隔)"
+            value={draft.args}
+            onChange={(args) => set({ args })}
+            placeholder="如:/path/to/dir --another"
+          />
+        </>
+      ) : (
+        <TextInput
+          label="URL"
+          value={draft.url}
+          onChange={(url) => set({ url })}
+          placeholder="https://mcp.example.com/mcp"
+          status={statusOf('url')}
+        />
+      )}
+      {initial && <p className="settings-card-desc">修改在下一个新建/载入的会话生效。</p>}
+      <div className="settings-form-actions">
+        <Button variant="primary" size="sm" label={initial ? '保存' : '创建'} clickAction={submit} />
+        <Button variant="ghost" size="sm" label="取消" clickAction={onCancel} />
+      </div>
+    </div>
+  );
+}
+
+/** Shape the form edits — name/url/workspace (path rides on the workspace). */
+export type ProfileDraft = { name: string; url: string; workspace: { kind: string; path: string } };/** Field-level validation, shared by unit tests: every key names a field the
  * form must block saving on. */
 export function profileDraftErrors(draft: ProfileDraft): Partial<Record<'name' | 'url' | 'path', string>> {
   const errors: Partial<Record<'name' | 'url' | 'path', string>> = {};

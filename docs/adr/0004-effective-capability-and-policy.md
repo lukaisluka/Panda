@@ -19,3 +19,5 @@
 **Consequences**：v1 生命周期内 agent 调 `fs/*` / `terminal/*` 仍收到 method-not-found（现状不变）；策略判 `deny` 的权限请求以「策略拒绝」终态卡留在会话文档（拒绝可追溯，用户不会只看到 agent 无故停住）；`blocked-by-policy` 原因码预留、本 issue 不产生。
 
 **补充（2026-09-05，issue #68）**：会话级权限记忆落地——用户在本会话内对同一操作（kind+title+locations 判定）选过 `allow_always` / `reject_always` 后，后续同类请求自动按该选择代答，并以终态卡留在会话文档。这不是决策 2 所禁止的策略 `allow`：代答内容是用户自己的既往选择（且仅在 agent 本次仍提供该选项时生效），策略仍先于记忆运行（deny 恒优先），记忆随会话切换与断开清空、不跨连接持久化。
+
+**补充（2026-09-05，issue #71）**：决策 3 的 v1 过渡形态落地——全局 MCP 服务器配置（localStorage，stdio/http/sse 三型，env/headers 待 secret 存储立项后再议）随每个 `session/new` · `session/load` 下发，由 agent 侧连接取得工具。`mcp` 分片（v2 的客户端自持 MCP server / `mcp/connect`）仍为未来项，本补充不改变其预留状态。

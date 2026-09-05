@@ -39,6 +39,7 @@ import {
   toSessionModeState,
 } from './wire';
 import { EchoReconciler } from './echoReconciliation';
+import { toWireMcpServers, type McpServerConfig } from '../mcpServers';
 import { PANDA_HOST_CAPABILITIES, effectiveCapability, type AgentCapabilityDeclarations, type CapabilityKey, type EffectiveCapability } from '../capabilities';
 import { alwaysAskPolicy, denyResolution, UNKNOWN_POLICY_CONTEXT, type PermissionDecision } from '../policy';
 
@@ -143,6 +144,14 @@ export type LiveClientHandlers = {
  */
 export type LiveClientOptions = {
   policy?: (request: RequestPermissionRequest) => PermissionDecision;
+  /**
+   * Sources the MCP servers to declare on every session/new · session/load
+   * (issue #71, the v1 execution surface). A provider, read fresh at each
+   * establishment — config edits apply to the next session without any
+   * client surgery. The default emits none: the client stays pure, the
+   * connection layer injects the real store.
+   */
+  mcpServers?: () => McpServerConfig[];
 };
 
 type PendingPermission = {
@@ -276,6 +285,8 @@ export class LiveAcpClient {
   private readonly handlers: LiveClientHandlers;
   /** Host-side permission policy (issue #22); default hands every decision to the user. */
   private readonly policy: (request: RequestPermissionRequest) => PermissionDecision;
+  /** MCP server source (issue #71) — see LiveClientOptions. */
+  private readonly mcpServers: () => McpServerConfig[];
   private connection: ClientConnection | null = null;
   /**
    * The transport of the most recent connect attempt (issue #20) — owned
@@ -339,6 +350,7 @@ export class LiveAcpClient {
     // connection identity, so the unknown context stands in — alwaysAskPolicy
     // ignores it, and real policies arrive pre-bound by the connection layer.
     this.policy = options.policy ?? ((request) => alwaysAskPolicy(request, UNKNOWN_POLICY_CONTEXT));
+    this.mcpServers = options.mcpServers ?? (() => []);
   }
 
   /**
@@ -1047,7 +1059,7 @@ export class LiveAcpClient {
       'session/new',
       connection.agent.request(methods.agent.session.new, {
         cwd,
-        mcpServers: [],
+        mcpServers: toWireMcpServers(this.mcpServers()),
       }),
     );
     if (generation !== this.connectionGeneration) {
@@ -1094,7 +1106,7 @@ export class LiveAcpClient {
         connection.agent.request(methods.agent.session.load, {
           sessionId,
           cwd,
-          mcpServers: [],
+          mcpServers: toWireMcpServers(this.mcpServers()),
         }),
       );
       if (generation !== this.connectionGeneration) {
