@@ -329,3 +329,39 @@
   color: var(--color-fg);
   background: color-mix(in oklab, var(--color-accent) 12%, transparent);
 }
+
+/* Settings-route section nav (#115): replaces the session list wholesale —
+ * same column rhythm (label head + rows at 13px) and the same active
+ * language as the gear above. */
+.sidebar-settings-nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-inline: 12px; /* matches .sidebar-sessions */
+}
+
+.sidebar-settings-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--panda-radius-lg);
+  padding: 8px 12px; /* matches .sidebar-connection-btn */
+  text-align: left;
+  font-size: 13px;
+  color: color-mix(in oklab, var(--color-fg) 70%, transparent);
+  transition: var(--panda-colors-transition);
+}
+.sidebar-settings-item:hover {
+  background: color-mix(in oklab, var(--color-raised) 60%, transparent);
+  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+}
+.sidebar-settings-item--active {
+  color: var(--color-fg);
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}

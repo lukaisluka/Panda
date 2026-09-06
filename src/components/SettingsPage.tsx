@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bot, Check, Palette, Pencil, Play, Plug, Plus, Terminal, Trash2 } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { IconButton } from '@astryxdesign/core/IconButton';
@@ -29,6 +29,111 @@ import { useI18n } from '../i18n/context';
 import { copyDiagnosticsReport } from './ErrorBoundary';
 import './SettingsPage.css';
 
+/** The settings page's navigable sections (#115) — the single source shared
+ * by the main column's cards (id jump targets) and the sidebar's section
+ * nav: same order, same titles, same icons. Dev tools stay out of the nav
+ * (dev-build-only, not a destination users manage). */
+export const SETTINGS_SECTIONS = [
+  { id: 'settings-section-appearance', titleKey: 'settings.appearance', icon: Palette },
+  { id: 'settings-section-language', titleKey: 'settings.language', icon: Languages },
+  { id: 'settings-section-agents', titleKey: 'settings.profiles', icon: Bot },
+  { id: 'settings-section-mcp', titleKey: 'settings.mcp', icon: Plug },
+  { id: 'settings-section-diagnostics', titleKey: 'diag.cardTitle', icon: Activity },
+] as const;
+
+const [appearanceSection, languageSection, agentsSection, mcpSection, diagnosticsSection] = SETTINGS_SECTIONS;
+
+/** Settings-route sidebar nav (#115): jumps to a card and tracks which
+ * section is current while the column scrolls. Rendered by the Sidebar in
+ * place of the session list. */
+export function SettingsSideNav({ onNavigate }: { onNavigate(): void }) {
+  const { t } = useI18n();
+  const [activeId, setActiveId] = useState<string>(SETTINGS_SECTIONS[0].id);
+  // A clicked section stays pinned until the USER scrolls (wheel/touch/key —
+  // input events, not scroll events: the programmatic jump fires those too).
+  // Without the pin, the scrollspy below would fight the click: this page is
+  // shorter than one viewport of scroll, so the last sections can never
+  // cross the probe line and a clicked target could flash back instantly.
+  const pinnedId = useRef<string | null>(null);
+
+  useEffect(() => {
+    const container = document.querySelector('.settings-page');
+    if (!(container instanceof HTMLElement)) return;
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      if (pinnedId.current !== null) {
+        setActiveId(pinnedId.current);
+        return;
+      }
+      // Current = the last card whose head passed a probe line 120px down the
+      // scrollport; at the very bottom the last section always wins (it can
+      // never reach the line on this short page). Rect-relative on purpose:
+      // card offsetTop is measured against .app-main (a positioned
+      // ancestor), not this scroll container.
+      const probe = container.getBoundingClientRect().top + 120;
+      let current: string = SETTINGS_SECTIONS[0].id;
+      for (const section of SETTINGS_SECTIONS) {
+        const el = document.getElementById(section.id);
+        if (el && el.getBoundingClientRect().top <= probe) current = section.id;
+      }
+      if (container.scrollTop + container.clientHeight >= container.scrollHeight - 4) {
+        current = diagnosticsSection.id;
+      }
+      setActiveId(current);
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(update);
+    };
+    const unpin = () => {
+      pinnedId.current = null;
+      // Re-evaluate immediately: wheeling while already at the scroll limit
+      // fires no scroll event, so waiting for one would keep the stale pin.
+      if (!raf) raf = requestAnimationFrame(update);
+    };
+    container.addEventListener('scroll', onScroll, { passive: true });
+    container.addEventListener('wheel', unpin, { passive: true });
+    container.addEventListener('touchmove', unpin, { passive: true });
+    container.addEventListener('keydown', unpin);
+    update();
+    return () => {
+      container.removeEventListener('scroll', onScroll);
+      container.removeEventListener('wheel', unpin);
+      container.removeEventListener('touchmove', unpin);
+      container.removeEventListener('keydown', unpin);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  const jump = (id: string) => {
+    pinnedId.current = id;
+    document.getElementById(id)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    setActiveId(id);
+    onNavigate();
+  };
+
+  return (
+    <div className="sidebar-settings-nav">
+      <div className="sidebar-sessions-head">
+        <span className="sidebar-label">{t('settings.title')}</span>
+      </div>
+      <nav className="sidebar-settings-list">
+        {SETTINGS_SECTIONS.map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            className={`sidebar-settings-item ${activeId === section.id ? 'sidebar-settings-item--active' : ''}`}
+            onClick={() => jump(section.id)}
+          >
+            <section.icon size={14} />
+            <span className="truncate">{t(section.titleKey)}</span>
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
 /**
  * Settings content (`#/settings`, #111): renders INSIDE MainScreen's main
  * column — the sidebar/header chrome stays, this replaces only the session
@@ -44,7 +149,7 @@ export function SettingsPage() {
   return (
     <div className="settings-page">
       <div className="settings-body">
-        <section className="settings-card">
+        <section id={appearanceSection.id} className="settings-card">
           <div className="settings-card-head">
             <span className="settings-card-icon" aria-hidden>
               <Palette size={14} />
@@ -55,7 +160,7 @@ export function SettingsPage() {
           <ThemeSwatches />
         </section>
 
-        <section className="settings-card">
+        <section id={languageSection.id} className="settings-card">
           <div className="settings-card-head">
             <span className="settings-card-icon" aria-hidden>
               <Languages size={14} />
@@ -66,11 +171,11 @@ export function SettingsPage() {
           <LanguageChips />
         </section>
 
-        <ProfileCard profiles={profiles} />
+        <ProfileCard profiles={profiles} sectionId={agentsSection.id} />
 
-        <McpCard />
+        <McpCard sectionId={mcpSection.id} />
 
-        <DiagnosticsCard />
+        <DiagnosticsCard sectionId={diagnosticsSection.id} />
 
         {import.meta.env.DEV && (
           <section className="settings-card settings-card--muted">
@@ -103,11 +208,11 @@ export function SettingsPage() {
 /** One-click diagnostics report (#105): the non-crash path — copies the
  * environment + recent-console ring so a bug report carries its context.
  * Nothing is uploaded; the clipboard is the transport. */
-function DiagnosticsCard() {
+function DiagnosticsCard({ sectionId }: { sectionId: string }) {
   const { t } = useI18n();
   const [copy, setCopy] = useState<'idle' | 'ok' | 'fail'>('idle');
   return (
-    <section className="settings-card">
+    <section id={sectionId} className="settings-card">
       <div className="settings-card-head">
         <span className="settings-card-icon" aria-hidden>
           <Activity size={14} />
@@ -202,13 +307,13 @@ function LanguageChips() {
 
 /** The Agent 配置 card: header with the create action, the description, and
  * the avatar-row list (a row swaps for the edit form in place). */
-function ProfileCard({ profiles }: { profiles: AgentProfile[] }) {
+function ProfileCard({ profiles, sectionId }: { profiles: AgentProfile[]; sectionId: string }) {
   const { t } = useI18n();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   return (
-    <section className="settings-card">
+    <section id={sectionId} className="settings-card">
       <div className="settings-card-head">
         <span className="settings-card-icon" aria-hidden>
           <Bot size={15} />
@@ -310,7 +415,7 @@ function ProfileCard({ profiles }: { profiles: AgentProfile[] }) {
 /** The MCP 服务器 card (issue #71): the v1 execution surface — configured
  * servers ride every session/new · session/load to the agent. Same in-place
  * edit pattern as the Agent 配置 card. */
-function McpCard() {
+function McpCard({ sectionId }: { sectionId: string }) {
   const { t } = useI18n();
   const [servers, setServers] = useState<McpServerConfig[]>(() => loadMcpServers());
   useEffect(() => subscribeMcpServers(setServers), []);
@@ -318,7 +423,7 @@ function McpCard() {
   const [creating, setCreating] = useState(false);
 
   return (
-    <section className="settings-card">
+    <section id={sectionId} className="settings-card">
       <div className="settings-card-head">
         <span className="settings-card-icon" aria-hidden>
           <Plug size={15} />

@@ -24,6 +24,9 @@
   border: 1px solid var(--color-border);
   border-radius: 16px; /* composer-card's card radius — NOT the Astryx scale */
   background: var(--color-surface);
+  /* jump targets for the sidebar section nav (#115): breathing room between
+   * the scrollport top and a jumped-to card's head */
+  scroll-margin-top: 12px;
 }
 
 .settings-card--muted {
