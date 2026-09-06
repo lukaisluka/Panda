@@ -8,7 +8,9 @@
 协议壳直接构建在官方 [`@agentclientprotocol/sdk`](https://www.npmjs.com/package/@agentclientprotocol/sdk)
 上(Panda 客户端用同一个 SDK),ACP 契约镜像 Python 版 deepagents-acp 0.0.11:
 能力声明、三档权限模式 + mode/model 会话配置、权限三选项(approve/reject/always)、
-会话标题、`session/load` 回放。不用 npm 的 deepagents-acp(0.1.29):它的会话在
+会话标题、`session/load` 回放,以及全套 session 管理能力(`session/list` 小页分页、
+`session/resume` 跨子进程恢复、`session/delete` 连同线程 checkpoints 一并抹除、
+`session/close`)。不用 npm 的 deepagents-acp(0.1.29):它的会话在
 进程内存里,跨子进程 `session/load` 直接失败;权限请求后从不 resume 图;也不支持
 会话配置选项。
 
@@ -89,10 +91,9 @@ WebSocket 完成握手、能力协商、模式切换、权限批准、真实文�
 
 ## 已知限制
 
-只声明并实现 `session/load`,没有 `session/list`、`session/resume` 和
-`session/delete`。Panda 会根据能力协商隐藏对应会话管理入口;这些 UI/客户端路径
-继续由 `scripts/mock-acp-server.mjs` 和现有单元测试覆盖。确定性剧本不是智能模型,
-这是保障回归稳定性的刻意设计。
+`session/list` 按固定小页(2 条)分页,`updated_at` 刻意保守(仅 prompt/resume/模式与
+配置变更刷新),为的是把 Panda 客户端的 nextCursor 循环与「最新活跃在前」排序钉进
+e2e。确定性剧本不是智能模型,这是保障回归稳定性的刻意设计。
 
 deepagents 的 JS 工具循环聚合输出模型消息(没有 token 级流式),协议壳按词合成
 增量 chunk,保持 Panda 的增量渲染路径真实工作。
