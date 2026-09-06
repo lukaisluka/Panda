@@ -22,10 +22,10 @@ import type { ForegroundSessionController } from './session-controller';
 import './App.css';
 import { useI18n } from './i18n/context';
 
-/** Route-level shell (IA refactor phase 1): `#/` is the session screen,
- * `#/settings` the settings screen. Everything session-related (both live
- * and demo replay) lives in MainScreen so the settings route renders none
- * of its state. */
+/** Route-level shell: `#/` is the session screen, `#/settings` the settings
+ * screen. MainScreen owns the shell (sidebar + header); the settings route
+ * swaps only the main column's content (#111) so the app chrome — sidebar,
+ * header, mobile drawer — never unmounts across routes. */
 export default function App() {
   const route = useHashRoute();
   // Phase 2: the hash owns the session mode — `#/demo` (dev builds only)
@@ -35,11 +35,12 @@ export default function App() {
   useEffect(() => {
     usePanda.getState().setMode(route === 'demo' ? 'demo' : 'live');
   }, [route]);
-  if (route === 'settings') return <SettingsPage />;
   return <MainScreen />;
 }
 
 function MainScreen() {
+  const route = useHashRoute();
+  const onSettings = route === 'settings';
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const mode = usePanda((s) => s.mode);
   const doc = useActiveDoc();
@@ -65,10 +66,16 @@ function MainScreen() {
   const activeSession = liveActive
     ? sessions.find((entry) => entry.sessionId === connection.sessionId)
     : undefined;
-  const headerTitle = !liveActive
-    ? t('app.demoHeaderTitle')
-    : (activeSession?.title ?? connection.agentName ?? t('app.liveSessionTitle'));
-  const headerMeta = liveActive ? (connection.url ?? 'acp') : 'acp://claude-code · demo replay';
+  const headerTitle = onSettings
+    ? t('settings.title')
+    : !liveActive
+      ? t('app.demoHeaderTitle')
+      : (activeSession?.title ?? connection.agentName ?? t('app.liveSessionTitle'));
+  const headerMeta = onSettings
+    ? null
+    : liveActive
+      ? (connection.url ?? 'acp')
+      : 'acp://claude-code · demo replay';
 
   return (
     <div className="app-shell">
@@ -99,40 +106,46 @@ function MainScreen() {
             </button>
             <span className="truncate app-header-title">{headerTitle}</span>
           </div>
-          <span className="app-header-meta">{headerMeta}</span>
+          {headerMeta !== null && <span className="app-header-meta">{headerMeta}</span>}
         </header>
-        {doc.plan && doc.plan.length > 0 && <PlanDock entries={doc.plan} />}
-        {liveActive && lifecycle.phase === 'auth-required' ? (
-          <AuthGate
-            methods={connection.authMethods ?? []}
-            message={connection.error}
-            elicitation={connection.authElicitation}
-            onAuthenticate={live.authenticate}
-            onResolveElicitation={controller.resolveElicitation}
-            onOpenElicitationUrl={controller.openElicitationUrl}
-          />
+        {onSettings ? (
+          <SettingsPage />
         ) : (
-          <MessageStream onResolvePermission={controller.resolvePermission} onResolveElicitation={controller.resolveElicitation} onOpenElicitationUrl={controller.openElicitationUrl} />
+          <>
+            {doc.plan && doc.plan.length > 0 && <PlanDock entries={doc.plan} />}
+            {liveActive && lifecycle.phase === 'auth-required' ? (
+              <AuthGate
+                methods={connection.authMethods ?? []}
+                message={connection.error}
+                elicitation={connection.authElicitation}
+                onAuthenticate={live.authenticate}
+                onResolveElicitation={controller.resolveElicitation}
+                onOpenElicitationUrl={controller.openElicitationUrl}
+              />
+            ) : (
+              <MessageStream onResolvePermission={controller.resolvePermission} onResolveElicitation={controller.resolveElicitation} onOpenElicitationUrl={controller.openElicitationUrl} />
+            )}
+            <StatusBar
+              doc={doc}
+              connection={connection}
+              mode={mode}
+              onAuthenticate={live.authenticate}
+            />
+            <Composer
+              onSend={controller.send}
+              disabled={lifecycle.composerDisabled}
+              hint={lifecycle.hint}
+              canAttachImages={!liveActive || effectiveCaps.image.available}
+              canStop={lifecycle.canStop}
+              onStop={live.cancel}
+              modes={sessionModes.modes}
+              onSetMode={sessionModes.onSetMode}
+              commands={doc.availableCommands}
+              configOptions={doc.configOptions}
+              onSetConfigOption={controller.setConfigOption}
+            />
+          </>
         )}
-        <StatusBar
-          doc={doc}
-          connection={connection}
-          mode={mode}
-          onAuthenticate={live.authenticate}
-        />
-        <Composer
-          onSend={controller.send}
-          disabled={lifecycle.composerDisabled}
-          hint={lifecycle.hint}
-          canAttachImages={!liveActive || effectiveCaps.image.available}
-          canStop={lifecycle.canStop}
-          onStop={live.cancel}
-          modes={sessionModes.modes}
-          onSetMode={sessionModes.onSetMode}
-          commands={doc.availableCommands}
-          configOptions={doc.configOptions}
-          onSetConfigOption={controller.setConfigOption}
-        />
       </main>
     </div>
   );
