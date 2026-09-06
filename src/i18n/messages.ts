@@ -250,8 +250,6 @@ export const messages = {
   'side.attention.authRequired': { en: 'Sign-in required', zh: '需要登录' },
 
   // ---- SettingsPage ----
-  'settings.back': { en: 'Back', zh: '返回' },
-  'settings.backTooltip': { en: 'Back to the session view', zh: '回到会话界面' },
   'settings.title': { en: 'Settings', zh: '设置' },
   'settings.appearance': { en: 'Appearance', zh: '外观' },
   'settings.appearanceDesc': {

@@ -1,53 +1,35 @@
-/* Settings screen (#/settings) — carded sections on a centered column.
- * Phase-5 redesign: every section is a raised card with an icon'd header,
- * the page reads as a product surface instead of a floating form list. */
+/* Settings content (#/settings) — lives INSIDE MainScreen's main column
+ * (#111): sidebar/header chrome stays, this block is the column's scrollable
+ * content, so it sits on the same body background as the message stream and
+ * owns no chrome of its own. Cards share the composer card's material
+ * (surface + border, no shadow, 16px radius, 720px column) so the settings
+ * page reads as the same application, not a swapped-in product page. */
 
 .settings-page {
-  display: flex;
-  flex-direction: column;
-  height: 100dvh;
-  background: var(--color-surface);
-}
-
-.settings-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface);
-}
-
-.settings-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .settings-body {
-  flex: 1;
-  overflow-y: auto;
   padding: 28px 20px 40px;
 }
 
 /* --- Cards --- */
 
 .settings-card {
-  max-width: 680px;
+  max-width: 720px;
   margin: 0 auto 16px;
   padding: 18px 20px 20px;
   border: 1px solid var(--color-border);
-  border-radius: var(--panda-radius-xl);
-  background: var(--color-raised);
-  box-shadow: var(--shadow-high);
+  border-radius: 16px; /* composer-card's card radius — NOT the Astryx scale */
+  background: var(--color-surface);
 }
 
 .settings-card--muted {
   margin-top: 8px; /* groups the dev card away from the product cards above */
   padding: 16px 20px 18px;
-  background: var(--color-surface);
-  box-shadow: none;
+  background: transparent;
   border-style: dashed;
 }
 
@@ -280,7 +262,9 @@
   padding: 14px;
   border: 1px solid var(--color-accent);
   border-radius: var(--panda-radius-lg);
-  background: var(--color-surface);
+  /* one step below the card: bg (body) reads as an inset well inside a
+   * surface card — surface-on-surface would have no contrast left (#111) */
+  background: var(--color-bg);
 }
 
 .settings-form-row {
@@ -306,7 +290,7 @@
 /* --- Colophon --- */
 
 .settings-colophon {
-  max-width: 680px;
+  max-width: 720px;
   margin: 4px auto 0;
   padding: 0 20px;
   font-size: 11.5px;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Bot, Check, Palette, Pencil, Play, Plug, Plus, Terminal, Trash2 } from 'lucide-react';
+import { Bot, Check, Palette, Pencil, Play, Plug, Plus, Terminal, Trash2 } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { IconButton } from '@astryxdesign/core/IconButton';
 import { Selector } from '@astryxdesign/core/Selector';
@@ -30,31 +30,19 @@ import { copyDiagnosticsReport } from './ErrorBoundary';
 import './SettingsPage.css';
 
 /**
- * Settings screen (`#/settings`, IA refactor phase 1; redesigned phase 5):
- * the product home for connection-asset management. Carded sections on a
- * centered column — appearance (theme swatches), Agent 配置 CRUD (avatar
- * rows), and a dev-only tools card. Edits to url/workspace apply on the next
- * connect; deleting a profile never touches the endpoint's remembered
- * sessions.
+ * Settings content (`#/settings`, #111): renders INSIDE MainScreen's main
+ * column — the sidebar/header chrome stays, this replaces only the session
+ * stream. Carded sections on a centered column — appearance (theme
+ * swatches), Agent 配置 CRUD (avatar rows), and a dev-only tools card. Edits
+ * to url/workspace apply on the next connect; deleting a profile never
+ * touches the endpoint's remembered sessions.
  */
 export function SettingsPage() {
-  const { t } = useI18n();
   const [profiles, setProfiles] = useState<AgentProfile[]>(() => loadProfiles());
   useEffect(() => subscribeProfiles(setProfiles), []);
 
   return (
     <div className="settings-page">
-      <header className="settings-header">
-        <IconButton
-          variant="ghost"
-          icon={<ArrowLeft size={16} />}
-          label={t('settings.back')}
-          tooltip={t('settings.backTooltip')}
-          clickAction={() => navigate('main')}
-        />
-        <h1 className="settings-title">{t('settings.title')}</h1>
-      </header>
-
       <div className="settings-body">
         <section className="settings-card">
           <div className="settings-card-head">
