@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 仓库无 packageManager 字段,须显式指定版本(本地 11.22,lockfile v9)
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      # e2e 以 process.execPath spawn test-agent 且不带 --experimental-sqlite,
+      # node:sqlite 必须无 flag 可用,固着 Node 24(与本地开发版本一致)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+      - run: pnpm --filter panda-test-agent typecheck
+
+      # workspace 安装后 test-agent/node_modules 存在,deepagents WebSocket e2e
+      # 自动启用;CI 无 .env,确定性剧本模型,无真实模型调用
+      - run: pnpm test
+      - run: pnpm --filter panda-test-agent test
