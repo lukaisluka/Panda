@@ -16,6 +16,7 @@ import {
 } from './LiveAcpClient';
 import { StreamTransport } from './transport/StreamTransport';
 import { WORKSPACE_NONE_CWD } from '../workspace';
+import type { SessionEntry } from '../store';
 import { applyUpdate, emptySession } from '../protocol/reducer';
 import type {
   AcpContentBlock,
@@ -50,6 +51,10 @@ type Records = {
   sessionIds: string[];
   sessionInfos: { sessionId: string; title?: string | null; updatedAt?: string | null }[];
   replayStarts: number;
+  /** connect 时 session/list 聚合出的每一批完整列表(#97)。 */
+  sessionLists: SessionEntry[][];
+  /** deleteSession 完成回执的会话 id(#97)。 */
+  sessionDeleted: string[];
   /** initialize 的常驻登录方式(#90)。 */
   authMethodOffers: { id: string; name: string; description?: string }[][];
   /** authenticate 成功的方法 id(#90)。 */
@@ -116,6 +121,8 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
     sessionIds: [],
     sessionInfos: [],
     replayStarts: 0,
+    sessionLists: [],
+    sessionDeleted: [],
     authMethodOffers: [],
     authedMethodIds: [],
   };
@@ -180,10 +187,10 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
       onAuthMethods: (methods) => records.authMethodOffers.push(methods),
       onAuthenticated: (methodId) => records.authedMethodIds.push(methodId),
       onCapabilities: (capabilities) => records.capabilities.push(capabilities),
-      onSessions: () => {},
+      onSessions: (entries) => records.sessionLists.push(entries),
       onSessionInfo: (sessionId, info) => records.sessionInfos.push({ sessionId, ...info }),
       onReplayStart: () => records.replayStarts++,
-      onSessionDeleted: () => {},
+      onSessionDeleted: (sessionId) => records.sessionDeleted.push(sessionId),
       onSessionSwitchStage: () => {},
       onSessionSwitchCommit: () => {},
       onSessionSwitchRollback: () => {},
@@ -233,9 +240,9 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
     }
   };
 
-  it('声明图片与 load 能力,不伪装 session 管理能力,并支持模式切换', async () => {
+  it('声明图片与 load 能力、全套 session 管理能力,并支持模式切换', async () => {
     expect(records.capabilities).toEqual([
-      { image: true, loadSession: true, list: false, resume: false, delete: false },
+      { image: true, loadSession: true, list: true, resume: true, delete: true },
     ]);
 
     const connection = client({ name: 'panda-e2e-mode-check' }).connect(
@@ -249,7 +256,13 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
       });
       expect(initialized.agentCapabilities?.promptCapabilities?.image).toBe(true);
       expect(initialized.agentCapabilities?.loadSession).toBe(true);
-      expect(initialized.agentCapabilities?.sessionCapabilities).toEqual({ close: {} });
+      // #97:close/list/delete/resume 四件套与 handler 一一对应
+      expect(initialized.agentCapabilities?.sessionCapabilities).toEqual({
+        close: {},
+        list: {},
+        delete: {},
+        resume: {},
+      });
 
       const session = await connection.agent.request(methods.agent.session.new, {
         cwd: '/tmp/project',
@@ -411,14 +424,15 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
     },
   );
 
-  it('断开后由新 stdio 子进程通过 session/load 回放持久化会话', async () => {
+  it('断开后由新 stdio 子进程 session/resume:transcript 保留、thread 上下文延续(#97)', async () => {
     const sessionId = records.sessionIds.at(-1);
     expect(sessionId).toBeTruthy();
-    const updateCountBefore = records.updates.length;
+    const replayStartsBefore = records.replayStarts;
+    const planCountBefore = records.updates.filter((u) => u.sessionUpdate === 'plan').length;
 
     acpClient.disconnect();
     // 断开时 agent 收到 session/close(声明了 sessionCapabilities.close,
-    // #89):运行态释放、历史保留,下面的 load 重放就是证明。
+    // #89):运行态释放、历史保留,下面的 resume 接回同一 thread 就是证明。
     const logBefore = serverLog.length;
     await waitFor(
       () => serverLog.slice(logBefore).includes(`closed session ${sessionId}`),
@@ -431,23 +445,44 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
       { sessionId: sessionId! },
     );
 
-    expect(records.replayStarts).toBe(1);
+    // resume 不回放(与 session/load 的区别):replayStarts 不动、
+    // 文档不清空,session id 原样接回。
+    expect(records.replayStarts).toBe(replayStartsBefore);
     expect(records.sessionIds.at(-1)).toBe(sessionId);
-    expect(records.sessionInfos.at(-1)).toEqual({
-      sessionId,
-      title: '重构 auth 校验',
-    });
-    expect(records.updates.length).toBeGreaterThan(updateCountBefore);
+
+    // thread 上下文真的恢复:该 thread 已有 2 条 HumanMessage,第 3 条按
+    // 剧本得到「后续轮次」固定短回复;若 thread 未接上,消息计数从 1 起
+    // 会重播完整故事(带 write_todos 计划卡),两条断言都会炸。
+    const marker = records.updates.length;
+    const turn = acpClient.send([{ type: 'text', text: '继续对话验证 resume' }]);
+    await turn;
+    const slice = records.updates.slice(marker);
+    const joined = slice
+      .map((u) => (u.sessionUpdate === 'agent_message_chunk' && u.content.type === 'text' ? u.content.text : ''))
+      .join('');
+    expect(joined).toContain('每轮都回复这段固定文字');
     expect(
-      records.updates
-        .slice(updateCountBefore)
-        .some((u) => u.sessionUpdate === 'agent_message_chunk'),
-    ).toBe(true);
-    // echo 对账(issue #15):session/load 重放后历史里该 prompt 只有一条用户消息
-    const replayed = userBlocks(updateCountBefore).flat().filter(
-      (t) => t.type === 'text' && t.text === '重构 auth 校验',
-    );
-    expect(replayed).toHaveLength(1);
+      records.updates.filter((u) => u.sessionUpdate === 'plan').length,
+      'resume 后重播了完整故事(thread 未恢复)',
+    ).toBe(planCountBefore);
+    expect(records.statuses.at(-1)).toBe('idle');
+  });
+
+  it('session/list:小页分页聚合出全量会话,带标题与活跃时间(#97)', async () => {
+    // 上面的 connect 已自动拉取会话列表;库内此时 2 个会话、页大小 2,
+    // 满页返回 nextCursor 强制客户端走完分页循环,聚合结果才可能齐全。
+    await waitFor(() => records.sessionLists.length > 0, 5_000, 'session/list 聚合结果');
+    const list = records.sessionLists.at(-1)!;
+
+    expect(list.length).toBeGreaterThanOrEqual(2);
+    // 完整回合的会话在列,字段齐全:标题、cwd、活跃时间
+    const titled = list.find((entry) => entry.title === '重构 auth 校验');
+    expect(titled).toBeDefined();
+    expect(titled!.sessionId).toBe(records.sessionIds[1]);
+    expect(titled!.cwd).toBe('/tmp/project');
+    expect(titled!.updatedAt).toBeTruthy();
+    // 最新活跃在前:resume 用例刚活动过的会话排第一
+    expect(list[0]!.sessionId).toBe(records.sessionIds.at(-1));
   });
 
   it(
@@ -505,15 +540,16 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
       );
       expect(diffs.some((c) => c.type === 'diff' && c.path === '/auth.ts')).toBe(true);
 
-      // 恢复必须逐字使用同一 cwd(deepagents-acp 的 session/load 相等校验):
-      // 重连 resume 该会话,`/` 原样发送,重放成功。
+      // 恢复必须逐字使用同一 cwd:重连 resume 该会话,`/` 原样发送。
+      // resume 声明后重连优先走 session/resume(不回放),session id 原样接回。
+      const replayStartsBefore = records.replayStarts;
       acpClient.disconnect();
       await acpClient.connect(
         new StreamTransport(createWebSocketStream(`ws://127.0.0.1:${port}/acp`)),
         WORKSPACE_NONE_CWD,
         { sessionId },
       );
-      expect(records.replayStarts).toBe(2);
+      expect(records.replayStarts).toBe(replayStartsBefore);
       expect(records.sessionIds.at(-1)).toBe(sessionId);
     },
   );
@@ -596,5 +632,57 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
     // 客户端落「已认证」记录,且新会话已重建(会话 id 换新)
     expect(records.authedMethodIds).toEqual(['panda-token']);
     expect(records.sessionIds.length).toBeGreaterThan(1);
+  });
+
+  it('session/delete:抹除会话后列表移除、load 拒绝(#97)', { timeout: 60_000 }, async () => {
+    // 自建一个专用会话再删,避免误伤其他用例依赖的会话
+    await acpClient.newSession('/tmp/project');
+    const doomed = records.sessionIds.at(-1)!;
+
+    await acpClient.deleteSession(doomed);
+    await waitFor(
+      () => records.sessionDeleted.includes(doomed),
+      5_000,
+      'deleteSession 的 onSessionDeleted 回执',
+    );
+
+    // 服务端真抹了:直连 probe 对该会话 session/load 必须 Session not found
+    // (元数据行与线程 checkpoints 一并删除)。
+    const probe = client({ name: 'panda-e2e-delete-probe' }).connect(
+      createWebSocketStream(`ws://127.0.0.1:${port}/acp`),
+    );
+    try {
+      // mcpServers 必填:SDK 服务端 zod 校验缺失即 -32602,到不了 handler。
+      // handler 抛的普通 Error 被连接层包成 -32603,原文进 data.details。
+      await expect(
+        probe.agent.request(methods.agent.session.load, {
+          sessionId: doomed,
+          cwd: '/tmp/project',
+          mcpServers: [],
+        }),
+      ).rejects.toMatchObject({
+        code: -32603,
+        data: { details: expect.stringContaining('Session not found') },
+      });
+    } finally {
+      probe.close();
+    }
+
+    // 重连拉新列表:被删会话不在其中,其余会话仍在(delete 没有殃及旁人)。
+    // list 随 connect 同步完成,基线必须在 disconnect 前取。
+    const listCountBefore = records.sessionLists.length;
+    acpClient.disconnect();
+    await acpClient.connect(
+      new StreamTransport(createWebSocketStream(`ws://127.0.0.1:${port}/acp`)),
+      '/tmp/project',
+    );
+    await waitFor(
+      () => records.sessionLists.length > listCountBefore,
+      5_000,
+      '重连后的 session/list',
+    );
+    const list = records.sessionLists.at(-1)!;
+    expect(list.every((entry) => entry.sessionId !== doomed)).toBe(true);
+    expect(list.some((entry) => entry.title === '重构 auth 校验')).toBe(true);
   });
 });

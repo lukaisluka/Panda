@@ -22,12 +22,18 @@ import type {
   AuthenticateResponse,
   CloseSessionRequest,
   CloseSessionResponse,
+  DeleteSessionRequest,
+  DeleteSessionResponse,
   InitializeRequest,
   InitializeResponse,
+  ListSessionsRequest,
+  ListSessionsResponse,
   LoadSessionRequest,
   LoadSessionResponse,
   NewSessionRequest,
   NewSessionResponse,
+  ResumeSessionRequest,
+  ResumeSessionResponse,
   PromptRequest,
   PromptResponse,
   SessionUpdate,
@@ -633,7 +639,8 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
         agentCapabilities: {
           loadSession: true,
           promptCapabilities: { image: true },
-          sessionCapabilities: { close: {} },
+          // #97:session 管理四件套与 handler 一一对应,不虚假声明
+          sessionCapabilities: { close: {}, list: {}, delete: {}, resume: {} },
         },
         // v1 auth(#90):声明 agent 托管登录方式。假实现,无条件成功——
         // Panda 的认证入口/记录链路以此演练。
@@ -695,6 +702,61 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
       return {};
     },
 
+    async listSessions(params: ListSessionsRequest): Promise<ListSessionsResponse> {
+      // cursor 即行偏移(对客户端不透明即合法);小页刻意钉住客户端的
+      // nextCursor 分页循环——单页返回会让那条路径永远测不到。
+      const PAGE_SIZE = 2;
+      const offset = params.cursor ? Number.parseInt(params.cursor, 10) : 0;
+      if (!Number.isInteger(offset) || offset < 0) {
+        throw new Error(`Invalid list cursor: ${String(params.cursor)}`);
+      }
+      const records = deps.store.list({
+        cwd: params.cwd ?? undefined,
+        limit: PAGE_SIZE,
+        offset,
+      });
+      const sessions = records.map((record) => ({
+        sessionId: record.sessionId,
+        cwd: record.cwd,
+        title: record.title,
+        updatedAt: record.updatedAt,
+      }));
+      // 满页就可能还有下一页(下一页拉空即自然终止);不满页必然到尾。
+      const nextCursor = records.length === PAGE_SIZE ? String(offset + PAGE_SIZE) : null;
+      deps.log(`listed ${sessions.length} sessions (offset ${offset}, cwd ${params.cwd ?? 'any'})`);
+      return { sessions, nextCursor };
+    },
+
+    async resumeSession(params: ResumeSessionRequest): Promise<ResumeSessionResponse> {
+      const record = deps.store.get(params.sessionId);
+      if (!record) {
+        throw new Error(`Session not found: ${params.sessionId}`);
+      }
+      if (Array.isArray(params.mcpServers) && params.mcpServers.length > 0) {
+        deps.log(`[session/resume] 收到 ${params.mcpServers.length} 个 mcpServers 配置(接收但不连接)`);
+      }
+      // 协议语义:resume 不回放历史——客户端自持 transcript,服务端只把
+      // thread 上下文接回 checkpointer(threadId 在 store 里,天然跨子进程)。
+      deps.store.touch(record.sessionId);
+      deps.log(`resumed session ${record.sessionId} (thread ${record.threadId}, no replay)`);
+      return { modes: modeState(record), configOptions: configOptions(deps, record) };
+    },
+
+    async deleteSession(params: DeleteSessionRequest): Promise<DeleteSessionResponse> {
+      const record = deps.store.get(params.sessionId);
+      if (!record) {
+        throw new Error(`Session not found: ${params.sessionId}`);
+      }
+      // 与 close 相反:delete 是抹除——元数据行、线程 checkpoints、连接内
+      // 运行态一起清,之后 load 该会话必须 Session not found。
+      await deps.checkpointer.deleteThread(record.threadId);
+      deps.store.delete(record.sessionId);
+      sessionPlans.delete(record.sessionId);
+      allowedCommandTypes.delete(record.sessionId);
+      deps.log(`deleted session ${record.sessionId} (thread ${record.threadId} checkpoints removed)`);
+      return {};
+    },
+
     async prompt(params: PromptRequest): Promise<PromptResponse> {
       const record = deps.store.get(params.sessionId);
       if (!record) {
@@ -718,6 +780,7 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
       }
 
       const stopReason = await streamTurn(record, promptToHumanMessage(params.prompt));
+      deps.store.touch(record.sessionId);
       deps.log(`prompt completed: ${record.sessionId} stopReason=${stopReason}`);
       return { stopReason };
     },
