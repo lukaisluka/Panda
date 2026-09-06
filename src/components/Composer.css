@@ -77,6 +77,21 @@
 .composer-remove:hover {
   color: var(--color-fg);
 }
+/* Coarse-pointer exception (#107): keeps the 20px visual badge (44px would
+ * cover the whole 56px thumbnail), finger target grows invisibly instead
+ * (::after hit testing, 20 + 2×12 = 44). Already position: absolute, which
+ * anchors the pseudo-element. */
+@media (pointer: coarse) {
+  .composer-remove {
+    min-height: 20px;
+    min-width: 20px;
+  }
+  .composer-remove::after {
+    content: '';
+    position: absolute;
+    inset: -12px;
+  }
+}
 
 .composer-tile-error {
   margin-top: 4px; /* mt-1 */

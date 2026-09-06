@@ -2,7 +2,10 @@
 
 .app-shell {
   display: flex;
-  height: 100vh;
+  /* dvh (SettingsPage.css precedent): 100vh is the mobile LARGEST viewport —
+   * once the URL bar collapses, the composer at the bottom sits below the
+   * visible area. */
+  height: 100dvh;
   overflow: hidden;
 }
 

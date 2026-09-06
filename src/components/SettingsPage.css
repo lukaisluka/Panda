@@ -223,13 +223,22 @@
   display: flex;
   gap: 2px;
   flex-shrink: 0;
-  opacity: 0;
-  transition: opacity 120ms ease;
 }
 
-.settings-profile-row:hover .settings-profile-actions,
-.settings-profile-row:focus-within .settings-profile-actions {
-  opacity: 1;
+/* Reveal-on-hover is a hover-pointer affordance, so the whole gate is scoped
+ * to devices that can hover. On touch, opacity:0 would leave the buttons
+ * invisible-but-clickable (opacity keeps hit testing) — a mis-tap trap with
+ * destructive actions here — so they stay permanently visible there. */
+@media (hover: hover) {
+  .settings-profile-actions {
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+
+  .settings-profile-row:hover .settings-profile-actions,
+  .settings-profile-row:focus-within .settings-profile-actions {
+    opacity: 1;
+  }
 }
 
 /* --- Empty state --- */
