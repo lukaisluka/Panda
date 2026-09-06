@@ -16,7 +16,7 @@ import {
 } from './store';
 import { useForegroundLifecycle, useSessionModes } from './projector/hooks';
 import { navigate, useHashRoute } from './routes';
-import { SettingsPage } from './components/SettingsPage';
+import { SettingsPage, type SettingsSectionId } from './components/SettingsPage';
 import { useReplaySession } from './useReplaySession';
 import { useLiveSession } from './useLiveSession';
 import type { ForegroundSessionController } from './session-controller';
@@ -43,6 +43,9 @@ function MainScreen() {
   const route = useHashRoute();
   const onSettings = route === 'settings';
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
+  // Which settings section is showing (#117) — MainScreen-level so it
+  // survives settings ⇄ main route flips (returning lands where you left).
+  const [settingsSection, setSettingsSection] = useState<SettingsSectionId>('general');
   const mode = usePanda((s) => s.mode);
   const doc = useActiveDoc();
   const connection = useActiveConnection();
@@ -93,6 +96,8 @@ function MainScreen() {
         live={live}
         mobileOpen={mobileNavigationOpen}
         onMobileClose={() => setMobileNavigationOpen(false)}
+        settingsSection={settingsSection}
+        onSelectSettingsSection={setSettingsSection}
       />
       <main className="app-main">
         <header className="app-header">
@@ -119,7 +124,7 @@ function MainScreen() {
           {headerMeta !== null && <span className="app-header-meta">{headerMeta}</span>}
         </header>
         {onSettings ? (
-          <SettingsPage />
+          <SettingsPage section={settingsSection} />
         ) : (
           <>
             {doc.plan && doc.plan.length > 0 && <PlanDock entries={doc.plan} />}

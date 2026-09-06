@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Bot, Check, Palette, Pencil, Play, Plug, Plus, Terminal, Trash2 } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Activity, Bot, Check, Copy, Languages, Palette, Pencil, Play, Plug, Plus, SlidersHorizontal, Terminal, Trash2 } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { IconButton } from '@astryxdesign/core/IconButton';
 import { Selector } from '@astryxdesign/core/Selector';
@@ -22,96 +22,41 @@ import {
 import { navigate } from '../routes';
 import { isThemeId, loadThemeId, saveThemeId, subscribeTheme, THEMES, EXPOSED_THEME_IDS } from '../theme';
 import { workspaceDisplay } from '../workspace';
-import { Activity, Copy, Languages } from 'lucide-react';
 import { LOCALES, saveLocale } from '../i18n';
 import { t } from '../i18n';
 import { useI18n } from '../i18n/context';
 import { copyDiagnosticsReport } from './ErrorBoundary';
 import './SettingsPage.css';
 
-/** The settings page's navigable sections (#115) — the single source shared
- * by the main column's cards (id jump targets) and the sidebar's section
- * nav: same order, same titles, same icons. Dev tools stay out of the nav
- * (dev-build-only, not a destination users manage). */
+/** The settings page's sections (#117) — the single source shared by the
+ * sidebar's section nav and the main column's pages: same order, same
+ * titles, same icons. One section shows at a time (macOS-Settings style) —
+ * the settings content is shorter than one viewport of scroll, so a jump-to-
+ * card nav produced almost no visible movement; a page swap always does.
+ * Sparse neighbours are grouped (外观+语言 → 通用) so every page carries
+ * real content. Dev tools live on the diagnostics page (dev-build-only, not
+ * a destination users manage). */
 export const SETTINGS_SECTIONS = [
-  { id: 'settings-section-appearance', titleKey: 'settings.appearance', icon: Palette },
-  { id: 'settings-section-language', titleKey: 'settings.language', icon: Languages },
-  { id: 'settings-section-agents', titleKey: 'settings.profiles', icon: Bot },
-  { id: 'settings-section-mcp', titleKey: 'settings.mcp', icon: Plug },
-  { id: 'settings-section-diagnostics', titleKey: 'diag.cardTitle', icon: Activity },
+  { id: 'general', titleKey: 'settings.general', descKey: 'settings.generalDesc', icon: SlidersHorizontal },
+  { id: 'agents', titleKey: 'settings.profiles', descKey: 'settings.profilesDesc', icon: Bot },
+  { id: 'mcp', titleKey: 'settings.mcp', descKey: 'settings.mcpDesc', icon: Plug },
+  { id: 'diagnostics', titleKey: 'diag.cardTitle', descKey: 'diag.cardDesc', icon: Activity },
 ] as const;
 
-const [appearanceSection, languageSection, agentsSection, mcpSection, diagnosticsSection] = SETTINGS_SECTIONS;
+export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id'];
 
-/** Settings-route sidebar nav (#115): jumps to a card and tracks which
- * section is current while the column scrolls. Rendered by the Sidebar in
- * place of the session list. */
-export function SettingsSideNav({ onNavigate }: { onNavigate(): void }) {
+const [generalSection, agentsSection, mcpSection, diagnosticsSection] = SETTINGS_SECTIONS;
+
+/** Settings-route sidebar nav (#115/#117): lists the sections; selection is
+ * lifted state (MainScreen owns it, so it survives route flips), clicking
+ * switches the main column's page. Rendered by the Sidebar in place of the
+ * session list. */
+export function SettingsSideNav({ activeId, onSelect, onNavigate }: {
+  activeId: SettingsSectionId;
+  onSelect(id: SettingsSectionId): void;
+  onNavigate(): void;
+}) {
   const { t } = useI18n();
-  const [activeId, setActiveId] = useState<string>(SETTINGS_SECTIONS[0].id);
-  // A clicked section stays pinned until the USER scrolls (wheel/touch/key —
-  // input events, not scroll events: the programmatic jump fires those too).
-  // Without the pin, the scrollspy below would fight the click: this page is
-  // shorter than one viewport of scroll, so the last sections can never
-  // cross the probe line and a clicked target could flash back instantly.
-  const pinnedId = useRef<string | null>(null);
-
-  useEffect(() => {
-    const container = document.querySelector('.settings-page');
-    if (!(container instanceof HTMLElement)) return;
-    let raf = 0;
-    const update = () => {
-      raf = 0;
-      if (pinnedId.current !== null) {
-        setActiveId(pinnedId.current);
-        return;
-      }
-      // Current = the last card whose head passed a probe line 120px down the
-      // scrollport; at the very bottom the last section always wins (it can
-      // never reach the line on this short page). Rect-relative on purpose:
-      // card offsetTop is measured against .app-main (a positioned
-      // ancestor), not this scroll container.
-      const probe = container.getBoundingClientRect().top + 120;
-      let current: string = SETTINGS_SECTIONS[0].id;
-      for (const section of SETTINGS_SECTIONS) {
-        const el = document.getElementById(section.id);
-        if (el && el.getBoundingClientRect().top <= probe) current = section.id;
-      }
-      if (container.scrollTop + container.clientHeight >= container.scrollHeight - 4) {
-        current = diagnosticsSection.id;
-      }
-      setActiveId(current);
-    };
-    const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(update);
-    };
-    const unpin = () => {
-      pinnedId.current = null;
-      // Re-evaluate immediately: wheeling while already at the scroll limit
-      // fires no scroll event, so waiting for one would keep the stale pin.
-      if (!raf) raf = requestAnimationFrame(update);
-    };
-    container.addEventListener('scroll', onScroll, { passive: true });
-    container.addEventListener('wheel', unpin, { passive: true });
-    container.addEventListener('touchmove', unpin, { passive: true });
-    container.addEventListener('keydown', unpin);
-    update();
-    return () => {
-      container.removeEventListener('scroll', onScroll);
-      container.removeEventListener('wheel', unpin);
-      container.removeEventListener('touchmove', unpin);
-      container.removeEventListener('keydown', unpin);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, []);
-
-  const jump = (id: string) => {
-    pinnedId.current = id;
-    document.getElementById(id)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-    setActiveId(id);
-    onNavigate();
-  };
-
   return (
     <div className="sidebar-settings-nav">
       <div className="sidebar-sessions-head">
@@ -123,7 +68,10 @@ export function SettingsSideNav({ onNavigate }: { onNavigate(): void }) {
             key={section.id}
             type="button"
             className={`sidebar-settings-item ${activeId === section.id ? 'sidebar-settings-item--active' : ''}`}
-            onClick={() => jump(section.id)}
+            onClick={() => {
+              onSelect(section.id);
+              onNavigate();
+            }}
           >
             <section.icon size={14} />
             <span className="truncate">{t(section.titleKey)}</span>
@@ -134,91 +82,99 @@ export function SettingsSideNav({ onNavigate }: { onNavigate(): void }) {
   );
 }
 
+/** One section's page header — the shared skeleton that makes a short page
+ * read as a designed page instead of a lonely card: icon + title + one-line
+ * description (+ the section's primary action, right-aligned). */
+function SectionHeader({ section, actions }: {
+  section: (typeof SETTINGS_SECTIONS)[number];
+  actions?: ReactNode;
+}) {
+  const { t } = useI18n();
+  const Icon = section.icon;
+  return (
+    <header className="settings-section-head">
+      <span className="settings-section-head-icon" aria-hidden>
+        <Icon size={17} />
+      </span>
+      <div className="settings-section-head-text">
+        <h1 className="settings-section-head-title">{t(section.titleKey)}</h1>
+        <p className="settings-section-head-desc">{t(section.descKey)}</p>
+      </div>
+      {actions && <div className="settings-section-head-actions">{actions}</div>}
+    </header>
+  );
+}
+
 /**
  * Settings content (`#/settings`, #111): renders INSIDE MainScreen's main
  * column — the sidebar/header chrome stays, this replaces only the session
- * stream. Carded sections on a centered column — appearance (theme
- * swatches), Agent 配置 CRUD (avatar rows), and a dev-only tools card. Edits
- * to url/workspace apply on the next connect; deleting a profile never
- * touches the endpoint's remembered sessions.
+ * stream. One section page at a time (#117); the keyed body abandons
+ * in-flight forms on switch and replays the entrance fade.
  */
-export function SettingsPage() {
+export function SettingsPage({ section }: { section: SettingsSectionId }) {
+  const { t } = useI18n();
   const [profiles, setProfiles] = useState<AgentProfile[]>(() => loadProfiles());
   useEffect(() => subscribeProfiles(setProfiles), []);
 
   return (
     <div className="settings-page">
-      <div className="settings-body">
-        <section id={appearanceSection.id} className="settings-card">
-          <div className="settings-card-head">
-            <span className="settings-card-icon" aria-hidden>
-              <Palette size={14} />
-            </span>
-            <h2 className="settings-card-title">{t('settings.appearance')}</h2>
-          </div>
-          <p className="settings-card-desc">{t('settings.appearanceDesc')}</p>
-          <ThemeSwatches />
-        </section>
-
-        <section id={languageSection.id} className="settings-card">
-          <div className="settings-card-head">
-            <span className="settings-card-icon" aria-hidden>
-              <Languages size={14} />
-            </span>
-            <h2 className="settings-card-title">{t('settings.language')}</h2>
-          </div>
-          <p className="settings-card-desc">{t('settings.languageDesc')}</p>
-          <LanguageChips />
-        </section>
-
-        <ProfileCard profiles={profiles} sectionId={agentsSection.id} />
-
-        <McpCard sectionId={mcpSection.id} />
-
-        <DiagnosticsCard sectionId={diagnosticsSection.id} />
-
-        {import.meta.env.DEV && (
-          <section className="settings-card settings-card--muted">
-            <div className="settings-card-head">
-            <span className="settings-card-icon" aria-hidden>
-              <Terminal size={14} />
-            </span>
-            <h2 className="settings-card-title">{t('settings.dev')}</h2>
-              <div className="settings-card-actions">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  label={t('settings.demoReplay')}
-                  icon={<Play size={12} />}
-                  clickAction={() => navigate('demo')}
-                  tooltip={t('settings.demoReplayTooltip')}
-                />
-              </div>
-            </div>
-            <p className="settings-card-desc">{t('settings.devDesc')}</p>
-          </section>
-        )}
-
+      <div className="settings-body" key={section}>
+        {section === 'general' && <GeneralSection section={generalSection} />}
+        {section === 'agents' && <AgentsSection section={agentsSection} profiles={profiles} />}
+        {section === 'mcp' && <McpSection section={mcpSection} />}
+        {section === 'diagnostics' && <DiagnosticsSection section={diagnosticsSection} />}
         <p className="settings-colophon">{t('settings.colophon')}</p>
       </div>
     </div>
   );
 }
 
+/** 通用: theme + language — the two sparse preference cards grouped onto one
+ * page. They keep their own card heads (their titles differ from the page
+ * title); the header carries only the page-level context. */
+function GeneralSection({ section }: { section: (typeof SETTINGS_SECTIONS)[number] }) {
+  const { t } = useI18n();
+  return (
+    <>
+      <SectionHeader section={section} />
+      <section className="settings-card">
+        <div className="settings-card-head">
+          <span className="settings-card-icon" aria-hidden>
+            <Palette size={14} />
+          </span>
+          <h2 className="settings-card-title">{t('settings.appearance')}</h2>
+        </div>
+        <p className="settings-card-desc">{t('settings.appearanceDesc')}</p>
+        <ThemeSwatches />
+      </section>
+
+      <section className="settings-card">
+        <div className="settings-card-head">
+          <span className="settings-card-icon" aria-hidden>
+            <Languages size={14} />
+          </span>
+          <h2 className="settings-card-title">{t('settings.language')}</h2>
+        </div>
+        <p className="settings-card-desc">{t('settings.languageDesc')}</p>
+        <LanguageChips />
+      </section>
+    </>
+  );
+}
+
 /** One-click diagnostics report (#105): the non-crash path — copies the
  * environment + recent-console ring so a bug report carries its context.
- * Nothing is uploaded; the clipboard is the transport. */
-function DiagnosticsCard({ sectionId }: { sectionId: string }) {
+ * Nothing is uploaded; the clipboard is the transport. The copy action
+ * lives in the page header; the dev tools card rides this page
+ * (dev-build-only). */
+function DiagnosticsSection({ section }: { section: (typeof SETTINGS_SECTIONS)[number] }) {
   const { t } = useI18n();
   const [copy, setCopy] = useState<'idle' | 'ok' | 'fail'>('idle');
   return (
-    <section id={sectionId} className="settings-card">
-      <div className="settings-card-head">
-        <span className="settings-card-icon" aria-hidden>
-          <Activity size={14} />
-        </span>
-        <h2 className="settings-card-title">{t('diag.cardTitle')}</h2>
-        <div className="settings-card-actions">
+    <>
+      <SectionHeader
+        section={section}
+        actions={
           <Button
             variant="secondary"
             size="sm"
@@ -233,10 +189,30 @@ function DiagnosticsCard({ sectionId }: { sectionId: string }) {
             clickAction={() => void copyDiagnosticsReport().then(setCopy)}
             tooltip={t('diag.cardDesc')}
           />
-        </div>
-      </div>
-      <p className="settings-card-desc">{t('diag.cardDesc')}</p>
-    </section>
+        }
+      />
+      {import.meta.env.DEV && (
+        <section className="settings-card settings-card--muted">
+          <div className="settings-card-head">
+            <span className="settings-card-icon" aria-hidden>
+              <Terminal size={14} />
+            </span>
+            <h2 className="settings-card-title">{t('settings.dev')}</h2>
+            <div className="settings-card-actions">
+              <Button
+                variant="secondary"
+                size="sm"
+                label={t('settings.demoReplay')}
+                icon={<Play size={12} />}
+                clickAction={() => navigate('demo')}
+                tooltip={t('settings.demoReplayTooltip')}
+              />
+            </div>
+          </div>
+          <p className="settings-card-desc">{t('settings.devDesc')}</p>
+        </section>
+      )}
+    </>
   );
 }
 
@@ -305,38 +281,36 @@ function LanguageChips() {
   );
 }
 
-/** The Agent 配置 card: header with the create action, the description, and
- * the avatar-row list (a row swaps for the edit form in place). */
-function ProfileCard({ profiles, sectionId }: { profiles: AgentProfile[]; sectionId: string }) {
+/** The Agent 配置 page (#117): the create action and description live in the
+ * page header; the card carries only content — the avatar-row list (a row
+ * swaps for the edit form in place). */
+function AgentsSection({ section, profiles }: {
+  section: (typeof SETTINGS_SECTIONS)[number];
+  profiles: AgentProfile[];
+}) {
   const { t } = useI18n();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   return (
-    <section id={sectionId} className="settings-card">
-      <div className="settings-card-head">
-        <span className="settings-card-icon" aria-hidden>
-          <Bot size={15} />
-        </span>
-        <h2 className="settings-card-title">{t('settings.profiles')}</h2>
-        {!creating && (
-          <div className="settings-card-actions">
-            <Button
-              variant="secondary"
-              size="sm"
-              label={t('settings.addProfile')}
-              icon={<Plus size={12} />}
-              clickAction={() => {
-                setEditingId(null);
-                setCreating(true);
-              }}
-            />
-          </div>
+    <>
+      <SectionHeader
+        section={section}
+        actions={creating ? undefined : (
+          <Button
+            variant="secondary"
+            size="sm"
+            label={t('settings.addProfile')}
+            icon={<Plus size={12} />}
+            clickAction={() => {
+              setEditingId(null);
+              setCreating(true);
+            }}
+          />
         )}
-      </div>
-      <p className="settings-card-desc">{t('settings.profilesDesc')}</p>
-
-      {creating ? (
+      />
+      <section className="settings-card">
+        {creating ? (
         <ProfileForm
           onCancel={() => setCreating(false)}
           onSave={(profile) => {
@@ -408,14 +382,15 @@ function ProfileCard({ profiles, sectionId }: { profiles: AgentProfile[]; sectio
           )}
         </div>
       )}
-    </section>
+      </section>
+    </>
   );
 }
 
-/** The MCP 服务器 card (issue #71): the v1 execution surface — configured
- * servers ride every session/new · session/load to the agent. Same in-place
- * edit pattern as the Agent 配置 card. */
-function McpCard({ sectionId }: { sectionId: string }) {
+/** The MCP 服务器 page (issue #71, #117): the v1 execution surface —
+ * configured servers ride every session/new · session/load to the agent.
+ * Same header/page split and in-place edit pattern as the Agent 配置 page. */
+function McpSection({ section }: { section: (typeof SETTINGS_SECTIONS)[number] }) {
   const { t } = useI18n();
   const [servers, setServers] = useState<McpServerConfig[]>(() => loadMcpServers());
   useEffect(() => subscribeMcpServers(setServers), []);
@@ -423,30 +398,24 @@ function McpCard({ sectionId }: { sectionId: string }) {
   const [creating, setCreating] = useState(false);
 
   return (
-    <section id={sectionId} className="settings-card">
-      <div className="settings-card-head">
-        <span className="settings-card-icon" aria-hidden>
-          <Plug size={15} />
-        </span>
-        <h2 className="settings-card-title">{t('settings.mcp')}</h2>
-        {!creating && (
-          <div className="settings-card-actions">
-            <Button
-              variant="secondary"
-              size="sm"
-              label={t('settings.addMcp')}
-              icon={<Plus size={12} />}
-              clickAction={() => {
-                setEditingId(null);
-                setCreating(true);
-              }}
-            />
-          </div>
+    <>
+      <SectionHeader
+        section={section}
+        actions={creating ? undefined : (
+          <Button
+            variant="secondary"
+            size="sm"
+            label={t('settings.addMcp')}
+            icon={<Plus size={12} />}
+            clickAction={() => {
+              setEditingId(null);
+              setCreating(true);
+            }}
+          />
         )}
-      </div>
-      <p className="settings-card-desc">{t('settings.mcpDesc')}</p>
-
-      {creating ? (
+      />
+      <section className="settings-card">
+        {creating ? (
         <McpForm
           onCancel={() => setCreating(false)}
           onSave={(server) => {
@@ -518,7 +487,8 @@ function McpCard({ sectionId }: { sectionId: string }) {
           )}
         </div>
       )}
-    </section>
+      </section>
+    </>
   );
 }
 

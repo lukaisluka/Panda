@@ -13,6 +13,75 @@
 
 .settings-body {
   padding: 28px 20px 40px;
+  /* One section per page (#117): the body is keyed by section id, so every
+   * switch remounts and replays this entrance — the visible "something
+   * happened" feedback that scroll-jumping could never provide on a page
+   * shorter than one viewport. */
+  animation: settings-section-in 160ms ease;
+}
+
+@keyframes settings-section-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-body {
+    animation: none;
+  }
+}
+
+/* --- Section page header (#117) --- */
+
+/* The shared skeleton that makes a short section read as a designed page:
+ * icon chip + title + one-line description (+ the primary action, right).
+ * Horizontally aligned with the cards below (same 720px column, same 20px
+ * inner padding). */
+.settings-section-head {
+  max-width: 720px;
+  margin: 0 auto 20px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.settings-section-head-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: var(--panda-radius-lg);
+  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+  color: var(--color-accent);
+}
+
+.settings-section-head-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-section-head-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.settings-section-head-desc {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--color-muted);
+}
+
+.settings-section-head-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 /* --- Cards --- */
@@ -24,9 +93,6 @@
   border: 1px solid var(--color-border);
   border-radius: 16px; /* composer-card's card radius — NOT the Astryx scale */
   background: var(--color-surface);
-  /* jump targets for the sidebar section nav (#115): breathing room between
-   * the scrollport top and a jumped-to card's head */
-  scroll-margin-top: 12px;
 }
 
 .settings-card--muted {
