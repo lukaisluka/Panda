@@ -233,7 +233,11 @@ Astryx 不是全盘替代；以下保持在 `src/index.css` 的纯 CSS 里，颜
 - **`.md-codeblock*`**：shiki 代码块外壳（语言标签 + 复制按钮头）。
 - **吉祥物动画**：`.panda--*` 与 11 个 `@keyframes`（含 `prefers-reduced-motion`
   守卫），与设计系统无关的舞台动画。
-- **focus-visible 轮廓**与 `.focus-outline-none` 退出：键盘可达性兜底。
+- **focus-visible 轮廓**与 `.focus-outline-none` 退出：键盘可达性兜底。文字输入
+  的聚焦暗示归所在表面（composer card 边框、Astryx TextInput 包装层变强调色边框
+  + 内发光），内层 input 一律退出全局 outline——叠加会画出双重框，暖色主题里
+  读作「大黑框」（#109）。规则按结构限定（`.astryx-text-input input`、
+  `.focus-outline-none`），裸 checkbox/输入仍保留键盘轮廓。
 - **`.message-scroller`** 的 scrollbar-gutter 媒体查询：虚拟流滚动条对称预留。
 
 ## 字体（joint-debug 后：所有权归 Panda，variable 自托管）

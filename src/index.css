@@ -198,6 +198,15 @@ body {
 .focus-outline-none:focus-visible {
   outline: none;
 }
+/* Same policy for Astryx TextInput (#109): its wrapper IS the focus
+ * affordance (accent border + inset glow on focus-within), so the native
+ * input inside must not also paint the global outline — the doubled inner
+ * frame reads as a thick black box around the typing area, especially in
+ * warm themes where the accent is a dark brown. Scoped to inputs inside the
+ * wrapper: bare checkboxes/inputs elsewhere keep the keyboard outline. */
+.astryx-text-input input:focus-visible {
+  outline: none;
+}
 
 /* Touch floor (#107): on coarse pointers interactive controls get the 44px
  * minimum hit size (Apple HIG; Material asks 48 but 44 is the classic chat-app
