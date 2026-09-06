@@ -199,6 +199,26 @@ body {
   outline: none;
 }
 
+/* Touch floor (#107): on coarse pointers interactive controls get the 44px
+ * minimum hit size (Apple HIG; Material asks 48 but 44 is the classic chat-app
+ * compromise). Scoped to (pointer: coarse), so the desktop density is
+ * untouched. Unlayered, so it beats the Astryx layers' fixed height/width
+ * utilities (min-height/min-width constrain them). Two deliberate exclusions:
+ * inline .md-body links (a 44px floor would blow open message line boxes) and
+ * the in-card micro controls that keep their visual size and grow an
+ * invisible hit area instead (.composer-remove, .md-codeblock-copy — their
+ * local coarse rules). */
+@media (pointer: coarse) {
+  button, select, [role='button'] {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  textarea,
+  input:not([type='checkbox'], [type='radio'], [type='file']) {
+    min-height: 44px;
+  }
+}
+
 /* ---------------------------------------------------------------------------
  * Shared primitives (#32 Phase 3). Tiny fixed vocabulary used across
  * components; everything else lives in the co-located per-component CSS.
@@ -391,6 +411,22 @@ body {
 .md-codeblock-copy:hover {
   background: var(--color-bg);
   color: var(--color-fg);
+}
+/* Coarse-pointer exception (#107): 22px visual (a 44px button would dominate
+ * the code header), finger target grows invisibly instead — ::after
+ * participates in hit testing, 22 + 2×11 = 44. position: relative is the
+ * containing block for it. */
+@media (pointer: coarse) {
+  .md-codeblock-copy {
+    position: relative;
+    min-height: 22px;
+    min-width: 22px;
+  }
+  .md-codeblock-copy::after {
+    content: '';
+    position: absolute;
+    inset: -11px;
+  }
 }
 .md-codeblock pre {
   margin: 0;

@@ -207,6 +207,21 @@ Tailwind 退役后，Panda 自有样式分三层：
   写在共置文件里。
 - 颜色透明度不再有 `/50` 修饰符，用 `color-mix(in oklab, …)` 显式表达。
 
+## 触屏与指针契约（#107）
+
+响应式骨架（断点 640/768、抽屉侧栏）之外，触屏是二等输入，规则只有三条：
+
+- **视口高度一律 `100dvh`，禁止 `100vh`**（`100vh` 是移动端最大视口，
+  地址栏收起后底部内容被截；App.css 与 SettingsPage.css 同此）。
+- **hover 显隐必须包进 `@media (hover: hover)`**。触屏没有 hover，
+  `opacity: 0` 的按钮仍可命中（opacity 不关命中测试）——不可见但可点
+  是误触陷阱，触屏上此类操作常显。
+- **`(pointer: coarse)` 下交互控件 44px 最小命中尺寸**（全局规则在
+  `index.css`，不分层压过 Astryx 尺寸工具类）。两个例外保持视觉尺寸、
+  用 `::after` 不可见扩命中区：`.composer-remove`（20px 徽标）、
+  `.md-codeblock-copy`（22px）。行内 `.md-body` 链接排除（44px 下限会
+  撑开消息行框）。
+
 ## 保留的定制 CSS（有意为之）
 
 Astryx 不是全盘替代；以下保持在 `src/index.css` 的纯 CSS 里，颜色一律走 token：
