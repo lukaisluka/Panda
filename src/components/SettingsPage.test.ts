@@ -3,6 +3,7 @@ import {
   mcpDraftErrors,
   mcpServerSummary,
   profileDraftErrors,
+  SETTINGS_SECTIONS,
   type McpDraft,
   type ProfileDraft,
 } from './SettingsPage';
@@ -21,6 +22,19 @@ const mcpDraft = (patch: Partial<McpDraft> = {}): McpDraft => ({
   args: '-y server-filesystem',
   url: '',
   ...patch,
+});
+
+describe('SETTINGS_SECTIONS (#115: sidebar nav ↔ card ids)', () => {
+  it('lists the five product sections with unique ids', () => {
+    expect(SETTINGS_SECTIONS.map((s) => s.id)).toEqual([
+      'settings-section-appearance',
+      'settings-section-language',
+      'settings-section-agents',
+      'settings-section-mcp',
+      'settings-section-diagnostics',
+    ]);
+    expect(new Set(SETTINGS_SECTIONS.map((s) => s.id)).size).toBe(SETTINGS_SECTIONS.length);
+  });
 });
 
 describe('profileDraftErrors', () => {

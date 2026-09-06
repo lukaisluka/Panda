@@ -31,6 +31,7 @@ import { navigate, useHashRoute } from '../routes';
 import { cwdToWorkspace, workspaceLabel } from '../workspace';
 import type { LiveSessionFacade } from '../useLiveSession';
 import { NewSessionDialog } from './NewSessionDialog';
+import { SettingsSideNav } from './SettingsPage';
 import './Sidebar.css';
 
 /**
@@ -95,56 +96,64 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
         </span>
       </div>
 
-      <div className="sidebar-sessions-head">
-        <span className="sidebar-label">
-          Sessions
-        </span>
-        <IconButton
-          variant="ghost"
-          size="sm"
-          icon={<Plus size={13} />}
-          label={t('side.newSession')}
-          tooltip={t('side.newSessionTooltip')}
-          clickAction={() => setNewSessionOpen(true)}
-        />
-      </div>
-      <div className="sidebar-sessions">
-        {!liveMode && (
-          <div className="sidebar-demo-chip">
-            <MessagesSquare size={13} className="sidebar-icon-faint" />
-            <span className="truncate">{t('app.demoHeaderTitle')}</span>
-          </div>
-        )}
-        <div className="sidebar-group-list">
-          {orderedIds.map((connectionId) => (
-            <ConnectionGroupRow
-              key={connectionId}
-              connectionId={connectionId}
-              profile={profiles.find((entry) => entry.id === connectionId) ?? null}
-              isActiveConnection={connectionId === activeConnectionId}
-              live={live}
-              onMobileClose={onMobileClose}
-              exitSettings={exitSettings}
+      {onSettings ? (
+        <SettingsSideNav onNavigate={onMobileClose} />
+      ) : (
+        <>
+          <div className="sidebar-sessions-head">
+            <span className="sidebar-label">
+              Sessions
+            </span>
+            <IconButton
+              variant="ghost"
+              size="sm"
+              icon={<Plus size={13} />}
+              label={t('side.newSession')}
+              tooltip={t('side.newSessionTooltip')}
+              clickAction={() => setNewSessionOpen(true)}
             />
-          ))}
-          {liveMode && orderedIds.length === 0 && (
-            <div className="sidebar-empty">{t('side.noAgents')}</div>
-          )}
-        </div>
-      </div>
+          </div>
+          <div className="sidebar-sessions">
+            {!liveMode && (
+              <div className="sidebar-demo-chip">
+                <MessagesSquare size={13} className="sidebar-icon-faint" />
+                <span className="truncate">{t('app.demoHeaderTitle')}</span>
+              </div>
+            )}
+            <div className="sidebar-group-list">
+              {orderedIds.map((connectionId) => (
+                <ConnectionGroupRow
+                  key={connectionId}
+                  connectionId={connectionId}
+                  profile={profiles.find((entry) => entry.id === connectionId) ?? null}
+                  isActiveConnection={connectionId === activeConnectionId}
+                  live={live}
+                  onMobileClose={onMobileClose}
+                  exitSettings={exitSettings}
+                />
+              ))}
+              {liveMode && orderedIds.length === 0 && (
+                <div className="sidebar-empty">{t('side.noAgents')}</div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       <div className="sidebar-footer-block">
-        <button
-          type="button"
-          className="sidebar-add-agent"
-          onClick={() => {
-            navigate('settings');
-            onMobileClose();
-          }}
-        >
-          <Plus size={13} />
-          {t('side.addAgent')}
-        </button>
+        {!onSettings && (
+          <button
+            type="button"
+            className="sidebar-add-agent"
+            onClick={() => {
+              navigate('settings');
+              onMobileClose();
+            }}
+          >
+            <Plus size={13} />
+            {t('side.addAgent')}
+          </button>
+        )}
         <div className="sidebar-footer">
           <Bot size={14} className="sidebar-footer-icon" />
           <span className="truncate">
