@@ -10,7 +10,11 @@
 能力声明、三档权限模式 + mode/model 会话配置、权限三选项(approve/reject/always)、
 会话标题、`session/load` 回放,以及全套 session 管理能力(`session/list` 小页分页、
 `session/resume` 跨子进程恢复、`session/delete` 连同线程 checkpoints 一并抹除、
-`session/close`)。不用 npm 的 deepagents-acp(0.1.29):它的会话在
+`session/close`)。#99 起其余 Panda 支持的协议面也全量接上:elicitation 双模式
+(form 表单 / url + complete 通知)、compaction 全周期、plan_update(items)/
+plan_removed(UNSTABLE)、usage_update、available_commands_update、
+current_mode_update / config_option_update、session_info_update.updatedAt、
+auth/logout。不用 npm 的 deepagents-acp(0.1.29):它的会话在
 进程内存里,跨子进程 `session/load` 直接失败;权限请求后从不 resume 图;也不支持
 会话配置选项。
 
@@ -57,6 +61,24 @@ stdio 的 stdout 只承载逐行 JSON-RPC,日志全部写到 stderr。
 会话的首条文本消息会被压缩为最多 48 个字符的标题,并通过 ACP 的
 `session_info_update` 推送给 Panda。这个标题不额外调用模型,因此不会增加等待时间
 或真实模型费用;SQLite 持久化会话在 `session/load` 后也会重新推送它。
+
+## 协议演示触发词(#99)
+
+prompt 文本包含以下关键词时,回合开始前会先走一段确定性的协议演示流(触发回合
+照常播放剧本,轮次计数不受影响):
+
+| 关键词 | 演示内容 |
+|---|---|
+| `表单` | `elicitation/create` form 模式(环境确认表单),客户端应答后答复回显进消息流 |
+| `打开链接` | `elicitation/create` url 模式;客户端 consent 后 agent 发 `elicitation/complete` 闭环 |
+| `压缩上下文` | compaction 全周期:`in_progress` → 2 条 `compaction_summary_chunk` → `completed`(带 summary) |
+| `清理计划` | `plan_update`(items 变体,全 completed)→ `plan_removed` |
+
+无需触发词的常驻行为:每回合结束推 `usage_update`(确定性假用量)与
+`session_info_update.updatedAt`;会话建立/加载/恢复后推 `available_commands_update`;
+`set_mode` 与 mode 配置项成功后推 `current_mode_update`,`set_config_option` 成功后推
+`config_option_update`。`initialize` 声明 `auth.logout` 且已实现(登出清服务端认证
+记录,连接保持)。
 
 ## 切换 OpenAI 兼容真实模型
 
