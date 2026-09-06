@@ -320,6 +320,24 @@ export const messages = {
   'settings.serverName': { en: 'Server name', zh: '服务器名称' },
   'settings.serverNamePlaceholder': { en: 'e.g. filesystem', zh: '如:filesystem' },
   'settings.type': { en: 'Type', zh: '类型' },
+  'settings.profileType': { en: 'Connection type', zh: '连接方式' },
+  'settings.typeWebsocket': { en: 'WebSocket (remote service)', zh: 'WebSocket(远程服务)' },
+  'settings.profileTypeTooltip': {
+    en: 'stdio spawns a local agent process and speaks ACP over its stdin/stdout',
+    zh: 'stdio 在本机拉起 agent 进程,经其 stdin/stdout 通信',
+  },
+  'settings.stdioDesktopOnly': {
+    en: 'Panda desktop app only (spawns a local process)',
+    zh: '仅 Panda 桌面版可用(在本机拉起进程)',
+  },
+  'settings.agentCommandPlaceholder': {
+    en: 'e.g. npx -y claude-code-acp',
+    zh: '如:npx -y claude-code-acp',
+  },
+  'settings.commandRequired': {
+    en: 'stdio needs an executable command',
+    zh: 'stdio 需要可执行命令',
+  },
   'settings.typeStdio': { en: 'stdio (command on the agent host)', zh: 'stdio(agent 主机命令)' },
   'settings.typeHttp': { en: 'HTTP (Streamable)', zh: 'HTTP(Streamable)' },
   'settings.typeSse': { en: 'SSE', zh: 'SSE' },
@@ -423,6 +441,10 @@ export const messages = {
     zh: 'agent 要求认证,但没有提供浏览器可用的登录方式',
   },
   'acp.connectFailed': { en: 'Connection failed: {error}', zh: '连接失败: {error}' },
+  'acp.stdioHostMissing': {
+    en: 'stdio agents require the Panda desktop app',
+    zh: 'stdio agent 需要在 Panda 桌面版中连接',
+  },
   'acp.newSessionFailed': { en: 'New session failed: {error}', zh: '新建会话失败: {error}' },
   'acp.loginFailed': { en: 'Sign-in failed: {error}', zh: '登录失败: {error}' },
   'acp.deleteSessionFailed': { en: 'Session deletion failed: {error}', zh: '删除会话失败: {error}' },

@@ -13,7 +13,18 @@ import type {
   PermissionOptionKind,
 } from './protocol/types';
 import { connectionStorePort, usePanda, type ConnectionStorePort, type SessionEntry, type SessionSwitchSnapshot } from './store';
-import { updateProfileFields, type AgentProfile } from './profiles';
+import {
+  canonicalArgs,
+  liveTargetEndpoint,
+  loadProfiles,
+  profileEndpoint,
+  profileToLiveTarget,
+  updateProfileFields,
+  type AgentProfile,
+  type LiveTarget,
+  type ProfileFieldPatch,
+} from './profiles';
+import { getStdioTransportFactory, splitArgs } from './acp/transport/stdioHost';
 import { loadMcpServers } from './mcpServers';
 import { cwdToWorkspace, workspaceToCwd, type Workspace } from './workspace';
 import { alwaysAskPolicy, type PermissionDecision, type PermissionPolicy } from './policy';
@@ -171,7 +182,15 @@ type LiveConnection = {
    */
   stagedSwitch: { snapshot: SessionSwitchSnapshot; era: number } | null;
   /** Profile targeted by the in-flight connect — consumed on success (write-back). */
-  pendingProfile: { id: string; url: string; workspace: Workspace } | null;
+  pendingProfile: { id: string; target: LiveTarget; workspace: Workspace } | null;
+  /**
+   * The target the entry last connected with (issue #121) — the reconnect
+   * flow's source of truth. A stdio endpoint string (`stdio: cmd args`) never
+   * parses back into command/args, so the target itself is remembered here;
+   * null while the slot was only seeded offline (reconnect then rebuilds it
+   * from the profile).
+   */
+  lastTarget: LiveTarget | null;
 };
 
 const liveConnections = new Map<string, LiveConnection>();
@@ -231,6 +250,7 @@ function ensureEntry(connectionId: string): LiveConnection {
     port: connectionStorePort(connectionId),
     stagedSwitch: null,
     pendingProfile: null,
+    lastTarget: null,
   };
   const factory =
     clientFactories.get(connectionId) ??
@@ -262,9 +282,18 @@ function wireHandlers(entry: LiveConnection) {
         authedMethodId: null,
         authElicitation: null,
       });
-      // "默认工作区" = what the last successful connect used (issue #2, #23).
+      // "默认工作区" = what the last successful connect used (issue #2, #23);
+      // the endpoint fields echo back as the same-kind patch (issue #121).
       const pending = entry.pendingProfile;
-      if (pending) updateProfileFields(pending.id, { url: pending.url, workspace: pending.workspace });
+      if (pending) {
+        const patch: ProfileFieldPatch = { workspace: pending.workspace };
+        if (pending.target.kind === 'websocket') patch.url = pending.target.url;
+        else {
+          patch.command = pending.target.command;
+          patch.args = pending.target.args;
+        }
+        updateProfileFields(pending.id, patch);
+      }
       entry.pendingProfile = null;
     },
     onSessionId: (sessionId: string, cwd: string) => port.adoptSession(sessionId, cwd),
@@ -390,6 +419,11 @@ export type LiveConnectOptions = { resume?: boolean; profileId?: string | null }
  * slot replaces its connection — the client's era machinery (issue #19)
  * retires the old one. `profileId` routes the on-success write-back.
  *
+ * The target (issue #121) picks the transport at the AcpTransport seam: a
+ * websocket target gets a WebSocketTransport; a stdio target requires a
+ * registered host factory (stdioHost) and fails fast as a connection error
+ * when the host cannot spawn — never a silent fallback to another transport.
+ *
  * The workspace (issue #23, ADR 0005) becomes the protocol cwd here — the
  * single derivation point: local-directory sends its path, 无工作区 sends the
  * `WORKSPACE_NONE_CWD` constant. Everything downstream (ConnectionInfo.cwd,
@@ -397,25 +431,41 @@ export type LiveConnectOptions = { resume?: boolean; profileId?: string | null }
  */
 export async function connectLiveConnection(
   connectionId: string,
-  url: string,
+  target: LiveTarget,
   workspace: Workspace,
   opts?: LiveConnectOptions,
 ): Promise<void> {
-  const trimmedUrl = url.trim();
+  const normalizedTarget: LiveTarget =
+    target.kind === 'websocket'
+      ? { kind: 'websocket', url: target.url.trim() }
+      : { kind: 'stdio', command: target.command.trim(), args: canonicalArgs(target.args) };
   const normalizedWorkspace: Workspace =
     workspace.kind === 'local-directory'
       ? { kind: 'local-directory', path: workspace.path.trim() }
       : workspace;
   const cwd = workspaceToCwd(normalizedWorkspace);
-  if (!trimmedUrl || !cwd) {
-    console.warn(`[panda/acp:${connectionId}] connect ignored: url and a workspace path are required`);
+  const endpoint = liveTargetEndpoint(normalizedTarget);
+  if (!endpoint || !cwd) {
+    console.warn(`[panda/acp:${connectionId}] connect ignored: an endpoint and a workspace path are required`);
     return;
   }
-  remember(URL_KEY, trimmedUrl);
+  const stdioFactory = normalizedTarget.kind === 'stdio' ? getStdioTransportFactory() : null;
+  if (normalizedTarget.kind === 'stdio' && !stdioFactory) {
+    // §5.2 fail-fast: this host cannot spawn. Surfaced as a connect failure —
+    // the same shape the client reports for refused sockets.
+    const entry = ensureEntry(connectionId);
+    usePanda.getState().ensureConnection(connectionId);
+    entry.port.setConnection({ status: 'error', url: endpoint, cwd, error: t('acp.stdioHostMissing') });
+    return;
+  }
+  // The custom-address form prefills from the last WEBSOCKET endpoint only —
+  // a stdio command must never leak into it (issue #121).
+  if (normalizedTarget.kind === 'websocket') remember(URL_KEY, normalizedTarget.url);
   remember(CWD_KEY, cwd);
   const entry = ensureEntry(connectionId);
+  entry.lastTarget = normalizedTarget;
   entry.pendingProfile = opts?.profileId
-    ? { id: opts.profileId, url: trimmedUrl, workspace: normalizedWorkspace }
+    ? { id: opts.profileId, target: normalizedTarget, workspace: normalizedWorkspace }
     : null;
   usePanda.getState().ensureConnection(connectionId);
   const resumeSessionId = opts?.resume
@@ -424,7 +474,7 @@ export async function connectLiveConnection(
   usePanda.getState().setMode('live');
   entry.port.setConnection({
     status: 'connecting',
-    url: trimmedUrl,
+    url: endpoint,
     cwd,
     error: null,
     agentName: null,
@@ -433,19 +483,43 @@ export async function connectLiveConnection(
     availableAuthMethods: [],
     authedMethodId: null,
   });
-  // Seed the sidebar with sessions remembered for this service; the server
+  // Seed the sidebar with sessions remembered for this endpoint; the server
   // list (if any) merges on top. A replacing connect replaces the old
   // endpoint's visible list rather than combining unrelated histories.
-  restoreEndpointSessions(trimmedUrl, entry.port.replaceSessions);
+  restoreEndpointSessions(endpoint, entry.port.replaceSessions);
   // A replacing connect ends the previous connection era (issue #19): its
   // in-flight switch can never settle — roll it back stale BEFORE the new
   // era begins staging/adopting anything.
   abandonStagedSwitch(entry, 'connect replacing the connection');
+  let transport: import('./acp/transport/AcpTransport').AcpTransport;
+  if (normalizedTarget.kind === 'websocket') {
+    transport = new WebSocketTransport(normalizedTarget.url);
+  } else {
+    const factory = stdioFactory;
+    if (!factory) {
+      // Unreachable behind the fail-fast guard above; loud, never silent.
+      throw new Error(`[panda/acp:${connectionId}] stdio connect without a registered transport factory`);
+    }
+    transport = factory({ program: normalizedTarget.command, args: splitArgs(normalizedTarget.args), cwd });
+  }
   await entry.client.connect(
-    new WebSocketTransport(trimmedUrl),
+    transport,
     cwd,
     resumeSessionId ? { sessionId: resumeSessionId } : undefined,
   );
+}
+
+/**
+ * The target a reconnect should dial (issue #121): the entry's remembered
+ * last target, else the profile's current target for an offline-seeded slot.
+ * Null when neither exists (an unknown or direct slot that never connected).
+ */
+export function reconnectTargetFor(connectionId: string): LiveTarget | null {
+  const remembered = liveConnections.get(connectionId)?.lastTarget ?? null;
+  if (remembered) return remembered;
+  if (isDirectConnectionId(connectionId)) return null;
+  const profile = loadProfiles().find((entry) => entry.id === connectionId) ?? null;
+  return profile ? profileToLiveTarget(profile) : null;
 }
 
 /**
@@ -506,20 +580,20 @@ export function foregroundConnection(connectionId: string): void {
 export function seedProfileSlots(profiles: AgentProfile[], storage: SessionStorage = globalThis.localStorage): void {
   for (const profile of profiles) {
     if (usePanda.getState().connections[profile.id]) continue;
-    const url = profile.url.trim();
+    const endpoint = profileEndpoint(profile);
     const cwd = workspaceToCwd(profile.workspace).trim();
-    if (!url || !cwd) {
-      console.error(`[panda/profiles] seed skipped: profile ${profile.id} has an empty url or workspace path`);
+    if (!endpoint || !cwd) {
+      console.error(`[panda/profiles] seed skipped: profile ${profile.id} has an empty endpoint or workspace path`);
       continue;
     }
     usePanda.getState().seedConnection(profile.id);
     const entry = ensureEntry(profile.id);
-    restoreEndpointSessions(url, entry.port.replaceSessions, storage);
+    restoreEndpointSessions(endpoint, entry.port.replaceSessions, storage);
     entry.port.resetDocument();
     entry.port.setCapabilities({ image: false, loadSession: false, list: false, resume: false, delete: false });
     entry.port.setConnection({
       status: 'disconnected',
-      url,
+      url: endpoint,
       cwd,
       agentName: null,
       protocolVersion: null,

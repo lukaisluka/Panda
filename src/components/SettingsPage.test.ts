@@ -10,7 +10,10 @@ import {
 
 const draft = (patch: Partial<ProfileDraft> = {}): ProfileDraft => ({
   name: 'test-agent',
+  type: 'websocket',
   url: 'ws://localhost:8766/acp',
+  command: '',
+  args: '',
   workspace: { kind: 'local-directory', path: '/tmp/project' },
   ...patch,
 });
@@ -54,6 +57,13 @@ describe('profileDraftErrors', () => {
     expect(profileDraftErrors(draft({ workspace: { kind: 'none', path: '' } }))).toEqual({});
     expect(profileDraftErrors(draft({ workspace: { kind: 'local-directory', path: ' ' } }))).toEqual({
       path: 'A local directory needs a path',
+    });
+  });
+
+  it('stdio drafts need a command, not a url (#121)', () => {
+    expect(profileDraftErrors(draft({ type: 'stdio', command: 'node', args: 'agent.js', url: '' }))).toEqual({});
+    expect(profileDraftErrors(draft({ type: 'stdio', command: '   ' }))).toEqual({
+      command: 'stdio needs an executable command',
     });
   });
 });

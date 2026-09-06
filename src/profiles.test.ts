@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  isStdioEndpoint,
   loadProfiles,
+  liveTargetEndpoint,
   newProfileId,
+  profileEndpoint,
+  profileToLiveTarget,
   saveProfiles,
   subscribeProfiles,
   updateProfileFields,
@@ -34,10 +38,21 @@ class MemoryStorage implements ProfileStorage {
 const profile = (overrides: Partial<AgentProfile> = {}): AgentProfile => ({
   id: newProfileId(),
   name: 'Mock Agent',
+  kind: 'websocket',
   url: 'ws://localhost:8765/acp',
   workspace: { kind: 'local-directory', path: '/tmp/project' },
   ...overrides,
-});
+} as AgentProfile);
+
+const stdioProfile = (overrides: Partial<AgentProfile> = {}): AgentProfile => ({
+  id: newProfileId(),
+  name: 'Local Agent',
+  kind: 'stdio',
+  command: 'node',
+  args: 'agent.js --stdio',
+  workspace: { kind: 'local-directory', path: '/tmp/project' },
+  ...overrides,
+} as AgentProfile);
 
 const workspaces = {
   local: (): Workspace => ({ kind: 'local-directory', path: '/tmp/project' }),
@@ -109,6 +124,43 @@ describe('loadProfiles', () => {
     });
     expect(loadProfiles(storage)).toEqual([]);
   });
+
+  it('migrates legacy entries (no kind) to websocket and persists the upgrade (#121)', () => {
+    const storage = new MemoryStorage();
+    const legacy = { id: 'legacy-1', name: '旧配置', url: 'ws://old:8765/acp', workspace: workspaces.local() };
+    storage.setRaw(JSON.stringify([legacy]));
+    const loaded = loadProfiles(storage);
+    expect(loaded).toEqual([{ ...legacy, kind: 'websocket' }]);
+    // The upgrade is written back once — a second load is a plain round-trip.
+    expect(JSON.parse(String(storage.raw))).toEqual([{ ...legacy, kind: 'websocket' }]);
+    expect(loadProfiles(storage)).toEqual(loaded);
+  });
+
+  it('round-trips stdio profiles (args may be empty)', () => {
+    const storage = new MemoryStorage();
+    const local = stdioProfile({ args: '' });
+    saveProfiles([local], storage);
+    expect(loadProfiles(storage)).toEqual([local]);
+  });
+
+  it('drops a stdio entry without a command, keeps neighbors', () => {
+    const storage = new MemoryStorage();
+    const good = profile();
+    const bad = { id: 'no-cmd', name: '空命令', kind: 'stdio', args: 'x', workspace: workspaces.local() };
+    storage.setRaw(JSON.stringify([bad, good]));
+    expect(loadProfiles(storage)).toEqual([good]);
+    expect(JSON.parse(String(storage.raw))).toEqual([good]);
+  });
+
+  it('defaults a missing stdio args field to the empty string', () => {
+    const storage = new MemoryStorage();
+    storage.setRaw(
+      JSON.stringify([{ id: 'a', name: 'A', kind: 'stdio', command: 'node', workspace: workspaces.none() }]),
+    );
+    expect(loadProfiles(storage)).toEqual([
+      { id: 'a', name: 'A', kind: 'stdio', command: 'node', args: '', workspace: workspaces.none() },
+    ]);
+  });
 });
 
 describe('saveProfiles', () => {
@@ -149,6 +201,49 @@ describe('updateProfileFields', () => {
     saveProfiles([a], storage);
     expect(updateProfileFields(a.id, { name: '  重命名  ' }, storage)).toEqual([{ ...a, name: '  重命名  ' }]);
     expect(updateProfileFields(a.id, { name: '   ', url: '' }, storage)).toEqual([{ ...a, name: '  重命名  ' }]);
+  });
+
+  it('applies command/args to stdio profiles and blanks args on demand (#121)', () => {
+    const storage = new MemoryStorage();
+    const a = stdioProfile();
+    saveProfiles([a], storage);
+    expect(updateProfileFields(a.id, { command: 'bun', args: '' }, storage)).toEqual([
+      { ...a, command: 'bun', args: '' },
+    ]);
+  });
+
+  it('ignores cross-kind endpoint fields loudly (#121)', () => {
+    const storage = new MemoryStorage();
+    const ws = profile();
+    const local = stdioProfile();
+    saveProfiles([ws, local], storage);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(updateProfileFields(ws.id, { command: 'node', args: 'x' }, storage)).toEqual([ws, local]);
+    expect(updateProfileFields(local.id, { url: 'ws://x/acp' }, storage)).toEqual([ws, local]);
+    expect(warn).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+});
+
+describe('endpoint derivation (#121)', () => {
+  it('derives the endpoint from either profile kind', () => {
+    expect(profileEndpoint(profile({ url: 'ws://h:1/acp' }))).toBe('ws://h:1/acp');
+    expect(profileEndpoint(stdioProfile({ command: 'node', args: 'x y' }))).toBe('stdio: node x y');
+    expect(profileEndpoint(stdioProfile({ args: '   ' }))).toBe('stdio: node');
+  });
+
+  it('trims through the live target before deriving', () => {
+    expect(liveTargetEndpoint(profileToLiveTarget(profile({ url: '  ws://h/acp  ' })))).toBe('ws://h/acp');
+    expect(liveTargetEndpoint(profileToLiveTarget(stdioProfile({ command: ' node ', args: ' a ' })))).toBe('stdio: node a');
+    // inner whitespace runs collapse: the endpoint (and its session key) must
+    // not depend on how the user spaced the args
+    expect(liveTargetEndpoint(profileToLiveTarget(stdioProfile({ args: '  x   y  ' })))).toBe('stdio: node x y');
+  });
+
+  it('recognizes stdio endpoint strings', () => {
+    expect(isStdioEndpoint('stdio: node x')).toBe(true);
+    expect(isStdioEndpoint('ws://h/acp')).toBe(false);
+    expect(isStdioEndpoint(null)).toBe(false);
   });
 });
 
