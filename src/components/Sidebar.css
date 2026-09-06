@@ -322,3 +322,10 @@
   flex-shrink: 0;
   color: var(--color-accent);
 }
+
+/* Settings route (#113): the gear reads as the current destination — same
+ * active language as connection rows (full-opacity text on a tint). */
+.sidebar-settings-btn--active {
+  color: var(--color-fg);
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
