@@ -27,7 +27,7 @@ import { useI18n } from '../i18n/context';
 import { t } from '../i18n';
 import type { AgentProfile } from '../profiles';
 import { loadProfiles, newProfileId, saveProfiles, subscribeProfiles } from '../profiles';
-import { navigate } from '../routes';
+import { navigate, useHashRoute } from '../routes';
 import { cwdToWorkspace, workspaceLabel } from '../workspace';
 import type { LiveSessionFacade } from '../useLiveSession';
 import { NewSessionDialog } from './NewSessionDialog';
@@ -49,6 +49,13 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
   onMobileClose(): void;
 }) {
   const { t } = useI18n();
+  // Route-aware since #113: settings shares the shell, so the sidebar must
+  // reflect (gear highlight + toggle-back) and respect it (any session action
+  // below returns to the session view instead of changing nothing).
+  const onSettings = useHashRoute() === 'settings';
+  const exitSettings = () => {
+    if (onSettings) navigate('main');
+  };
   const [newSessionOpen, setNewSessionOpen] = useState(false);
   const orderedIds = useConnectionOrder();
   const [profiles, setProfiles] = useState<AgentProfile[]>(() => loadProfiles());
@@ -117,6 +124,7 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
               isActiveConnection={connectionId === activeConnectionId}
               live={live}
               onMobileClose={onMobileClose}
+              exitSettings={exitSettings}
             />
           ))}
           {liveMode && orderedIds.length === 0 && (
@@ -150,10 +158,11 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
             variant="ghost"
             size="sm"
             icon={<Settings size={14} />}
-            label={t('side.settings')}
-            tooltip={t('side.settingsTooltip')}
+            className={onSettings ? 'sidebar-settings-btn--active' : undefined}
+            label={onSettings ? t('side.backToSession') : t('side.settings')}
+            tooltip={onSettings ? t('side.backToSessionTooltip') : t('side.settingsTooltip')}
             clickAction={() => {
-              navigate('settings');
+              navigate(onSettings ? 'main' : 'settings');
               onMobileClose();
             }}
           />
@@ -164,7 +173,10 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
         <NewSessionDialog
           isOpen
           onOpenChange={setNewSessionOpen}
-          onStarted={onMobileClose}
+          onStarted={() => {
+            exitSettings();
+            onMobileClose();
+          }}
           live={live}
           profiles={profiles}
         />
@@ -228,12 +240,13 @@ const ATTENTION_LABELS: Record<AttentionReason, 'side.attention.unreadCompletion
 /** One agent's section: header (status, indicators, hover actions), an
  * inline error recovery block when the connection failed, and the session
  * list (live or remembered). */
-function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, onMobileClose }: {
+function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, onMobileClose, exitSettings }: {
   connectionId: string;
   profile: AgentProfile | null;
   isActiveConnection: boolean;
   live: LiveSessionFacade;
   onMobileClose(): void;
+  exitSettings(): void;
 }) {
   // Whole-slot subscription for the display facts; status meaning comes
   // from the lifecycle projection (#53). Only THIS group re-renders on stream.
@@ -265,6 +278,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
           type="button"
           onClick={() => {
             live.foreground(connectionId);
+            exitSettings();
             onMobileClose();
           }}
           title={slot.connection.url ?? title}
@@ -385,6 +399,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
                   disabled={foregroundSession || !canSwitch}
                   onClick={() => {
                     live.openSession(connectionId, entry.sessionId, entry.cwd);
+                    exitSettings();
                     onMobileClose();
                   }}
                   title={

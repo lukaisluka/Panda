@@ -17,6 +17,8 @@ export const messages = {
   // ---- shell / app frame ----
   'app.closeNav': { en: 'Close navigation', zh: '关闭导航' },
   'app.openNav': { en: 'Open navigation', zh: '打开导航' },
+  'app.back': { en: 'Back', zh: '返回' },
+  'app.backTooltip': { en: 'Back to the session view', zh: '回到会话界面' },
   'app.liveSessionTitle': { en: 'Live session', zh: 'Live 会话' },
   'app.demoHeaderTitle': { en: 'Refactor auth validation', zh: '重构 auth 校验' },
 
@@ -200,6 +202,8 @@ export const messages = {
   'side.addAgent': { en: 'Add agent', zh: '添加 agent' },
   'side.settings': { en: 'Settings', zh: '设置' },
   'side.settingsTooltip': { en: 'Settings: agent profiles, theme', zh: '设置:Agent 配置、主题' },
+  'side.backToSession': { en: 'Back to session', zh: '返回会话' },
+  'side.backToSessionTooltip': { en: 'Leave settings and return to the session view', zh: '离开设置,回到会话界面' },
   'side.profileNamePrompt': { en: 'Profile name', zh: '配置名称' },
   'side.temp': { en: 'Temp', zh: '临时' },
   'side.needsAttention': { en: 'Needs attention', zh: '需要关注' },

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Menu } from 'lucide-react';
+import { ArrowLeft, Menu } from 'lucide-react';
+import { IconButton } from '@astryxdesign/core/IconButton';
 import { Sidebar } from './components/Sidebar';
 import { MessageStream } from './components/MessageStream';
 import { AuthGate } from './components/AuthGate';
@@ -14,7 +15,7 @@ import {
   usePanda,
 } from './store';
 import { useForegroundLifecycle, useSessionModes } from './projector/hooks';
-import { useHashRoute } from './routes';
+import { navigate, useHashRoute } from './routes';
 import { SettingsPage } from './components/SettingsPage';
 import { useReplaySession } from './useReplaySession';
 import { useLiveSession } from './useLiveSession';
@@ -104,6 +105,15 @@ function MainScreen() {
             >
               <Menu size={18} />
             </button>
+            {onSettings && (
+              <IconButton
+                variant="ghost"
+                icon={<ArrowLeft size={16} />}
+                label={t('app.back')}
+                tooltip={t('app.backTooltip')}
+                clickAction={() => navigate('main')}
+              />
+            )}
             <span className="truncate app-header-title">{headerTitle}</span>
           </div>
           {headerMeta !== null && <span className="app-header-meta">{headerMeta}</span>}
