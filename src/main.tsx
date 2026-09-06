@@ -4,9 +4,15 @@ import { Theme } from '@astryxdesign/core/theme';
 import './index.css';
 import App from './App';
 import { AstryxSmoke } from './dev/AstryxSmoke';
+import { CrashProbe } from './dev/CrashProbe';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { installConsoleTap } from './diagnostics';
 import { loadThemeId, resolveTheme, subscribeTheme } from './theme';
 import { I18nProvider } from './i18n/context';
 import { parseDevPage } from './routes';
+
+// Earliest possible (#105): the ring must catch startup errors too.
+installConsoleTap();
 
 const root = createRoot(document.getElementById('root')!);
 
@@ -30,17 +36,29 @@ function ThemeRoot() {
 
 // Dev-only tree-level pages: parseDevPage (routes.ts) owns every hash
 // spelling — a tree-level page replaces the whole render root, while
-// in-app views (#/, #/settings) route inside App.
-if (parseDevPage(window.location.hash) === 'astryx-smoke') {
+// in-app views (#/, #/settings) route inside App. #/crash mounts inside the
+// boundary on purpose: the page you should see is the crash fallback.
+const devPage = parseDevPage(window.location.hash);
+if (devPage === 'astryx-smoke') {
   root.render(
     <StrictMode>
       <AstryxSmoke />
     </StrictMode>,
   );
+} else if (devPage === 'crash') {
+  root.render(
+    <StrictMode>
+      <ErrorBoundary>
+        <CrashProbe />
+      </ErrorBoundary>
+    </StrictMode>,
+  );
 } else {
   root.render(
     <StrictMode>
-      <ThemeRoot />
+      <ErrorBoundary>
+        <ThemeRoot />
+      </ErrorBoundary>
     </StrictMode>,
   );
 }

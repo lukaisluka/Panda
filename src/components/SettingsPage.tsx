@@ -22,10 +22,11 @@ import {
 import { navigate } from '../routes';
 import { isThemeId, loadThemeId, saveThemeId, subscribeTheme, THEMES, EXPOSED_THEME_IDS } from '../theme';
 import { workspaceDisplay } from '../workspace';
-import { Languages } from 'lucide-react';
+import { Activity, Copy, Languages } from 'lucide-react';
 import { LOCALES, saveLocale } from '../i18n';
 import { t } from '../i18n';
 import { useI18n } from '../i18n/context';
+import { copyDiagnosticsReport } from './ErrorBoundary';
 import './SettingsPage.css';
 
 /**
@@ -81,6 +82,8 @@ export function SettingsPage() {
 
         <McpCard />
 
+        <DiagnosticsCard />
+
         {import.meta.env.DEV && (
           <section className="settings-card settings-card--muted">
             <div className="settings-card-head">
@@ -106,6 +109,41 @@ export function SettingsPage() {
         <p className="settings-colophon">{t('settings.colophon')}</p>
       </div>
     </div>
+  );
+}
+
+/** One-click diagnostics report (#105): the non-crash path — copies the
+ * environment + recent-console ring so a bug report carries its context.
+ * Nothing is uploaded; the clipboard is the transport. */
+function DiagnosticsCard() {
+  const { t } = useI18n();
+  const [copy, setCopy] = useState<'idle' | 'ok' | 'fail'>('idle');
+  return (
+    <section className="settings-card">
+      <div className="settings-card-head">
+        <span className="settings-card-icon" aria-hidden>
+          <Activity size={14} />
+        </span>
+        <h2 className="settings-card-title">{t('diag.cardTitle')}</h2>
+        <div className="settings-card-actions">
+          <Button
+            variant="secondary"
+            size="sm"
+            label={
+              copy === 'ok'
+                ? `✓ ${t('diag.copied')}`
+                : copy === 'fail'
+                  ? `✗ ${t('diag.copyFailed')}`
+                  : t('diag.copyDiagnostics')
+            }
+            icon={<Copy size={12} />}
+            clickAction={() => void copyDiagnosticsReport().then(setCopy)}
+            tooltip={t('diag.cardDesc')}
+          />
+        </div>
+      </div>
+      <p className="settings-card-desc">{t('diag.cardDesc')}</p>
+    </section>
   );
 }
 

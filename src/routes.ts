@@ -15,7 +15,7 @@ import { useEffect, useState } from 'react';
 
 export type AppRoute = 'main' | 'settings' | 'demo';
 
-export type DevPage = 'astryx-smoke';
+export type DevPage = 'astryx-smoke' | 'crash';
 
 /** `''` · `'#'` · `'#/'` → main; `#/settings` → settings; `#/demo` (dev
  * builds only — production has no replay entry) → demo. */
@@ -30,6 +30,7 @@ export function parseHash(hash: string): AppRoute {
 export function parseDevPage(hash: string): DevPage | null {
   const path = hash.replace(/^#\/?/, '').replace(/\/+$/, '');
   if (import.meta.env.DEV && path === 'astryx-smoke') return 'astryx-smoke';
+  if (import.meta.env.DEV && path === 'crash') return 'crash';
   return null;
 }
 
