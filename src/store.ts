@@ -33,7 +33,11 @@ export type ConnectionStatus =
 
 export type ConnectionInfo = {
   status: ConnectionStatus;
-  /** WebSocket endpoint of the ACP service, remembered for reconnects. */
+  /** Endpoint of the ACP service (issue #121): a WebSocket URL, or
+   * `stdio: <command> [args]` for a local agent (profiles.ts
+   * liveTargetEndpoint is the single derivation). Doubles as the
+   * per-endpoint session-memory key — liveConnections folds persisted
+   * session lists by this string — and is remembered for reconnects. */
   url: string | null;
   /** Working directory passed to session/new for this connection — the
    * workspace's derived cwd (issue #23, ADR 0005); `/` is the 无工作区

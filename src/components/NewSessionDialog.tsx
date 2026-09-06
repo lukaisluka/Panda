@@ -12,6 +12,7 @@ import { usePanda } from '../store';
 import { connectionPhase, isLinkUp, type ConnectionPhase } from '../projector/connectionLifecycle';
 import { lastConnectionDefaults } from '../liveConnections';
 import type { AgentProfile } from '../profiles';
+import { profileEndpoint } from '../profiles';
 import type { Workspace } from '../workspace';
 import type { LiveSessionFacade } from '../useLiveSession';
 import './NewSessionDialog.css';
@@ -90,7 +91,7 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
                 title={
                   isLinkUp(phase)
                     ? t('nsd.newIn', { name: profile.name })
-                    : t('nsd.connect', { name: profile.name, url: profile.url })
+                    : t('nsd.connect', { name: profile.name, url: profileEndpoint(profile) })
                 }
               >
                 <span className="nsd-agent-status">
@@ -108,7 +109,7 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
                 </span>
                 <span className="nsd-agent-main">
                   <span className="truncate nsd-agent-name">{profile.name}</span>
-                  <span className="truncate nsd-agent-meta">{profile.url}</span>
+                  <span className="truncate nsd-agent-meta">{profileEndpoint(profile)}</span>
                 </span>
                 <ChevronRight size={14} className="nsd-agent-chevron" />
               </button>

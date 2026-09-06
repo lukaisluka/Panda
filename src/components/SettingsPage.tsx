@@ -7,11 +7,12 @@ import { TextInput } from '@astryxdesign/core/TextInput';
 import {
   loadProfiles,
   newProfileId,
+  profileEndpoint,
   saveProfiles,
   subscribeProfiles,
-  updateProfileFields,
   type AgentProfile,
 } from '../profiles';
+import { hasStdioHost } from '../acp/transport/stdioHost';
 import {
   loadMcpServers,
   newMcpServerId,
@@ -346,8 +347,11 @@ function AgentsSection({ section, profiles }: {
                 key={profile.id}
                 initial={profile}
                 onCancel={() => setEditingId(null)}
-                onSave={(fields) => {
-                  updateProfileFields(profile.id, fields);
+                onSave={(next) => {
+                  // Full replace, not updateProfileFields: the form may switch
+                  // the endpoint kind (websocket ↔ stdio), which the
+                  // same-kind write-back API deliberately refuses (#121).
+                  saveProfiles(loadProfiles().map((entry) => (entry.id === profile.id ? next : entry)));
                   setEditingId(null);
                 }}
               />
@@ -360,9 +364,9 @@ function AgentsSection({ section, profiles }: {
                   <span className="settings-profile-name truncate">{profile.name}</span>
                   <span
                     className="settings-profile-meta truncate"
-                    title={`${profile.url} · ${workspaceDisplay(profile.workspace)}`}
+                    title={`${profileEndpoint(profile)} · ${workspaceDisplay(profile.workspace)}`}
                   >
-                    {profile.url} · {workspaceDisplay(profile.workspace)}
+                    {profileEndpoint(profile)} · {workspaceDisplay(profile.workspace)}
                   </span>
                 </div>
                 <div className="settings-profile-actions">
@@ -618,13 +622,23 @@ function McpForm({ initial, onSave, onCancel }: {
   );
 }
 
-/** Shape the form edits — name/url/workspace (path rides on the workspace). */
-export type ProfileDraft = { name: string; url: string; workspace: { kind: string; path: string } };/** Field-level validation, shared by unit tests: every key names a field the
+/** Shape the form edits — name/type/endpoint/workspace (path rides on the
+ * workspace). `type` picks which endpoint fields are load-bearing (#121). */
+export type ProfileDraft = {
+  name: string;
+  type: 'websocket' | 'stdio';
+  url: string;
+  command: string;
+  args: string;
+  workspace: { kind: string; path: string };
+};
+/** Field-level validation, shared by unit tests: every key names a field the
  * form must block saving on. */
-export function profileDraftErrors(draft: ProfileDraft): Partial<Record<'name' | 'url' | 'path', string>> {
-  const errors: Partial<Record<'name' | 'url' | 'path', string>> = {};
+export function profileDraftErrors(draft: ProfileDraft): Partial<Record<'name' | 'url' | 'command' | 'path', string>> {
+  const errors: Partial<Record<'name' | 'url' | 'command' | 'path', string>> = {};
   if (!draft.name.trim()) errors.name = t('settings.nameRequired');
-  if (!draft.url.trim()) errors.url = t('settings.endpointRequired');
+  if (draft.type === 'websocket' && !draft.url.trim()) errors.url = t('settings.endpointRequired');
+  if (draft.type === 'stdio' && !draft.command.trim()) errors.command = t('settings.commandRequired');
   if (draft.workspace.kind === 'local-directory' && !draft.workspace.path.trim()) errors.path = t('settings.pathRequired');
   return errors;
 }
@@ -635,9 +649,16 @@ function ProfileForm({ initial, onSave, onCancel }: {
   onCancel(): void;
 }) {
   const { t } = useI18n();
+  // stdio needs a host that can spawn a child process (#121): a browser host
+  // disables the option. An existing stdio profile stays selectable so it can
+  // be inspected/edited instead of trapping the form.
+  const stdioAvailable = hasStdioHost();
   const [draft, setDraft] = useState<ProfileDraft>(() => ({
     name: initial?.name ?? '',
-    url: initial?.url ?? '',
+    type: initial?.kind ?? 'websocket',
+    url: initial?.kind === 'websocket' ? initial.url : '',
+    command: initial?.kind === 'stdio' ? initial.command : '',
+    args: initial?.kind === 'stdio' ? initial.args : '',
     workspace: {
       kind: initial?.workspace.kind === 'none' ? 'none' : 'local-directory',
       path: initial?.workspace.kind === 'local-directory' ? initial.workspace.path : '',
@@ -647,7 +668,7 @@ function ProfileForm({ initial, onSave, onCancel }: {
   const errors = profileDraftErrors(draft);
   // Astryx TextInput surfaces errors through its status object; they appear
   // only after a rejected submit, never while the user is still typing.
-  const statusOf = (field: 'name' | 'url' | 'path') =>
+  const statusOf = (field: 'name' | 'url' | 'command' | 'path') =>
     showErrors && errors[field] ? { type: 'error' as const, message: errors[field] } : undefined;
 
   const set = (patch: Partial<ProfileDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
@@ -656,15 +677,15 @@ function ProfileForm({ initial, onSave, onCancel }: {
       setShowErrors(true);
       return;
     }
-    onSave({
-      id: initial?.id ?? newProfileId(),
-      name: draft.name.trim(),
-      url: draft.url.trim(),
-      workspace:
-        draft.workspace.kind === 'none'
-          ? { kind: 'none' }
-          : { kind: 'local-directory', path: draft.workspace.path.trim() },
-    });
+    const workspace =
+      draft.workspace.kind === 'none'
+        ? { kind: 'none' as const }
+        : { kind: 'local-directory' as const, path: draft.workspace.path.trim() };
+    onSave(
+      draft.type === 'stdio'
+        ? { id: initial?.id ?? newProfileId(), name: draft.name.trim(), kind: 'stdio', command: draft.command.trim(), args: draft.args.trim(), workspace }
+        : { id: initial?.id ?? newProfileId(), name: draft.name.trim(), kind: 'websocket', url: draft.url.trim(), workspace },
+    );
   };
 
   return (
@@ -677,13 +698,46 @@ function ProfileForm({ initial, onSave, onCancel }: {
         status={statusOf('name')}
         hasAutoFocus={!initial}
       />
-      <TextInput
-        label={t('settings.endpoint')}
-        value={draft.url}
-        onChange={(url) => set({ url })}
-        placeholder="ws://host:port/acp"
-        status={statusOf('url')}
+      <Selector
+        label={t('settings.profileType')}
+        value={draft.type}
+        onChange={(type) => set({ type: type === 'stdio' ? 'stdio' : 'websocket' })}
+        options={[
+          { value: 'websocket', label: t('settings.typeWebsocket') },
+          {
+            value: 'stdio',
+            label: t('settings.typeStdio'),
+            disabled: !stdioAvailable && draft.type !== 'stdio',
+            description: stdioAvailable || draft.type === 'stdio' ? undefined : t('settings.stdioDesktopOnly'),
+          },
+        ]}
+        labelTooltip={t('settings.profileTypeTooltip')}
       />
+      {draft.type === 'websocket' ? (
+        <TextInput
+          label={t('settings.endpoint')}
+          value={draft.url}
+          onChange={(url) => set({ url })}
+          placeholder="ws://host:port/acp"
+          status={statusOf('url')}
+        />
+      ) : (
+        <>
+          <TextInput
+            label={t('settings.command')}
+            value={draft.command}
+            onChange={(command) => set({ command })}
+            placeholder={t('settings.agentCommandPlaceholder')}
+            status={statusOf('command')}
+          />
+          <TextInput
+            label={t('settings.args')}
+            value={draft.args}
+            onChange={(args) => set({ args })}
+            placeholder={t('settings.argsPlaceholder')}
+          />
+        </>
+      )}
       <div className="settings-form-row">
         <div className="settings-form-kind">
           <Selector

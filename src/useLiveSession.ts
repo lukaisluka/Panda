@@ -14,6 +14,7 @@ import {
   newLiveSession,
   openLiveSession,
   persistSessionsSnapshot,
+  reconnectTargetFor,
   seedProfileSlots,
   removeLiveConnection,
   openLiveElicitationUrl,
@@ -23,7 +24,7 @@ import {
   setLiveConfigOption,
   setLiveMode,
 } from './liveConnections';
-import type { AgentProfile } from './profiles';
+import { profileToLiveTarget, type AgentProfile, type LiveTarget } from './profiles';
 import { cwdToWorkspace, type Workspace } from './workspace';
 import type { ForegroundSessionController } from './session-controller';
 
@@ -31,7 +32,9 @@ import type { ForegroundSessionController } from './session-controller';
 export type ReconnectOptions = {
   /** Resume the slot's retained session (transcript kept) instead of a fresh one. */
   resume?: boolean;
-  /** Form-edited endpoint values; omitted ones fall back to the slot's. */
+  /** Form-edited WEBSOCKET endpoint; omitted ones fall back to the remembered
+   * target. Ignored (loudly) for stdio targets — their command edits live in
+   * the settings editor. */
   url?: string;
   workspace?: Workspace;
 };
@@ -60,9 +63,10 @@ export function useLiveSession() {
 
   return useMemo<LiveSessionFacade>(
     () => ({
-      connectDirect: (url: string, workspace: Workspace) => connectLiveConnection(newDirectConnectionId(), url, workspace),
+      connectDirect: (url: string, workspace: Workspace) =>
+        connectLiveConnection(newDirectConnectionId(), { kind: 'websocket', url }, workspace),
       connectProfile: (profile: AgentProfile) =>
-        connectLiveConnection(profile.id, profile.url, profile.workspace, { profileId: profile.id }),
+        connectLiveConnection(profile.id, profileToLiveTarget(profile), profile.workspace, { profileId: profile.id }),
       reconnectForeground: (opts?: ReconnectOptions) => {
         const state = usePanda.getState();
         const connectionId = state.activeConnectionId;
@@ -70,17 +74,30 @@ export function useLiveSession() {
           console.warn('[panda/acp] reconnect ignored: no foreground connection');
           return;
         }
-        const slot = state.connections[connectionId];
-        const url = opts?.url?.trim() || slot?.connection.url;
+        // A stdio endpoint string never parses back into command/args — the
+        // remembered target (or the profile, for offline-seeded slots) is the
+        // reconnect's source of truth (issue #121).
+        const remembered = reconnectTargetFor(connectionId);
+        if (!remembered) {
+          console.warn(`[panda/acp] reconnect ignored: slot "${connectionId}" has no remembered target`);
+          return;
+        }
+        const target: LiveTarget =
+          opts?.url !== undefined
+            ? remembered.kind === 'websocket'
+              ? { kind: 'websocket', url: opts.url.trim() || remembered.url }
+              : (console.warn('[panda/acp] reconnect ignored the url edit on a stdio target — edit the profile instead'), remembered)
+            : remembered;
         // The slot remembers the derived cwd it last used; `/` reads back as
         // 无工作区 (ADR 0005's accepted equivalence).
+        const slot = state.connections[connectionId];
         const workspace = opts?.workspace ?? (slot?.connection.cwd != null ? cwdToWorkspace(slot.connection.cwd) : null);
-        if (!url || !workspace) {
-          console.warn(`[panda/acp] reconnect ignored: slot "${connectionId}" has no remembered url/workspace`);
+        if (!workspace) {
+          console.warn(`[panda/acp] reconnect ignored: slot "${connectionId}" has no remembered workspace`);
           return;
         }
         const profileId = isDirectConnectionId(connectionId) ? null : connectionId;
-        void connectLiveConnection(connectionId, url, workspace, { resume: opts?.resume, profileId });
+        void connectLiveConnection(connectionId, target, workspace, { resume: opts?.resume, profileId });
       },
       disconnect: disconnectLiveConnection,
       remove: removeLiveConnection,

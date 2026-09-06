@@ -26,7 +26,7 @@ import { effectiveCapability, PANDA_HOST_CAPABILITIES } from '../capabilities';
 import { useI18n } from '../i18n/context';
 import { t } from '../i18n';
 import type { AgentProfile } from '../profiles';
-import { loadProfiles, newProfileId, saveProfiles, subscribeProfiles } from '../profiles';
+import { loadProfiles, newProfileId, profileEndpoint, saveProfiles, subscribeProfiles } from '../profiles';
 import { navigate, useHashRoute } from '../routes';
 import { cwdToWorkspace, workspaceLabel } from '../workspace';
 import type { LiveSessionFacade } from '../useLiveSession';
@@ -226,7 +226,7 @@ function saveDirectAsProfile(url: string, cwd: string | null): void {
   })();
   const name = window.prompt(t('side.profileNamePrompt'), defaultName)?.trim();
   if (!name) return; // cancelled or left blank
-  saveProfiles([...loadProfiles(), { id: newProfileId(), name, url: trimmedUrl, workspace }]);
+  saveProfiles([...loadProfiles(), { id: newProfileId(), name, kind: 'websocket', url: trimmedUrl, workspace }]);
 }
 
 /** Astryx StatusDot per lifecycle phase; 运行中 overlays a pulse. Phase →
@@ -354,7 +354,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
               size="sm"
               icon={<PlugZap size={12} />}
               label={t('side.connectProfile')}
-              tooltip={t('side.connectProfileTooltip', { name: profile.name, url: profile.url })}
+              tooltip={t('side.connectProfileTooltip', { name: profile.name, url: profileEndpoint(profile) })}
               clickAction={() => live.connectProfile(profile)}
             />
           )}

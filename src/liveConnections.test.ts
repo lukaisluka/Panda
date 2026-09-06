@@ -20,6 +20,8 @@ import {
 } from './liveConnections';
 import { connectionStorePort, usePanda, type SessionEntry } from './store';
 import { loadProfiles, saveProfiles, type AgentProfile } from './profiles';
+import type { AcpTransport } from './acp/transport/AcpTransport';
+import { setStdioTransportFactory, type StdioAgentConfig } from './acp/transport/stdioHost';
 import { WORKSPACE_NONE_CWD, type Workspace } from './workspace';
 
 /**
@@ -43,6 +45,7 @@ class MemoryStorage implements SessionStorage {
 const profile = (id: string, url = `ws://${id}/acp`, workspace: Workspace = { kind: 'local-directory', path: `/${id}` }): AgentProfile => ({
   id,
   name: id,
+  kind: 'websocket',
   url,
   workspace,
 });
@@ -75,7 +78,7 @@ function installStubClients(): StubbedClient[] {
 
 /** Connects a profile and drives it to "connected with one session". */
 async function connectedStub(id: string, stubs: StubbedClient[], sessionId: string): Promise<void> {
-  await connectLiveConnection(id, `ws://${id}/acp`, { kind: 'local-directory', path: `/${id}` });
+  await connectLiveConnection(id, { kind: 'websocket', url: `ws://${id}/acp` }, { kind: 'local-directory', path: `/${id}` });
   const stub = stubs.at(-1)!;
   stub.handlers.onSessionId(sessionId, `/${id}`);
   stub.handlers.onConnected({ agentName: `${id}-agent`, protocolVersion: 1 });
@@ -420,7 +423,7 @@ describe('工作区 (issue #23, ADR 0005)', () => {
     const entries = stubLocalStorage();
     const stubs = installStubClients();
 
-    await connectLiveConnection('agent-n', 'ws://agent-n/acp', { kind: 'none' });
+    await connectLiveConnection('agent-n', { kind: 'websocket', url: 'ws://agent-n/acp' }, { kind: 'none' });
     const stub = stubs[0]!;
 
     // The single derivation point: none → WORKSPACE_NONE_CWD on the wire.
@@ -461,7 +464,7 @@ describe('工作区 (issue #23, ADR 0005)', () => {
   it('a local-directory workspace without a path is rejected before connecting', async () => {
     const stubs = installStubClients();
 
-    await connectLiveConnection('agent-e', 'ws://agent-e/acp', { kind: 'local-directory', path: '   ' });
+    await connectLiveConnection('agent-e', { kind: 'websocket', url: 'ws://agent-e/acp' }, { kind: 'local-directory', path: '   ' });
 
     expect(stubs).toHaveLength(0);
     expect(usePanda.getState().connections['agent-e']).toBeUndefined();
@@ -474,11 +477,101 @@ describe('工作区 (issue #23, ADR 0005)', () => {
     saveProfiles([p]);
     const stubs = installStubClients();
 
-    await connectLiveConnection('p', 'ws://p/acp', { kind: 'none' }, { profileId: 'p' });
+    await connectLiveConnection('p', { kind: 'websocket', url: 'ws://p/acp' }, { kind: 'none' }, { profileId: 'p' });
     stubs[0]!.handlers.onConnected({ agentName: 'p-agent', protocolVersion: 1 });
 
     const persisted = loadProfiles();
     expect(persisted).toEqual([p]);
     expect(entries.get('panda.profiles')).toContain('"kind":"none"');
+  });
+});
+
+describe('stdio targets (#121)', () => {
+  const stubLocalStorage = () => {
+    const entries = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => entries.get(key) ?? null,
+      setItem: (key: string, value: string) => entries.set(key, value),
+      removeItem: (key: string) => entries.delete(key),
+    });
+    return entries;
+  };
+  afterEach(() => {
+    setStdioTransportFactory(null);
+  });
+
+  it('fails fast as a connection error when the host cannot spawn', async () => {
+    stubLocalStorage();
+    const stubs = installStubClients();
+
+    await connectLiveConnection(
+      'agent-s',
+      { kind: 'stdio', command: 'node', args: 'agent.js' },
+      { kind: 'local-directory', path: '/w' },
+    );
+
+    // §5.2 fail-fast: the client is never handed a transport, the slot shows
+    // a connection error naming the stdio endpoint, and nothing leaks into
+    // the custom-address form's websocket memory.
+    expect(stubs[0]!.client.connect).not.toHaveBeenCalled();
+    const conn = usePanda.getState().connections['agent-s']!.connection;
+    expect(conn.status).toBe('error');
+    expect(conn.url).toBe('stdio: node agent.js');
+    expect(conn.error).toBeTruthy();
+    expect(lastConnectionDefaults().url).toBe('');
+  });
+
+  it('spawns through the registered host factory and writes back the trimmed target', async () => {
+    const entries = stubLocalStorage();
+    const configs: StdioAgentConfig[] = [];
+    setStdioTransportFactory((config) => {
+      configs.push(config);
+      return { connect: vi.fn(), disconnect: vi.fn() } as unknown as AcpTransport;
+    });
+    const p: AgentProfile = {
+      id: 's1',
+      name: 'S',
+      kind: 'stdio',
+      command: ' node ',
+      args: ' x  y ',
+      workspace: { kind: 'local-directory', path: '/w' },
+    };
+    saveProfiles([p]);
+    const stubs = installStubClients();
+
+    await connectLiveConnection('s1', { kind: 'stdio', command: ' node ', args: ' x  y ' }, p.workspace, { profileId: 's1' });
+
+    // The factory received the argv-split target with the derived cwd.
+    expect(configs).toEqual([{ program: 'node', args: ['x', 'y'], cwd: '/w' }]);
+    expect(stubs[0]!.client.connect).toHaveBeenCalledTimes(1);
+    const conn = usePanda.getState().connections['s1']!.connection;
+    expect(conn.status).toBe('connecting');
+    expect(conn.url).toBe('stdio: node x y');
+    // The websocket prefill stayed empty (stdio never lands in URL_KEY) but
+    // the cwd is remembered for the next connect.
+    expect(lastConnectionDefaults().url).toBe('');
+    expect(entries.get('panda.acp.cwd')).toBe('/w');
+
+    // The same-kind write-back echoes the trimmed command/args.
+    stubs[0]!.handlers.onConnected({ agentName: 's-agent', protocolVersion: 1 });
+    expect(loadProfiles()).toEqual([
+      { ...p, command: 'node', args: 'x y', workspace: { kind: 'local-directory', path: '/w' } },
+    ]);
+  });
+
+  it('seeds offline slots for stdio profiles under their stdio endpoint', () => {
+    const p: AgentProfile = {
+      id: 's2',
+      name: 'S2',
+      kind: 'stdio',
+      command: 'node',
+      args: '',
+      workspace: { kind: 'none' },
+    };
+    seedProfileSlots([p]);
+    const slot = usePanda.getState().connections['s2']!;
+    expect(slot.connection.status).toBe('disconnected');
+    expect(slot.connection.url).toBe('stdio: node');
+    expect(slot.connection.cwd).toBe(WORKSPACE_NONE_CWD);
   });
 });
