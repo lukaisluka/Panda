@@ -24,16 +24,17 @@ const mcpDraft = (patch: Partial<McpDraft> = {}): McpDraft => ({
   ...patch,
 });
 
-describe('SETTINGS_SECTIONS (#115: sidebar nav ↔ card ids)', () => {
-  it('lists the five product sections with unique ids', () => {
-    expect(SETTINGS_SECTIONS.map((s) => s.id)).toEqual([
-      'settings-section-appearance',
-      'settings-section-language',
-      'settings-section-agents',
-      'settings-section-mcp',
-      'settings-section-diagnostics',
-    ]);
+describe('SETTINGS_SECTIONS (#117: sidebar nav ↔ section pages)', () => {
+  it('lists the four product sections with unique ids (外观+语言 grouped into 通用)', () => {
+    expect(SETTINGS_SECTIONS.map((s) => s.id)).toEqual(['general', 'agents', 'mcp', 'diagnostics']);
     expect(new Set(SETTINGS_SECTIONS.map((s) => s.id)).size).toBe(SETTINGS_SECTIONS.length);
+  });
+
+  it('every section names a title and a description (the page-header skeleton)', () => {
+    for (const section of SETTINGS_SECTIONS) {
+      expect(section.titleKey).toMatch(/^(\w+\.)+\w+$/);
+      expect(section.descKey).toMatch(/^(\w+\.)+\w+$/);
+    }
   });
 });
 

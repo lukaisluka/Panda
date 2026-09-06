@@ -255,6 +255,11 @@ export const messages = {
 
   // ---- SettingsPage ----
   'settings.title': { en: 'Settings', zh: '设置' },
+  'settings.general': { en: 'General', zh: '通用' },
+  'settings.generalDesc': {
+    en: 'Appearance theme and interface language.',
+    zh: '外观主题与界面语言。',
+  },
   'settings.appearance': { en: 'Appearance', zh: '外观' },
   'settings.appearanceDesc': {
     en: 'The theme colors the whole interface — switch anytime, the choice is remembered.',

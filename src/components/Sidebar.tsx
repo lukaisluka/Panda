@@ -31,7 +31,7 @@ import { navigate, useHashRoute } from '../routes';
 import { cwdToWorkspace, workspaceLabel } from '../workspace';
 import type { LiveSessionFacade } from '../useLiveSession';
 import { NewSessionDialog } from './NewSessionDialog';
-import { SettingsSideNav } from './SettingsPage';
+import { SettingsSideNav, type SettingsSectionId } from './SettingsPage';
 import './Sidebar.css';
 
 /**
@@ -43,11 +43,16 @@ import './Sidebar.css';
  * 前台连接置顶, 其余按最近活动; each group row subscribes narrowly to its
  * own slot so a streaming connection only re-renders its own group.
  */
-export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
+export function Sidebar({ mode, live, mobileOpen, onMobileClose, settingsSection, onSelectSettingsSection }: {
   mode: SessionMode;
   live: LiveSessionFacade;
   mobileOpen: boolean;
   onMobileClose(): void;
+  /** Which settings section is showing (#117) — lifted state so it survives
+   * route flips; the settings-route nav and the add-agent shortcut both
+   * write through onSelectSettingsSection. */
+  settingsSection: SettingsSectionId;
+  onSelectSettingsSection(id: SettingsSectionId): void;
 }) {
   const { t } = useI18n();
   // Route-aware since #113: settings shares the shell, so the sidebar must
@@ -97,7 +102,11 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
       </div>
 
       {onSettings ? (
-        <SettingsSideNav onNavigate={onMobileClose} />
+        <SettingsSideNav
+          activeId={settingsSection}
+          onSelect={onSelectSettingsSection}
+          onNavigate={onMobileClose}
+        />
       ) : (
         <>
           <div className="sidebar-sessions-head">
@@ -146,6 +155,9 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose }: {
             type="button"
             className="sidebar-add-agent"
             onClick={() => {
+              // Lands directly on the Agent profiles section (#117) — that
+              // is the page this shortcut exists for.
+              onSelectSettingsSection('agents');
               navigate('settings');
               onMobileClose();
             }}
