@@ -22,6 +22,7 @@ import type {
   AuthenticateResponse,
   CloseSessionRequest,
   CloseSessionResponse,
+  CreateElicitationResponse,
   DeleteSessionRequest,
   DeleteSessionResponse,
   InitializeRequest,
@@ -30,12 +31,14 @@ import type {
   ListSessionsResponse,
   LoadSessionRequest,
   LoadSessionResponse,
+  LogoutRequest,
+  LogoutResponse,
   NewSessionRequest,
   NewSessionResponse,
-  ResumeSessionRequest,
-  ResumeSessionResponse,
   PromptRequest,
   PromptResponse,
+  ResumeSessionRequest,
+  ResumeSessionResponse,
   SessionUpdate,
   SetSessionConfigOptionRequest,
   SetSessionConfigOptionResponse,
@@ -138,6 +141,10 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
   const activeToolCalls = new Map<string, { name: string; args: Record<string, unknown> }>();
   const agents = new Map<string, ReturnType<typeof buildDeepAgent>>();
   let cancelled = false;
+  /** 确定性假用量:每回合固定增长,e2e 断言可预知(#99)。 */
+  let usageTurns = 0;
+  /** elicitation/compaction 的本地序号,保证 id 确定性。 */
+  let flowSeq = 0;
 
   async function send(sessionId: string, update: SessionUpdate): Promise<void> {
     await conn.sessionUpdate({ sessionId, update });
@@ -206,6 +213,141 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
       priority: 'medium' as const,
     }));
     await send(sessionId, { sessionUpdate: 'plan', entries });
+  }
+
+  // —— #99:常驻通知与关键词触发的剧本化演示 ——
+
+  /** 固定命令表:客户端拿去驱动斜杠命令自动补全。 */
+  const AVAILABLE_COMMANDS = [
+    { name: '/plan', description: '查看当前计划状态', input: { hint: '(无需参数)' } },
+    { name: '/model', description: '列出本会话可用模型', input: { hint: '(无需参数)' } },
+    { name: '/summarize', description: '总结当前会话', input: { hint: '总结范围,如 recent 或 all' } },
+  ];
+
+  async function sendAvailableCommands(sessionId: string): Promise<void> {
+    await send(sessionId, { sessionUpdate: 'available_commands_update', availableCommands: AVAILABLE_COMMANDS });
+  }
+
+  /**
+   * 会话生命周期 RPC 的伴生通知:new/load 的 available_commands_update 若在
+   * RPC response 之前发出,客户端的 session 过滤(this.sessionId 尚未随
+   * resolve 更新)会把它们当 foreign session 丢掉。推迟到下一 macrotask:
+   * response 必然已 flush(Panda e2e 钉住这个时序)。
+   */
+  function sendAvailableCommandsAfterResponse(sessionId: string): void {
+    setTimeout(() => {
+      sendAvailableCommands(sessionId).catch((error) => {
+        deps.log(`[commands] available_commands_update 发送失败: ${String(error)}`);
+      });
+    }, 0);
+  }
+
+  /** 回合结束的确定性用量回报:used 按回合数线性增长,cost 同步放大。 */
+  async function sendUsageUpdate(sessionId: string): Promise<void> {
+    usageTurns += 1;
+    await send(sessionId, {
+      sessionUpdate: 'usage_update',
+      used: usageTurns * 4096,
+      size: 131_072,
+      cost: { amount: Number((usageTurns * 0.001).toFixed(3)), currency: 'USD' },
+    });
+  }
+
+  /**
+   * 关键词触发的演示流(#99)。每个分支独立成段、先于剧本回合发送;触发回合
+   * 仍走 streamTurn,HumanMessage 计数(剧本轮次定位)不受影响。返回 false
+   * 表示客户端断开了触发流(elicitation 通道死),回合应按 cancelled 收尾。
+   */
+  async function runTriggerFlows(record: SessionRecord, promptText: string): Promise<boolean> {
+    const sessionId = record.sessionId;
+    try {
+      if (promptText.includes('表单')) {
+        flowSeq += 1;
+        const response: CreateElicitationResponse = await conn.createElicitation({
+          mode: 'form',
+          sessionId,
+          message: '部署前确认环境与选项',
+          requestedSchema: {
+            type: 'object',
+            properties: {
+              environment: { type: 'string', title: '部署环境', enum: ['staging', 'production'] },
+              skipTests: { type: 'boolean', title: '跳过测试直接部署', default: false },
+            },
+            required: ['environment'],
+          },
+        });
+        const answered = response.action === 'accept' ? JSON.stringify(response.content ?? {}) : `被${response.action}`;
+        await send(sessionId, {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: `表单触发完成(${answered})。继续剧本回合。\n\n` },
+        });
+      } else if (promptText.includes('打开链接')) {
+        flowSeq += 1;
+        const elicitationId = `elicit-url-${flowSeq}`;
+        const response: CreateElicitationResponse = await conn.createElicitation({
+          mode: 'url',
+          sessionId,
+          elicitationId,
+          url: 'https://panda.test/oauth/consent',
+          message: '打开链接完成外部授权(测试流程,浏览器动作由客户端决定)',
+        });
+        if (response.action === 'accept') {
+          // url 模式收尾在 agent 侧:consent 已到,流程"完成",发 complete 通知
+          // 让客户端的挂起请求落定(真实世界对应 OAuth 回调后)。
+          await conn.completeElicitation({ elicitationId });
+          await send(sessionId, {
+            sessionUpdate: 'agent_message_chunk',
+            content: { type: 'text', text: '链接授权已完成(elicitation/complete 已送达)。继续剧本回合。\n\n' },
+          });
+        } else {
+          await send(sessionId, {
+            sessionUpdate: 'agent_message_chunk',
+            content: { type: 'text', text: `链接授权${response.action},跳过外部流程。继续剧本回合。\n\n` },
+          });
+        }
+      } else if (promptText.includes('压缩上下文')) {
+        flowSeq += 1;
+        const compactionId = `compaction-${flowSeq}`;
+        await send(sessionId, { sessionUpdate: 'compaction_update', compactionId, status: 'in_progress' });
+        await send(sessionId, {
+          sessionUpdate: 'compaction_summary_chunk',
+          compactionId,
+          content: { type: 'text', text: '会话前几轮的工具调用与结果已折叠。' },
+        });
+        await send(sessionId, {
+          sessionUpdate: 'compaction_summary_chunk',
+          compactionId,
+          content: { type: 'text', text: '保留了重构决策与验证结论。' },
+        });
+        await send(sessionId, {
+          sessionUpdate: 'compaction_update',
+          compactionId,
+          status: 'completed',
+          summary: [{ type: 'text', text: '早期调试轮次压缩为一条摘要,上下文已释放。' }],
+        });
+      } else if (promptText.includes('清理计划')) {
+        // UNSTABLE plan 变体:plan_update(items) 全部标记完成后撤下计划。
+        const planId = 'main';
+        await send(sessionId, {
+          sessionUpdate: 'plan_update',
+          plan: {
+            type: 'items',
+            planId,
+            entries: [
+              { content: '通读 auth.ts 现有校验逻辑', status: 'completed', priority: 'medium' },
+              { content: '收紧 authorize 的布尔判断', status: 'completed', priority: 'medium' },
+              { content: '用命令验证改动后的文件', status: 'completed', priority: 'medium' },
+            ],
+          },
+        } as SessionUpdate);
+        await send(sessionId, { sessionUpdate: 'plan_removed', planId });
+      }
+      return true;
+    } catch (error) {
+      // 触发流死了(客户端断开/通道异常):不静默,回合按 cancelled 收尾。
+      deps.log(`[trigger] 触发流失败,回合取消: ${String(error)}`);
+      return false;
+    }
   }
 
   async function emitToolCallStart(sessionId: string, toolCallId: string, name: string, args: Record<string, unknown>): Promise<void> {
@@ -641,6 +783,8 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
           promptCapabilities: { image: true },
           // #97:session 管理四件套与 handler 一一对应,不虚假声明
           sessionCapabilities: { close: {}, list: {}, delete: {}, resume: {} },
+          // #99:声明 auth.logout,让 Panda 的登出按钮有真实对端。
+          auth: { logout: {} },
         },
         // v1 auth(#90):声明 agent 托管登录方式。假实现,无条件成功——
         // Panda 的认证入口/记录链路以此演练。
@@ -660,6 +804,13 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
       return {};
     },
 
+    async logout(_params: LogoutRequest): Promise<LogoutResponse> {
+      const had = authenticatedMethodIds.size;
+      authenticatedMethodIds.clear();
+      deps.log(`logged out (${had} authenticated method record(s) cleared)`);
+      return {};
+    },
+
     async newSession(params: NewSessionRequest): Promise<NewSessionResponse> {
       const record = deps.store.create({
         modelValue: deps.models.modelsList[0]!.value,
@@ -673,6 +824,7 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
         deps.log(`[session/new] 收到 ${params.mcpServers.length} 个 mcpServers 配置(接收但不连接)`);
       }
       deps.log(`created session ${record.sessionId} (thread ${record.threadId})`);
+      sendAvailableCommandsAfterResponse(record.sessionId);
       return { sessionId: record.sessionId, modes: modeState(record), configOptions: configOptions(deps, record) };
     },
 
@@ -686,6 +838,7 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
         await send(record.sessionId, { sessionUpdate: 'session_info_update', title: record.title });
       }
       deps.log(`loaded session ${record.sessionId} (thread ${record.threadId})`);
+      sendAvailableCommandsAfterResponse(record.sessionId);
       return { modes: modeState(record), configOptions: configOptions(deps, record) };
     },
 
@@ -739,6 +892,7 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
       // thread 上下文接回 checkpointer(threadId 在 store 里,天然跨子进程)。
       deps.store.touch(record.sessionId);
       deps.log(`resumed session ${record.sessionId} (thread ${record.threadId}, no replay)`);
+      sendAvailableCommandsAfterResponse(record.sessionId);
       return { modes: modeState(record), configOptions: configOptions(deps, record) };
     },
 
@@ -779,8 +933,22 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
         }
       }
 
+      // #99 关键词触发流(elicitation/compaction/plan 变体):失败=通道死,
+      // 回合按 cancelled 收尾,不装作正常结束。
+      const promptText = params.prompt
+        .filter((block): block is { type: 'text'; text: string } => block.type === 'text' && typeof block.text === 'string')
+        .map((block) => block.text)
+        .join('\n');
+      if (!(await runTriggerFlows(record, promptText))) {
+        return { stopReason: 'cancelled' };
+      }
+
       const stopReason = await streamTurn(record, promptToHumanMessage(params.prompt));
+      const updatedAt = new Date().toISOString();
       deps.store.touch(record.sessionId);
+      // #99:活跃时间随推送(sidebar 的相对时间),确定性假用量随回合上报。
+      await send(record.sessionId, { sessionUpdate: 'session_info_update', updatedAt });
+      await sendUsageUpdate(record.sessionId);
       deps.log(`prompt completed: ${record.sessionId} stopReason=${stopReason}`);
       return { stopReason };
     },
@@ -799,6 +967,9 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
         throw new Error(`Invalid mode: ${params.modeId}`);
       }
       deps.store.update(record.sessionId, { modeId: params.modeId });
+      // #99:确认驱动之外补通知——真实 agent 常双路径,RPC 响应与
+      // current_mode_update 落到同一状态,e2e 钉住这个幂等性。
+      await send(record.sessionId, { sessionUpdate: 'current_mode_update', currentModeId: params.modeId });
       return {};
     },
 
@@ -812,6 +983,8 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
           throw new Error(`Invalid mode: ${String(params.value)}`);
         }
         deps.store.update(record.sessionId, { modeId: params.value });
+        // mode 走配置项同样属于模式变化:与 setSessionMode 一样补通知。
+        await send(record.sessionId, { sessionUpdate: 'current_mode_update', currentModeId: params.value });
       } else if (params.configId === 'model') {
         if (typeof params.value !== 'string' || !deps.models.instances.has(params.value)) {
           throw new Error(`Invalid model: ${String(params.value)}`);
@@ -821,6 +994,11 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
         throw new Error(`Unknown config option: ${params.configId}`);
       }
       const updated = deps.store.get(record.sessionId)!;
+      // #99:配置变化广播(与 set_mode 的通知同理,幂等落同一状态)。
+      await send(record.sessionId, {
+        sessionUpdate: 'config_option_update',
+        configOptions: configOptions(deps, updated),
+      });
       return { configOptions: configOptions(deps, updated) };
     },
   };
