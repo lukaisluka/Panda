@@ -339,6 +339,26 @@
   overflow-y: auto;
 }
 
+/* 「返回会话」(#119): the settings sidebar's own exit, above the section
+ * list — same row language as the items, so it reads as part of the
+ * settings column, not chrome bolted on. */
+.sidebar-settings-back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px 4px; /* the list's inline padding, plus air below the brand */
+  border-radius: var(--panda-radius-lg);
+  padding: 8px 12px; /* matches .sidebar-settings-item */
+  text-align: left;
+  font-size: 13px;
+  color: color-mix(in oklab, var(--color-fg) 70%, transparent);
+  transition: var(--panda-colors-transition);
+}
+.sidebar-settings-back:hover {
+  background: color-mix(in oklab, var(--color-raised) 60%, transparent);
+  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+}
+
 .sidebar-settings-list {
   display: flex;
   flex-direction: column;
