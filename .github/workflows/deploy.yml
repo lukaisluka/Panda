@@ -1,0 +1,60 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# deploy-pages 需要 pages: write + id-token: write
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Pages 部署同一时刻只允许一个;排队而非取消,避免半新半旧
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # 与 ci.yml 相同的工具链约定:pnpm 11(无 packageManager 字段)、
+      # Node 24(e2e 的 node:sqlite 须无 flag 可用)
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # 部署必须基于全绿构建:门禁与 CI 相同(双包 typecheck + test),
+      # 不依赖 ci.yml 的完成时序
+      - run: pnpm typecheck
+      - run: pnpm --filter panda-test-agent typecheck
+      - run: pnpm test
+      - run: pnpm --filter panda-test-agent test
+
+      # Pages 站点挂在 /Panda/ 子路径,index.html 的 asset 注入必须带 base。
+      # 注意:`pnpm build -- --base=...` 的透传实测到不了 vite(复合 script),
+      # 必须显式 exec;typecheck 已由上面的门禁步骤覆盖。
+      # hash 路由(routes.ts)对子路径免 SPA fallback;图标路径由
+      # FileTypeIcon 的 document.baseURI 解析,不依赖 build base。
+      - run: pnpm exec vite build --base=/Panda/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

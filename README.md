@@ -2,6 +2,8 @@
 
 **A universal client for every ACP-compatible agent, built around a meticulously crafted message stream.**
 
+🌐 **Try it live**: <https://lukaisluka.github.io/Panda/> — deployed from `main` on every push. Point it at any ACP-over-WebSocket endpoint (see below) for live conversations; with no agent connected it's the empty starting screen.
+
 Panda speaks [ACP (Agent Client Protocol)](https://agentclientprotocol.com) — the standard that 40+ coding agents (Claude Code, Gemini CLI, Codex, Cursor, Goose, Copilot…) expose to editors. Panda is an independent, conversation-first client: not an IDE plugin, but a place where talking to an agent is the primary experience.
 
 Panda is a **pure protocol client**: it never installs, spawns, or manages agent processes. Connect it to an ACP service you already run, and the whole message stream is live. Panda negotiates ACP **v1** today, failing fast on version mismatch.
@@ -51,7 +53,7 @@ Domain terminology lives in [CONTEXT.md](CONTEXT.md), significant decisions in [
 
 ## Roadmap
 
-- **Done** — live ACP client, session lifecycle & recovery, image sending, diff polish, virtualized streams, saved agent profiles (one active connection, [ADR 0001](docs/adr/0001-single-active-connection.md)), [user guide](docs/user-guide.md)
+- **Done** — live ACP client, session lifecycle & recovery, image sending, diff polish, virtualized streams, saved agent profiles (one active connection, [ADR 0001](docs/adr/0001-single-active-connection.md)), [user guide](docs/user-guide.md), CI + [live deployment](https://lukaisluka.github.io/Panda/)
 - **Later** — desktop shell
 
 Consciously out of scope: *terminal* tool content — in v1 that means the client executes commands on the agent's behalf, which a browser chat client doesn't declare; Panda skips such blocks with a warning.
