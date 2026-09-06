@@ -106,6 +106,7 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose, settingsSection
           activeId={settingsSection}
           onSelect={onSelectSettingsSection}
           onNavigate={onMobileClose}
+          onBack={exitSettings}
         />
       ) : (
         <>

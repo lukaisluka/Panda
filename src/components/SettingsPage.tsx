@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Activity, Bot, Check, Copy, Languages, Palette, Pencil, Play, Plug, Plus, SlidersHorizontal, Terminal, Trash2 } from 'lucide-react';
+import { Activity, ArrowLeft, Bot, Check, Copy, Languages, Palette, Pencil, Play, Plug, Plus, SlidersHorizontal, Terminal, Trash2 } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { IconButton } from '@astryxdesign/core/IconButton';
 import { Selector } from '@astryxdesign/core/Selector';
@@ -50,15 +50,29 @@ const [generalSection, agentsSection, mcpSection, diagnosticsSection] = SETTINGS
 /** Settings-route sidebar nav (#115/#117): lists the sections; selection is
  * lifted state (MainScreen owns it, so it survives route flips), clicking
  * switches the main column's page. Rendered by the Sidebar in place of the
- * session list. */
-export function SettingsSideNav({ activeId, onSelect, onNavigate }: {
+ * session list. The「返回会话」row (#119) closes the loop INSIDE the
+ * settings-context sidebar — the exit lives where the user's eye already
+ * is, not only in the main column's header. */
+export function SettingsSideNav({ activeId, onSelect, onNavigate, onBack }: {
   activeId: SettingsSectionId;
   onSelect(id: SettingsSectionId): void;
   onNavigate(): void;
+  onBack(): void;
 }) {
   const { t } = useI18n();
   return (
     <div className="sidebar-settings-nav">
+      <button
+        type="button"
+        className="sidebar-settings-back"
+        onClick={() => {
+          onBack();
+          onNavigate();
+        }}
+      >
+        <ArrowLeft size={14} />
+        <span className="truncate">{t('side.backToSession')}</span>
+      </button>
       <div className="sidebar-sessions-head">
         <span className="sidebar-label">{t('settings.title')}</span>
       </div>
