@@ -359,6 +359,22 @@ export const messages = {
     zh: '打开 #/demo 剧本回放(不连真实 agent);重新进入即从头重放',
   },
   'settings.devDesc': { en: 'Internal tools, visible only in dev builds.', zh: '仅开发构建可见的内部工具。' },
+
+  // ---- diagnostics (#105): crash fallback + settings diagnostics card ----
+  'diag.crashTitle': { en: 'Panda hit an error', zh: 'Panda 遇到了错误' },
+  'diag.crashDesc': {
+    en: 'The interface stopped rendering. Copy the diagnostics report (error, component stack, recent console log) and reload.',
+    zh: '界面停止渲染了。复制诊断报告(错误、组件栈、最近控制台日志)后重新加载。',
+  },
+  'diag.copyDiagnostics': { en: 'Copy diagnostics', zh: '复制诊断信息' },
+  'diag.copied': { en: 'Copied', zh: '已复制' },
+  'diag.copyFailed': { en: 'Copy failed', zh: '复制失败' },
+  'diag.reload': { en: 'Reload', zh: '重新加载' },
+  'diag.cardTitle': { en: 'Diagnostics', zh: '诊断' },
+  'diag.cardDesc': {
+    en: 'Copy a diagnostics report (app environment and the recent console log — nothing leaves your browser) to attach to a bug report.',
+    zh: '复制诊断报告(应用环境与最近控制台日志——数据不会离开你的浏览器),可附在问题反馈里。',
+  },
   'settings.colophon': {
     en: 'Panda — a pure-protocol client for any ACP agent',
     zh: 'Panda — 连接任意 ACP agent 的纯协议客户端',
