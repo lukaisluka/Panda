@@ -266,6 +266,14 @@ export type AcpSessionUpdate =
       sessionUpdate: 'user_message';
       content: AcpContentBlock[];
       /**
+       * Protocol-side messageId from the chunk, when the agent sent one.
+       * Two different ids are two different prompts — without it a
+       * content-less turn between two replayed prompts (refusal, plan-only)
+       * leaves no separator and the reducer would fold them into one block
+       * (bug hunt #13).
+       */
+      messageId?: string;
+      /**
        * Local optimistic echo from `send()`, not a protocol event. Echo
        * reconciliation replaces it with `user_message_confirmed` when the
        * agent's echo matches; it is never forged into a protocol notification.
@@ -504,7 +512,8 @@ export type Block =
       content: AcpContentBlock[];
       /** Set while the block is only a local optimistic echo, not protocol data. */
       optimistic?: true;
-      /** Protocol-side messageId, recorded once the agent's echo matched. */
+      /** Protocol-side messageId: carried by replayed chunks that have one,
+       * and recorded on the local echo once the agent's echo matched. */
       protocolMessageId?: string;
       rawNotifications?: SessionNotification[];
     }

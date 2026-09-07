@@ -1512,7 +1512,7 @@ describe('LiveAcpClient', () => {
 
     expect(contentEvents(h)).toEqual([
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }], optimistic: true },
-      { sessionUpdate: 'user_message', content: [{ type: 'text', text: '别的' }], raw: expect.any(Object) },
+      { sessionUpdate: 'user_message', messageId: 'pm-1', content: [{ type: 'text', text: '别的' }], raw: expect.any(Object) },
     ]);
     h.closeAll();
   });
@@ -1532,7 +1532,7 @@ describe('LiveAcpClient', () => {
     // The partial echo was held (prefix); the turn ending must render it.
     expect(contentEvents(h)).toEqual([
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hello' }], optimistic: true },
-      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hel' }], raw: expect.any(Object) },
+      { sessionUpdate: 'user_message', messageId: 'pm-1', content: [{ type: 'text', text: 'hel' }], raw: expect.any(Object) },
     ]);
     h.closeAll();
   });
@@ -1551,7 +1551,7 @@ describe('LiveAcpClient', () => {
 
     expect(contentEvents(h)).toEqual([
       { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hello' }], optimistic: true },
-      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hel' }], raw: expect.any(Object) },
+      { sessionUpdate: 'user_message', messageId: 'pm-1', content: [{ type: 'text', text: 'hel' }], raw: expect.any(Object) },
     ]);
     expect(h.statuses.at(-1)).toBe('idle');
     h.closeAll();

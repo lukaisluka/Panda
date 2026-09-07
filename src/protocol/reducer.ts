@@ -43,7 +43,7 @@ export function applyUpdate(
 ): SessionDocument {
   switch (update.sessionUpdate) {
     case 'user_message':
-      return appendUserMessage(doc, update.content, update.raw, update.optimistic);
+      return appendUserMessage(doc, update.content, update.raw, update.messageId, update.optimistic);
 
     case 'user_message_confirmed':
       return confirmUserMessage(doc, update);
@@ -230,10 +230,15 @@ export function applyUpdate(
       return resolvePermission(doc, update.toolCallId, update.response);
 
     case 'elicitation_requested': {
-      // The agent must keep wire elicitationIds unique among unfinished url
-      // elicitations; a repeat (or a collision with a local form mint) would
-      // overwrite a live record — keep the first, log the violation.
-      if (doc.elicitations[update.request.id]) {
+      // The agent must keep wire elicitationIds unique among *unfinished*
+      // elicitations — that is the spec's only promise. A repeat that
+      // collides with a live (pending/opened) record, or with a local form
+      // mint, is refused — keep the first, log the violation. A SETTLED
+      // record may be replaced by a re-run flow reusing the id (a retried
+      // OAuth after session/resume): refusing it would leave the new request
+      // unanswerable forever, its RPC hanging (bug hunt #4).
+      const existing = doc.elicitations[update.request.id];
+      if (existing && (existing.status === 'pending' || existing.status === 'opened')) {
         console.warn(`[reducer] elicitation_requested reuses live id ${update.request.id} — ignored`);
         return doc;
       }
@@ -366,32 +371,59 @@ function appendBlock(doc: SessionDocument, block: Block, newTurn: boolean): Sess
  * Keep those parts in one user block — but never merge into a block that is
  * (or was) a local optimistic echo: reconciliation owns that block's content,
  * so a divergent or flushed protocol echo must render as its own block.
+ *
+ * A protocol messageId, when either side carries one, decides whether two
+ * adjacent chunks belong to the same prompt: same id (or both absent, the
+ * v1-optional case) merges; a differing id is a NEW prompt that a
+ * content-less turn (refusal, plan-only) left no flow separator for — the
+ * id change is the only seam, and the new prompt opens its own turn
+ * (bug hunt #13).
  */
 function appendUserMessage(
   doc: SessionDocument,
   content: AcpContentBlock[],
   raw: SessionNotification | undefined,
+  messageId?: string,
   optimistic?: true,
 ): SessionDocument {
   const turn = currentTurn(doc);
   const last = turn?.blocks.at(-1);
-  const mergeable =
-    last?.kind === 'user_message' && last.optimistic !== true && last.protocolMessageId === undefined;
-  if (turn && mergeable) {
+  const lastUser = last?.kind === 'user_message' ? last : undefined;
+  const mergeableById =
+    messageId === undefined
+      ? lastUser?.protocolMessageId === undefined
+      : lastUser?.protocolMessageId === messageId;
+  const mergeable = lastUser !== undefined && lastUser.optimistic !== true && mergeableById;
+  if (turn && mergeable && lastUser) {
     const blocks: Block[] = [
       ...turn.blocks.slice(0, -1),
-      withRaw({ ...last, content: [...last.content, ...content] }, raw),
+      withRaw({ ...lastUser, content: [...lastUser.content, ...content] }, raw),
     ];
     return replaceLastTurn(doc, { ...turn, blocks });
   }
   const block: Block = withRaw(
-    optimistic ? { kind: 'user_message', content, optimistic: true } : { kind: 'user_message', content },
+    optimistic
+      ? { kind: 'user_message', content, optimistic: true }
+      : {
+          kind: 'user_message',
+          content,
+          ...(messageId !== undefined ? { protocolMessageId: messageId } : {}),
+        },
     raw,
   );
   // A local prompt always opens a turn. A protocol message rendering while
   // another user block still trails the turn (flushed divergent echo, late
-  // echo after confirmation) stays in the same turn as its own block.
-  if (!optimistic && turn && last?.kind === 'user_message') {
+  // echo after confirmation) stays in the same turn as its own block —
+  // unless its messageId differs from the trailer's: that is a new prompt,
+  // not a split echo of the current one.
+  if (!optimistic && turn && lastUser) {
+    if (
+      messageId !== undefined &&
+      lastUser.protocolMessageId !== undefined &&
+      messageId !== lastUser.protocolMessageId
+    ) {
+      return appendBlock(doc, block, true);
+    }
     return replaceLastTurn(doc, { ...turn, blocks: [...turn.blocks, block] });
   }
   return appendBlock(doc, block, true);

@@ -225,8 +225,11 @@ export function toAcpUpdates(notification: SessionNotification): AcpSessionUpdat
   switch (update.sessionUpdate) {
     case 'user_message_chunk': {
       const block = toContentBlock(update.content, 'user_message_chunk');
+      // messageId rides along (agent_message_chunk-style): the reducer needs
+      // it to keep two replayed prompts apart when nothing else separates
+      // them (bug hunt #13).
       return block
-        ? [{ sessionUpdate: 'user_message', content: [block], raw }]
+        ? [{ sessionUpdate: 'user_message', messageId: update.messageId ?? undefined, content: [block], raw }]
         : [{ sessionUpdate: 'unsupported', raw }];
     }
     case 'agent_message_chunk': {
