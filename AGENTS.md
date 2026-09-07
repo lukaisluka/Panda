@@ -35,9 +35,10 @@ file — cross-links to a doc in the other language get a language tag
 ### UI design system
 
 `DESIGN.md` at the repo root is the SSOT for UI tokens, themes, and the
-Astryx/Tailwind coexistence contracts (cascade layers, spacing pin). The
-UI runs on Astryx (matcha theme) behind the official Tailwind bridge —
-migration tracked in #32; dev-only self-check at `#/astryx-smoke`.
+Astryx coexistence contracts (cascade layers, 4px spacing pin). The UI
+runs directly on Astryx (chocolate is the only exposed theme; all seven
+official themes stay bundled) — Tailwind and its bridge were removed when
+#32 completed; dev-only self-check at `#/astryx-smoke`.
 
 ### Test ACP agent
 
