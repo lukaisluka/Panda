@@ -271,8 +271,12 @@
   overflow: hidden;
 }
 
+/* The card's content box is ~184px (240px sidebar) while both buttons are
+ * no-wrap and wider together (~266px) — without wrap they push past the card
+ * and the sidebar edge (#150). */
 .sidebar-conn-error-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 

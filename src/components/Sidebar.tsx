@@ -281,7 +281,15 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
   const { phase } = lifecycle;
   const connected = isLinkUp(phase);
   const offline = phase === 'disconnected';
-  const attention = lifecycle.attention.length > 0;
+  // The trailing 需要关注 dot speaks for session-level reasons only
+  // (unread completion, pending permission). connection-error and
+  // auth-required already show at the row head (SlotStatusDot error/
+  // warning) — a background errored slot otherwise reads as two red dots
+  // saying one thing (#150).
+  const sessionAttention = lifecycle.attention.filter(
+    (reason) => reason !== 'connection-error' && reason !== 'auth-required',
+  );
+  const attention = sessionAttention.length > 0;
   const title = profile?.name ?? slot.connection.url ?? connectionId;
   const isForegroundSession = (sessionId: string) => isActiveConnection && sessionId === activeSessionId;
   // Resume needs a retained session; seeded slots have none.
@@ -322,7 +330,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
               <StatusDot
                 variant="error"
                 label={t('side.needsAttention')}
-                tooltip={t('side.attentionTooltip', { reasons: lifecycle.attention.map((reason) => t(ATTENTION_LABELS[reason])).join(' / ') })}
+                tooltip={t('side.attentionTooltip', { reasons: sessionAttention.map((reason) => t(ATTENTION_LABELS[reason])).join(' / ') })}
               />
             )}
           </span>
