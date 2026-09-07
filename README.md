@@ -8,12 +8,12 @@ Panda speaks [ACP (Agent Client Protocol)](https://agentclientprotocol.com) — 
 
 ## Get Panda
 
-- **Web** — <https://lukaisluka.github.io/Panda/> runs in any modern browser, nothing to install. Point it at an ACP-over-WebSocket endpoint and the message stream is live; with no agent connected you get the built-in scripted demo.
-- **Desktop (macOS / Windows)** — grab a build from [GitHub Releases](https://github.com/lukaisluka/Panda/releases):
+- **Web (recommended)** — <https://lukaisluka.github.io/Panda/> runs in any modern browser, nothing to install. Point it at an ACP-over-WebSocket endpoint and the message stream is live; with no agent connected you get the built-in scripted demo.
+- **Desktop (macOS / Windows) — beta** — grab a build from [GitHub Releases](https://github.com/lukaisluka/Panda/releases). The desktop shell works — same UI and protocol stack as the web version, plus direct stdio agents — but it has not been through organized release testing yet, so it ships as beta; day-to-day, prefer the web version:
   - macOS: `Panda_<ver>_aarch64.dmg`
   - Windows: `Panda_<ver>_x64-setup.exe` (installer), or `Panda_<ver>_x64-portable.zip` (no install; the app is the same either way — user data stays in the per-user data directory, it does not travel with the exe)
 
-  The desktop shell additionally connects **stdio agents directly** — no bridge needed ([guide](docs/user-guide.md)). Windows needs WebView2 (preinstalled on Windows 11 and updated Windows 10; the installer downloads it when missing). Builds are **unsigned**: SmartScreen / first-run Gatekeeper prompts are expected.
+  Notes: connecting stdio agents directly needs the desktop build ([guide](docs/user-guide.md)). Windows needs WebView2 (preinstalled on Windows 11 and updated Windows 10; the installer downloads it when missing). Builds are **unsigned**: SmartScreen / first-run Gatekeeper prompts are expected.
 - **From source** — see [Development](#development).
 
 ## Features
