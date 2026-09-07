@@ -18,6 +18,20 @@ Label strings are identical to role names. See `docs/agents/triage-labels.md`.
 Single-context: `CONTEXT.md` and `docs/adr/` at the repo root, created
 lazily by `/domain-modeling`. See `docs/agents/domain.md`.
 
+### Bilingual docs
+
+Docs are organized by language: each file is single-language prose, and the
+only bilingual pairs are explicit mirrors. Two pairs exist — `README.md`
+(English) + `README.zh-CN.md` (Chinese), and the ACP contract pair (Chinese
+source of truth + English mirror, see "ACP agent contract"). When editing
+one side of a pair, update the other in the same change. Everything else is
+single-language by audience: agent-facing docs (`AGENTS.md`, `docs/agents/*`,
+`desktop/README.md`, `CHANGELOG.md`) are English; human-facing docs
+(`CONTEXT.md`, `DESIGN.md`, `docs/user-guide.md`, `docs/adr/*`,
+`test-agent/README.md`) are Chinese. Don't mix prose languages inside one
+file — cross-links to a doc in the other language get a language tag
+(`(Chinese)` / `（英文）`), nothing more.
+
 ### UI design system
 
 `DESIGN.md` at the repo root is the SSOT for UI tokens, themes, and the
