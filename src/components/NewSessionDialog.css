@@ -78,6 +78,39 @@
   color: var(--color-muted);
 }
 
+/* #157: with configured agents the custom form is an advanced aside —
+ * one quiet header row that expands it. Same typographic rung as
+ * .nsd-custom-title so the folded and agentless states read as one section. */
+.nsd-custom-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  text-align: left;
+}
+.nsd-custom-toggle:hover {
+  color: var(--color-fg);
+}
+
+.nsd-custom-toggle-chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--color-faint);
+  transition: transform 150ms var(--panda-ease);
+}
+.nsd-custom-toggle-chevron--open {
+  transform: rotate(180deg);
+}
+
 .nsd-custom-fields {
   display: flex;
   gap: 8px;

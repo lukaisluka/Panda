@@ -175,6 +175,7 @@ export const messages = {
     zh: '连接 {name}({url})— 连接成功即进入新会话',
   },
   'nsd.custom': { en: 'Custom address', zh: '自定义地址' },
+  'nsd.customToggle': { en: 'Custom address (advanced)', zh: '自定义地址(高级)' },
   'nsd.customHint': { en: 'Temporary direct connection; not saved as a profile.', zh: '临时直连,不保存为配置。' },
   'nsd.endpoint': { en: 'Endpoint', zh: '端点地址' },
   'nsd.workspace': { en: 'Workspace', zh: '工作区' },
