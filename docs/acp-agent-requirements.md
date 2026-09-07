@@ -5,7 +5,7 @@
 > 英文版:[acp-agent-requirements.en.md](acp-agent-requirements.en.md)。中文版为事实源,两版需同步更新。
 
 - 协议版本:**ACP v1**(`protocolVersion: 1`,SDK `@agentclientprotocol/sdk` 1.4.0)。
-- 代码事实源(本文是其人读导出,冲突时代码优先):
+- 代码事实源(本文据其整理而成,如有出入以代码为准):
   - 连接与全部 RPC 调用:[`src/acp/LiveAcpClient.ts`](../src/acp/LiveAcpClient.ts)
   - `session/update` 解析与宽容契约:[`src/acp/wire.ts`](../src/acp/wire.ts)
   - 能力组合判定:[`src/capabilities.ts`](../src/capabilities.ts)
