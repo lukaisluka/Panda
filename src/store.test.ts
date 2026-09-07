@@ -3,6 +3,7 @@ import {
   DEMO_CONNECTION_ID,
   connectionStorePort,
   orderedConnectionIds,
+  orderedSessions,
   usePanda,
   type SessionEntry,
 } from './store';
@@ -288,6 +289,117 @@ describe('transactional session switch (issue #17)', () => {
   });
 });
 
+describe('local activity stamping (#175)', () => {
+  it('conversation content stamps the session entry and the connection ordering key', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-09-07T10:00:00Z'));
+      usePanda.getState().ensureConnection('live');
+      const port = connectionStorePort('live');
+      port.adoptSession('s-1', '/a');
+      const before = usePanda.getState().connections['live']!.lastActivityAt;
+
+      vi.advanceTimersByTime(1000);
+      port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }] });
+
+      let slot = usePanda.getState().connections['live']!;
+      expect(slot.sessions.find((e) => e.sessionId === 's-1')!.updatedAt).toBe('2026-09-07T10:00:01.000Z');
+      expect(slot.lastActivityAt).toBeGreaterThan(before!);
+
+      // Sub-second stream chunks hold one stamp — the persistence pump diffs
+      // by value, so a whole-second stamp means one localStorage write per
+      // second, not one per chunk.
+      vi.advanceTimersByTime(100);
+      port.update({ sessionUpdate: 'agent_message_chunk', messageId: 'm', content: { type: 'text', text: 'more' } });
+      slot = usePanda.getState().connections['live']!;
+      expect(slot.sessions.find((e) => e.sessionId === 's-1')!.updatedAt).toBe('2026-09-07T10:00:01.000Z');
+      expect(slot.docs['s-1']!.turns).toHaveLength(1); // one turn…
+      expect(slot.docs['s-1']!.turns[0]!.blocks).toHaveLength(2); // …two blocks: user + agent reply
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('agent replies stamp too — the stamp is why agents that never report still sort', () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+
+    port.update({ sessionUpdate: 'agent_message_chunk', messageId: 'm', content: { type: 'text', text: 'reply' } });
+
+    expect(usePanda.getState().connections['live']!.sessions.find((e) => e.sessionId === 's-1')!.updatedAt).not.toBeNull();
+  });
+
+  it('bookkeeping updates do not stamp', () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+
+    port.update({ sessionUpdate: 'usage_update', used: 1, size: 2 });
+    port.update({ sessionUpdate: 'commands_update', commands: [] });
+
+    expect(usePanda.getState().connections['live']!.sessions.find((e) => e.sessionId === 's-1')!.updatedAt).toBeNull();
+  });
+
+  it('a session/load replay stamps nothing — history is not activity', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-09-07T10:00:00Z'));
+      usePanda.getState().ensureConnection('live');
+      const port = connectionStorePort('live');
+      port.adoptSession('s-1', '/a');
+      port.upsertSession({ sessionId: 's-2', cwd: '/b', title: null, updatedAt: '2026-01-01T00:00:00Z' });
+      const activityBefore = usePanda.getState().connections['live']!.lastActivityAt;
+
+      vi.advanceTimersByTime(1000);
+      const snapshot = port.stageSession('s-2', '/b');
+      port.resetDocument(); // onReplayStart
+      // Replayed history — full switch order from LiveAcpClient.loadSessionInternal:
+      port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'history' }] });
+      port.update({ sessionUpdate: 'agent_message_chunk', messageId: 'm', content: { type: 'text', text: 'reply' } });
+      port.update({ sessionUpdate: 'status_changed', status: 'idle' });
+      port.commitStagedSession(snapshot);
+
+      const slot = usePanda.getState().connections['live']!;
+      expect(slot.sessions.find((e) => e.sessionId === 's-2')!.updatedAt).toBe('2026-01-01T00:00:00Z');
+      expect(slot.lastActivityAt).toBe(activityBefore);
+      // The replayed content still lands in the document — suppression is
+      // about ordering keys, never about data.
+      expect(slot.docs['s-2']!.turns).toHaveLength(1);
+
+      // After commit, live content stamps again.
+      vi.advanceTimersByTime(1000);
+      port.update({ sessionUpdate: 'agent_message_chunk', messageId: 'm2', content: { type: 'text', text: 'live' } });
+      expect(usePanda.getState().connections['live']!.sessions.find((e) => e.sessionId === 's-2')!.updatedAt)
+        .toBe('2026-09-07T10:00:02.000Z');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('agent reports still win on arrival — last writer wins, no clock comparison', () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+    port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }] });
+    expect(usePanda.getState().connections['live']!.sessions[0]!.updatedAt).not.toBeNull();
+
+    port.patchSession('s-1', { updatedAt: '2020-01-01T00:00:00Z' });
+
+    expect(usePanda.getState().connections['live']!.sessions[0]!.updatedAt).toBe('2020-01-01T00:00:00Z');
+  });
+
+  it('orderedSessions: updatedAt descending, null sinks, ties break by id', () => {
+    const entries: SessionEntry[] = [
+      { sessionId: 'b', cwd: '/', title: null, updatedAt: null },
+      { sessionId: 'c', cwd: '/', title: null, updatedAt: '2026-01-03T00:00:00Z' },
+      { sessionId: 'a', cwd: '/', title: null, updatedAt: '2026-01-01T00:00:00Z' },
+      { sessionId: 'd', cwd: '/', title: null, updatedAt: '2026-01-03T00:00:00Z' },
+    ];
+    expect(orderedSessions(entries).map((e) => e.sessionId)).toEqual(['c', 'd', 'a', 'b']);
+  });
+});
+
 describe('selection generation (issue #19)', () => {
   it('latest-wins: a late commit for a superseded switch never moves the pointer', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -468,7 +580,7 @@ describe('multi-connection foreground (issue #21)', () => {
     expect(usePanda.getState().connections['bg']!.unreadCompletion).toBe(true);
   });
 
-  it('orderedConnectionIds: foreground first, then recent activity, demo excluded', () => {
+  it('orderedConnectionIds: pure recency — switching the foreground moves nothing (#175)', () => {
     vi.useFakeTimers();
     try {
       usePanda.getState().ensureConnection('idle-old');
@@ -481,7 +593,8 @@ describe('multi-connection foreground (issue #21)', () => {
 
       usePanda.getState().setActiveConnection('never');
 
-      expect(orderedConnectionIds(usePanda.getState())).toEqual(['never', 'recent', 'idle-old']);
+      // The foreground pin is gone: order tracks activity only, demo excluded.
+      expect(orderedConnectionIds(usePanda.getState())).toEqual(['recent', 'idle-old', 'never']);
     } finally {
       vi.useRealTimers();
     }

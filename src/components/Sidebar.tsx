@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import {
+  orderedSessions,
   useConnectionOrder,
   usePanda,
   type SessionMode,
@@ -29,6 +30,7 @@ import { isLinkUp, type AttentionReason, type ConnectionPhase } from '../project
 import { isDirectConnectionId, reconcileProfileSlots } from '../liveConnections';
 import { effectiveCapability, PANDA_HOST_CAPABILITIES } from '../capabilities';
 import { useI18n } from '../i18n/context';
+import { formatRelativeTime } from '../relativeTime';
 import type { AgentProfile } from '../profiles';
 import { loadProfiles, newProfileId, profileEndpoint, saveProfiles, subscribeProfiles } from '../profiles';
 import { navigate, useHashRoute } from '../routes';
@@ -45,8 +47,9 @@ import './Sidebar.css';
  * disconnected slots carrying the endpoint's remembered sessions (历史可见,
  * hover = 连接). Connection management lives in the settings page; the only
  * sidebar entry points are 新建会话 (picker dialog) and 添加 agent (settings).
- * 前台连接置顶, 其余按最近活动; each group row subscribes narrowly to its
- * own slot so a streaming connection only re-renders its own group.
+ * 分组与会话行都按最后活动时间排 (#175), 切换不移动任何位置; each group row
+ * subscribes narrowly to its own slot so a streaming connection only
+ * re-renders its own group.
  */
 export function Sidebar({ mode, live, mobileOpen, onMobileClose, settingsSection, onSelectSettingsSection }: {
   mode: SessionMode;
@@ -314,11 +317,9 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
   // Resume needs a retained session; seeded slots have none.
   const canResume = phase === 'error' && slot.connection.sessionId !== null;
 
-  const ordered = [...slot.sessions].sort((a, b) => {
-    if (isForegroundSession(a.sessionId)) return -1;
-    if (isForegroundSession(b.sessionId)) return 1;
-    return (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '');
-  });
+  // Pure recency (#175) — no foreground pin: switching must not move rows,
+  // the current session is recognized by its highlight.
+  const ordered = orderedSessions(slot.sessions);
 
   return (
     <div className={`sidebar-group ${isActiveConnection ? 'sidebar-group--active' : ''}`}>
@@ -452,6 +453,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
             const canDelete = effectiveCapability('delete', slot.capabilities, PANDA_HOST_CAPABILITIES);
             const canSwitch = connected ? loadSession.available && !lifecycle.busy : hasDoc;
             const label = entry.title ?? `${workspaceLabel(entry.cwd)} · ${entry.sessionId.slice(-6)}`;
+            const updated = formatRelativeTime(entry.updatedAt, t);
             return (
               <div key={entry.sessionId} className="sidebar-session">
                 <button
@@ -484,6 +486,14 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
                 >
                   <MessagesSquare size={12} className="sidebar-icon-faint" />
                   <span className="truncate">{label}</span>
+                  {updated !== null && (
+                    <span
+                      className="sidebar-session-time"
+                      title={entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : undefined}
+                    >
+                      {updated}
+                    </span>
+                  )}
                 </button>
                 {canDelete.available && connected && !foregroundSession && !lifecycle.busy && (
                   <span className="sidebar-session-delete">

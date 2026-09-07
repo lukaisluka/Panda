@@ -79,9 +79,37 @@ export type SessionEntry = {
   sessionId: string;
   cwd: string;
   title: string | null;
-  /** ISO 8601 last-activity timestamp from the agent, if reported. */
+  /**
+   * ISO 8601 last-activity timestamp. Two writers, no precedence: the agent
+   * (`session/list`, `session_info_update`) and the host (a local stamp on
+   * every live conversation event, so agents that never report still sort).
+   * Last writer wins by arrival — the two clocks are not comparable, and each
+   * write reflects "activity just happened" at its own clock.
+   */
   updatedAt: string | null;
 };
+
+/**
+ * Update kinds that count as conversation activity and refresh a session's
+ * `updatedAt` (plus the connection's `lastActivityAt`) when they arrive live.
+ * Deliberately excludes bookkeeping (status/usage/modes/permissions): a turn
+ * that produced no transcript content leaves the send-time user_message stamp
+ * as the last activity, which is correct — that IS when the user last acted.
+ * Ignored while `switching` is set: a session/load replay streams history
+ * through the same channel, and history is not "just happened".
+ */
+const SESSION_ACTIVITY_KINDS: ReadonlySet<AcpSessionUpdate['sessionUpdate']> = new Set([
+  'user_message',
+  'user_message_confirmed',
+  'agent_message_chunk',
+  'agent_thought_chunk',
+  'tool_call',
+  'tool_call_update',
+  'plan',
+  'plan_removed',
+  'compaction_update',
+  'compaction_summary_chunk',
+]);
 
 /**
  * What the current agent advertised at initialize (v1 capability gates).
@@ -127,9 +155,10 @@ export type ConnectionState = {
    */
   unreadCompletion: boolean;
   /**
-   * Last turn activity (issue #21): bumped on status transitions and session
-   * adoption. Drives sidebar ordering — the foreground connection is pinned,
-   * the rest sort by recency, so the timestamp never needs to be exact.
+   * Last turn activity (issue #21): bumped on status transitions, session
+   * adoption and live conversation events. Drives sidebar ordering — groups
+   * sort by recency (the foreground pin was removed: switching must not move
+   * groups around), so the timestamp never needs to be exact.
    */
   lastActivityAt: number | null;
 };
@@ -479,7 +508,8 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
         // (which includes "no foreground at all"). A turn KILLED by a
         // disconnect also lands idle here — the connection's error status
         // signals attention anyway, and the extra unread flag clears on the
-        // same foregrounding.
+        // same foregrounding. The activity bump is suppressed mid-switch: a
+        // replayed status event is history, not activity.
         // Same narrowing shape as the old setStatus: the null check must
         // live in this function body for TS to carry it into the closure.
         const sessionId = currentSessionId;
@@ -491,7 +521,7 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
               s.activeConnectionId !== connectionId && prevStatus === 'running' && update.status === 'idle';
             return {
               docs: { ...state.docs, [sessionId]: applyUpdate(state.docs[sessionId] ?? EMPTY_DOC, update) },
-              lastActivityAt: Date.now(),
+              ...(state.switching === null ? { lastActivityAt: Date.now() } : {}),
               ...(completedInBackground ? { unreadCompletion: true } : {}),
             };
           });
@@ -499,7 +529,36 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
         });
         return;
       }
-      patchDoc((doc) => applyUpdate(doc, update));
+      if (!SESSION_ACTIVITY_KINDS.has(update.sessionUpdate)) {
+        patchDoc((doc) => applyUpdate(doc, update));
+        return;
+      }
+      // Conversation content stamps the session's last-activity time and the
+      // connection's ordering key in the SAME setState as the document write —
+      // a streaming chunk already pays for one store notification, the stamp
+      // rides along free. Suppressed mid-switch: that traffic is a
+      // session/load replay streaming history, and history is not activity.
+      // Same narrowing shape as the status branch above.
+      const sessionId = currentSessionId;
+      if (sessionId === null) return;
+      // Whole-second granularity is deliberate: the persistence pump diffs a
+      // serialized snapshot by value, so millisecond-precision stamps would
+      // rewrite localStorage on every streamed chunk — truncated, chunks
+      // within one second collapse into a single write.
+      const now = new Date();
+      now.setMilliseconds(0);
+      const stampedAt = now.toISOString();
+      patchSlot((state) => ({
+        docs: { ...state.docs, [sessionId]: applyUpdate(state.docs[sessionId] ?? EMPTY_DOC, update) },
+        ...(state.switching === null
+          ? {
+              sessions: state.sessions.map((entry) =>
+                entry.sessionId === sessionId ? { ...entry, updatedAt: stampedAt } : entry,
+              ),
+              lastActivityAt: Date.now(),
+            }
+          : {}),
+      }));
     },
     setConnection: (patch) =>
       patchSlot((state) => ({ connection: { ...state.connection, ...patch } })),
@@ -744,19 +803,19 @@ export const useActiveSwitching = () => usePanda((s) => activeConnectionState(s)
 // -- sidebar grouping + indicators (issue #21) -------------------------------
 
 /**
- * Sidebar group order (issue #21): the foreground connection first, the rest
- * by most recent turn activity, never-active slots last; the demo replay
- * pseudo-slot is not a group. Stable by id so ties don't reshuffle.
+ * Sidebar group order (issue #21): by most recent turn activity, never-active
+ * slots last; the demo replay pseudo-slot is not a group. Stable by id so ties
+ * don't reshuffle. The foreground pin was removed (#175): pinning whatever
+ * you switch to made every switch jump two rows (the target to the top, the
+ * one you left back down) — order now tracks only activity, and the current
+ * group is recognized by its highlight, not its position.
  */
 export function orderedConnectionIds(s: {
   connections: Record<string, ConnectionState>;
-  activeConnectionId: string | null;
 }): string[] {
   return Object.keys(s.connections)
     .filter((id) => id !== DEMO_CONNECTION_ID)
     .sort((a, b) => {
-      if (a === s.activeConnectionId) return -1;
-      if (b === s.activeConnectionId) return 1;
       const at = s.connections[a]?.lastActivityAt ?? null;
       const bt = s.connections[b]?.lastActivityAt ?? null;
       if (at !== null && bt === null) return -1;
@@ -764,6 +823,19 @@ export function orderedConnectionIds(s: {
       if (at !== null && bt !== null && at !== bt) return bt - at;
       return a.localeCompare(b);
     });
+}
+
+/**
+ * Session rows within a group (#175): by `updatedAt` descending — agent
+ * reported or host stamped, see SessionEntry. Null timestamps sink; ties
+ * break by id so streaming stamps never reshuffle equal-footing rows. The
+ * foreground row is NOT pinned (same reasoning as orderedConnectionIds).
+ */
+export function orderedSessions(sessions: SessionEntry[]): SessionEntry[] {
+  return [...sessions].sort((a, b) => {
+    const byTime = (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '');
+    return byTime !== 0 ? byTime : a.sessionId.localeCompare(b.sessionId);
+  });
 }
 
 /**
