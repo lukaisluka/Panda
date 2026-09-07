@@ -14,13 +14,14 @@
     <img src="branding/clean/series-retro-sleep.png" alt="Idle" width="88" />
   </p>
   <p><em><a href="README.md">English</a> · 简体中文</em></p>
+  <p><img src="docs/assets/demo.gif" alt="Panda demo：一段脚本化的 agent 会话——流式回复、工具调用卡片、行内权限卡后的代码 diff、测试与用量收尾" /></p>
 </div>
 
 Panda 说 [ACP（Agent Client Protocol）](https://agentclientprotocol.com)——40+ 主流 coding agent（Claude Code、Gemini CLI、Codex、Cursor、Goose、Copilot……）暴露给编辑器的标准协议。Panda 是一个独立、对话优先的客户端：不是 IDE 插件，而是一个把「与 agent 对话」当作主体验的地方。
 
 ## 获取 Panda
 
-- **网页版（推荐）**——<https://lukaisluka.github.io/Panda/> 在任何现代浏览器里直接用，无需安装。指向一个 ACP-over-WebSocket 端点，消息流即刻上线；没有连接 agent 时，内置的脚本化 demo 照常可玩。
+- **网页版（推荐）**——<https://lukaisluka.github.io/Panda/> 在任何现代浏览器里直接用，无需安装。指向一个 ACP-over-WebSocket 端点，消息流即刻上线；也可以先看内置的[脚本化 demo](https://lukaisluka.github.io/Panda/#/demo)，无需任何 agent。
 - **桌面版（macOS / Windows）— beta**——从 [GitHub Releases](https://github.com/lukaisluka/Panda/releases) 下载。桌面壳可用——与网页版同一套界面与协议栈，另加 stdio 直连 agent——但尚未经过专门的组织化发布测试，以 beta 对待；日常使用推荐网页版：
   - macOS：`Panda_<ver>_aarch64.dmg`
   - Windows：`Panda_<ver>_x64-setup.exe`（安装版），或 `Panda_<ver>_x64-portable.zip`（免安装；两者是同一个应用——用户数据留在各平台的用户数据目录，不随 exe 走）
@@ -39,7 +40,7 @@ Panda 说 [ACP（Agent Client Protocol）](https://agentclientprotocol.com)—�
 - **双向图片**——agent 声明能力后可粘贴或选择图片发送；用户/agent 消息、思考块与工具结果里的图片都会渲染
 - **长会话**——虚拟化消息列表，流式增长时自动跟随底部，只在用户真正滚动时脱离
 - **桌面版直连 stdio agent**——在本机拉起一条 ACP agent 命令，通过其管道以 NDJSON 对话，生命周期全程托管
-- **离线 demo 回放**——同一套界面由脚本化 agent 驱动；`?demo=long` 播放 80 轮长会话
+- **脚本化 demo 回放**——同一套界面由脚本化 agent 驱动，无需后端：<https://lukaisluka.github.io/Panda/#/demo>（`?demo=long` 播放 80 轮长会话）
 
 ## 工作原理
 
@@ -61,6 +62,7 @@ ACP 是事件流，而界面需要的是文档。一层纯归约把 `session/upd
 
 - `src/assets/brand/`——应用内可用导出：`panda-badge.png`（侧栏 logo）、`panda-sleep.png`（崩溃页）；其余留给将来的空态/加载态
 - `public/favicon.png` + `public/apple-touch-icon.png`——网页图标，在 `index.html` 里声明
+- `public/og-image.png`——社交预览合成图（`index.html` 的 og/twitter 卡片）；GitHub 仓库 Settings 里的 *Social preview* 用同一张图（需手动上传）
 - `desktop/icon-source.png`——桌面图标源；用 `pnpm --dir desktop exec tauri icon icon-source.png` 重新生成 `desktop/src-tauri/icons/`
 
 ## 开发
@@ -69,7 +71,7 @@ ACP 是事件流，而界面需要的是文档。一层纯归约把 `session/upd
 
 ```sh
 pnpm install
-pnpm dev           # http://127.0.0.1:5173 —— 打开即是脚本化 demo
+pnpm dev           # http://127.0.0.1:5173 —— #/demo 即脚本化回放
 pnpm typecheck     # tsc --noEmit
 pnpm test          # vitest —— test-agent 依赖已装时含 live-agent e2e
 pnpm build         # typecheck + vite build

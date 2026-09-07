@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { parseDevPage, parseHash, routeHash } from './routes';
 
 describe('parseHash', () => {
@@ -19,21 +19,16 @@ describe('parseHash', () => {
   });
 });
 
-describe('demo route gating (phase 2: production has no replay entry)', () => {
-  const originalDev = import.meta.env.DEV;
-  afterEach(() => {
-    import.meta.env.DEV = originalDev;
-  });
-
-  it('parses #/demo in dev builds', () => {
-    import.meta.env.DEV = true;
-    expect(parseHash('#/demo')).toBe('demo');
-    expect(parseHash('#demo/')).toBe('demo');
-  });
-
-  it('falls back to main outside dev builds', () => {
+describe('demo route (explicit URL in every build)', () => {
+  it('parses #/demo in production builds too', () => {
+    const originalDev = import.meta.env.DEV;
     import.meta.env.DEV = false;
-    expect(parseHash('#/demo')).toBe('main');
+    try {
+      expect(parseHash('#/demo')).toBe('demo');
+      expect(parseHash('#demo/')).toBe('demo');
+    } finally {
+      import.meta.env.DEV = originalDev;
+    }
   });
 });
 
@@ -53,6 +48,6 @@ describe('routeHash / navigate round-trip', () => {
     expect(routeHash('demo')).toBe('#/demo');
     expect(parseHash(routeHash('main'))).toBe('main');
     expect(parseHash(routeHash('settings'))).toBe('settings');
-    expect(import.meta.env.DEV && parseHash(routeHash('demo'))).toBe('demo');
+    expect(parseHash(routeHash('demo'))).toBe('demo');
   });
 });
