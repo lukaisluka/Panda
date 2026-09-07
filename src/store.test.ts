@@ -389,6 +389,22 @@ describe('local activity stamping (#175)', () => {
     expect(usePanda.getState().connections['live']!.sessions[0]!.updatedAt).toBe('2020-01-01T00:00:00Z');
   });
 
+  it('a sparse patch never erases known fields — an undefined field is "not reported"', () => {
+    usePanda.getState().ensureConnection('live');
+    const port = connectionStorePort('live');
+    port.adoptSession('s-1', '/a');
+    port.update({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'hi' }] });
+    port.patchSession('s-1', { title: '已命名' });
+
+    // The load-time shape agents actually send: session_info_update with a
+    // title and NO updatedAt — the client wraps that as an explicit
+    // undefined, which must not wipe the stamp (or the row sinks + reorders).
+    port.patchSession('s-1', { title: '改题', updatedAt: undefined });
+
+    expect(usePanda.getState().connections['live']!.sessions[0]!).toMatchObject({ title: '改题' });
+    expect(usePanda.getState().connections['live']!.sessions[0]!.updatedAt).not.toBeNull();
+  });
+
   it('orderedSessions: updatedAt descending, null sinks, ties break by id', () => {
     const entries: SessionEntry[] = [
       { sessionId: 'b', cwd: '/', title: null, updatedAt: null },
