@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { McpServerConfig } from './mcpServers';
+import { mcpServersForProfile, type McpServerConfig } from './mcpServers';
 import {
   parseMcpConfigText,
+  rebindServerIds,
   serializeMcpServers,
 } from './mcpText';
 
@@ -212,5 +213,58 @@ describe('serialize → parse round-trip', () => {
       expect(error).toBeNull();
       expect(stripId(servers)).toEqual(stripId(list));
     }
+  });
+});
+
+describe('rebindServerIds (#12: text-view saves keep profile whitelists)', () => {
+  const existing: McpServerConfig[] = [stdio, http];
+
+  it('a no-op text round-trip keeps every id', () => {
+    const { text } = serializeMcpServers(existing, 'json');
+    const { servers } = parseMcpConfigText(text);
+    expect(rebindServerIds(servers, existing).map((s) => s.id)).toEqual(['a', 'b']);
+  });
+
+  it('renaming a server keeps its id (identity = transport + address)', () => {
+    const { servers } = parseMcpConfigText(JSON.stringify({
+      mcpServers: { files: { type: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/Users/me'] } },
+    }));
+    const rebound = rebindServerIds(servers, existing);
+    expect(rebound.map((s) => [s.name, s.id])).toEqual([['files', 'a']]);
+  });
+
+  it('editing a stdio server\'s args keeps its id — args are outside the identity', () => {
+    const { servers } = parseMcpConfigText(JSON.stringify({
+      mcpServers: { filesystem: { type: 'stdio', command: 'npx', args: ['-y', 'other-server'] } },
+    }));
+    expect(rebindServerIds(servers, existing)[0]?.id).toBe('a');
+  });
+
+  it('a genuinely new server keeps its fresh id', () => {
+    const { servers } = parseMcpConfigText(JSON.stringify({
+      mcpServers: { brand: { type: 'stdio', command: 'brand-new' } },
+    }));
+    const rebound = rebindServerIds(servers, existing);
+    expect(rebound[0]?.id).not.toBe('a');
+    expect(rebound[0]?.id).not.toBe('b');
+  });
+
+  it('one existing id never binds twice, even when two entries could claim it', () => {
+    // Same command twice under different names: the first takes the old id,
+    // the second keeps its fresh one.
+    const { servers } = parseMcpConfigText(JSON.stringify({
+      mcpServers: { one: { type: 'stdio', command: 'npx' }, two: { type: 'stdio', command: 'npx' } },
+    }));
+    const ids = rebindServerIds(servers, existing).map((s) => s.id);
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).toContain('a');
+  });
+
+  it('end-to-end: a profile whitelist survives a serialize → parse → rebind → save round-trip', () => {
+    const { text } = serializeMcpServers(existing, 'yaml');
+    const { servers } = parseMcpConfigText(text);
+    const rebound = rebindServerIds(servers, existing);
+    const profile = { mcpServerIds: ['a'] };
+    expect(mcpServersForProfile(rebound, profile)).toEqual([stdio]);
   });
 });
