@@ -1,10 +1,19 @@
-<p align="center">
-  <img src="branding/clean/concept-retro-badge.png" alt="Panda" width="160" />
-</p>
-
-# Panda 🐼
-
-**A universal client for every ACP-compatible agent, built around a meticulously crafted message stream.**
+<div align="center">
+  <img src="branding/clean/concept-retro-badge.png" alt="Panda" width="180" />
+  <h1>Panda</h1>
+  <p><strong>A universal client for every ACP-compatible agent, built around a meticulously crafted message stream.</strong></p>
+  <p>
+    <a href="https://github.com/lukaisluka/Panda/actions/workflows/ci.yml"><img src="https://github.com/lukaisluka/Panda/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+    <a href="https://github.com/lukaisluka/Panda/releases"><img src="https://img.shields.io/github/v/release/lukaisluka/Panda" alt="Release" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License" /></a>
+  </p>
+  <p>
+    <img src="branding/clean/series-retro-hello.png" alt="Say hello" width="88" />
+    <img src="branding/clean/series-retro-reading.png" alt="Reading" width="88" />
+    <img src="branding/clean/series-retro-tea.png" alt="Tea break" width="88" />
+    <img src="branding/clean/series-retro-sleep.png" alt="Idle" width="88" />
+  </p>
+</div>
 
 Panda speaks [ACP (Agent Client Protocol)](https://agentclientprotocol.com) — the standard that 40+ coding agents (Claude Code, Gemini CLI, Codex, Cursor, Goose, Copilot…) expose to editors. Panda is an independent, conversation-first client: not an IDE plugin, but a place where talking to an agent is the primary experience.
 
@@ -44,6 +53,14 @@ ACP is an event stream, but the UI needs a document. A pure reduction layer fold
 - [Architecture decision records](docs/adr/) — significant decisions, with context and rejected alternatives
 - [desktop/README.md](desktop/README.md) — desktop shell: development, acceptance harness, artifacts
 - [test-agent/README.md](test-agent/README.md) — the deterministic deepagents-based ACP agent used by integration tests
+
+## Brand
+
+The retro badge panda is the project's identity. Final artwork lives in `branding/clean/` (watermark-free): the main badge plus four state illustrations — hello / reading / tea / sleep. Where each piece is used:
+
+- `src/assets/brand/` — app-ready exports: `panda-badge.png` (sidebar logo), `panda-sleep.png` (crash page); the rest are available for future empty/loading states
+- `public/favicon.png` + `public/apple-touch-icon.png` — web icons, declared in `index.html`
+- `desktop/icon-source.png` — desktop icon source; regenerate `desktop/src-tauri/icons/` with `pnpm --dir desktop exec tauri icon icon-source.png`
 
 ## Development
 
