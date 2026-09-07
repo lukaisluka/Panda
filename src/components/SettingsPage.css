@@ -33,58 +33,30 @@
   }
 }
 
-/* --- Section page header (#117) --- */
+/* --- Row cards (#138: Codex-style one-setting-per-row; page header lives
+ * in the top bar since #140) --- */
 
-/* The shared skeleton that makes a short section read as a designed page:
- * icon chip + title + one-line description (+ the primary action, right).
- * Horizontally aligned with the cards below (same 720px column, same 20px
- * inner padding). */
-.settings-section-head {
-  max-width: 720px;
-  margin: 0 auto 20px;
-  padding: 0 20px;
+/* Group head (#140): a group title may carry its page action on the right
+ * (Codex puts create/edit actions on the group head, not the page header). */
+.settings-group-head {
   display: flex;
   align-items: center;
-  gap: 14px;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 4px;
 }
 
-.settings-section-head-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
-  border-radius: var(--panda-radius-lg);
-  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
-  color: var(--color-accent);
-}
-
-.settings-section-head-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.settings-section-head-title {
+.settings-group-head .settings-group-title {
   margin: 0;
-  font-size: 17px;
+}
+
+/* Group title: plain text head of a card whose content is SettingsRows —
+ * the card icon chip is gone, the group title sets the rhythm. */
+.settings-group-title {
+  margin: 0 0 4px;
+  font-size: 13px;
   font-weight: 600;
 }
-
-.settings-section-head-desc {
-  margin: 2px 0 0;
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: var(--color-muted);
-}
-
-.settings-section-head-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-/* --- Cards --- */
 
 .settings-card {
   max-width: 720px;

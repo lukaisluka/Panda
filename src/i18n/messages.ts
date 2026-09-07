@@ -283,6 +283,7 @@ export const messages = {
   'settings.locale.en': { en: 'English', zh: 'English' },
   'settings.locale.zh': { en: '中文', zh: '中文' },
   'settings.profiles': { en: 'Agent profiles', zh: 'Agent 配置' },
+  'settings.profilesGroup': { en: 'Saved profiles', zh: '已保存的配置' },
   'settings.addProfile': { en: 'Add profile', zh: '新增配置' },
   'settings.profilesDesc': {
     en: 'Save agent endpoints and default workspaces to pick directly when starting a session.',
@@ -308,6 +309,7 @@ export const messages = {
     zh: '删除配置「{name}」?该端点已记忆的会话不受影响。',
   },
   'settings.mcp': { en: 'MCP servers', zh: 'MCP 服务器' },
+  'settings.mcpGroup': { en: 'Saved servers', zh: '已保存的服务器' },
   'settings.addMcp': { en: 'Add server', zh: '新增服务器' },
   'settings.mcpDesc': {
     en: 'Configured tool servers ride every session/new · session/load to the agent, which connects and obtains their tools; stdio commands run on the agent’s host. Changes apply to the next session.',
