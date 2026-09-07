@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   loadMcpServers,
+  mcpServersForProfile,
   saveMcpServers,
   subscribeMcpServers,
   toWireMcpServers,
@@ -96,5 +97,29 @@ describe('toWireMcpServers (issue #71)', () => {
       { type: 'http', name: 'web', url: 'https://x/mcp', headers: [] },
       { type: 'sse', name: 'old', url: 'https://y/sse', headers: [] },
     ]);
+  });
+});
+
+describe('mcpServersForProfile (#148)', () => {
+  const servers = [
+    { id: 'a', name: 'fs', type: 'stdio' as const, command: 'npx', args: '-y srv' },
+    { id: 'b', name: 'web', type: 'http' as const, url: 'https://x/mcp' },
+    { id: 'c', name: 'old', type: 'sse' as const, url: 'https://y/sse' },
+  ];
+
+  it('carries nothing for a null profile (custom-address direct connection)', () => {
+    expect(mcpServersForProfile(servers, null)).toEqual([]);
+  });
+
+  it('carries nothing for an empty whitelist', () => {
+    expect(mcpServersForProfile(servers, { mcpServerIds: [] })).toEqual([]);
+  });
+
+  it('carries exactly the whitelisted servers', () => {
+    expect(mcpServersForProfile(servers, { mcpServerIds: ['c', 'a'] })).toEqual([servers[0], servers[2]]);
+  });
+
+  it('drops whitelist ids whose server no longer exists', () => {
+    expect(mcpServersForProfile(servers, { mcpServerIds: ['a', 'gone'] })).toEqual([servers[0]]);
   });
 });

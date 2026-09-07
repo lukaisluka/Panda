@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Activity, ArrowLeft, Bot, Check, Copy, Pencil, Play, Plug, Plus, SlidersHorizontal, Trash2, WandSparkles } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
+import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { IconButton } from '@astryxdesign/core/IconButton';
 import { Selector } from '@astryxdesign/core/Selector';
 import { TextArea } from '@astryxdesign/core/TextArea';
@@ -495,7 +496,13 @@ function McpSection() {
                     label={t('settings.deleteMcp')}
                     tooltip={t('settings.deleteMcpTooltip')}
                     clickAction={() => {
-                      if (window.confirm(t('settings.deleteMcpConfirm', { name: server.name }))) {
+                      // #148: the whitelist references servers by id — say who
+                      // loses this server before it goes away.
+                      const users = loadProfiles().filter((profile) => profile.mcpServerIds.includes(server.id)).length;
+                      const message = users > 0
+                        ? t('settings.deleteMcpConfirmUsed', { name: server.name, n: String(users) })
+                        : t('settings.deleteMcpConfirm', { name: server.name });
+                      if (window.confirm(message)) {
                         saveMcpServers(loadMcpServers().filter((entry) => entry.id !== server.id));
                         if (editingId === server.id) setEditingId(null);
                       }
@@ -759,8 +766,9 @@ function McpForm({ initial, onSave, onCancel, onTextConfig }: {
   );
 }
 
-/** Shape the form edits — name/type/endpoint/workspace (path rides on the
- * workspace). `type` picks which endpoint fields are load-bearing (#121). */
+/** Shape the form edits — name/type/endpoint/workspace/MCP whitelist (the
+ * whitelist rides on the profile, #148). `type` picks which endpoint fields
+ * are load-bearing (#121). */
 export type ProfileDraft = {
   name: string;
   type: 'websocket' | 'stdio';
@@ -768,6 +776,7 @@ export type ProfileDraft = {
   command: string;
   args: string;
   workspace: { kind: string; path: string };
+  mcpServerIds: string[];
 };
 /** Field-level validation, shared by unit tests: every key names a field the
  * form must block saving on. */
@@ -800,7 +809,12 @@ function ProfileForm({ initial, onSave, onCancel }: {
       kind: initial?.workspace.kind === 'none' ? 'none' : 'local-directory',
       path: initial?.workspace.kind === 'local-directory' ? initial.workspace.path : '',
     },
+    mcpServerIds: initial?.mcpServerIds ?? [],
   }));
+  // Server list for the whitelist picker: definitions live on the MCP page;
+  // here they are just (id, summary) rows to check on or off.
+  const [mcpServers, setMcpServers] = useState<McpServerConfig[]>(() => loadMcpServers());
+  useEffect(() => subscribeMcpServers(setMcpServers), []);
   const [showErrors, setShowErrors] = useState(false);
   const errors = profileDraftErrors(draft);
   // Astryx TextInput surfaces errors through its status object; they appear
@@ -820,8 +834,8 @@ function ProfileForm({ initial, onSave, onCancel }: {
         : { kind: 'local-directory' as const, path: draft.workspace.path.trim() };
     onSave(
       draft.type === 'stdio'
-        ? { id: initial?.id ?? newProfileId(), name: draft.name.trim(), kind: 'stdio', command: draft.command.trim(), args: draft.args.trim(), workspace }
-        : { id: initial?.id ?? newProfileId(), name: draft.name.trim(), kind: 'websocket', url: draft.url.trim(), workspace },
+        ? { id: initial?.id ?? newProfileId(), name: draft.name.trim(), kind: 'stdio', command: draft.command.trim(), args: draft.args.trim(), workspace, mcpServerIds: draft.mcpServerIds }
+        : { id: initial?.id ?? newProfileId(), name: draft.name.trim(), kind: 'websocket', url: draft.url.trim(), workspace, mcpServerIds: draft.mcpServerIds },
     );
   };
 
@@ -902,6 +916,36 @@ function ProfileForm({ initial, onSave, onCancel }: {
               status={statusOf('path')}
             />
           </div>
+        )}
+      </div>
+      <div className="settings-form-mcp">
+        <div className="settings-form-mcp-head">
+          <span className="settings-form-mcp-title">{t('settings.profileMcpGroup')}</span>
+          <span className="settings-form-mcp-desc">{t('settings.profileMcpDesc')}</span>
+        </div>
+        {mcpServers.length === 0 ? (
+          <p className="settings-form-mcp-empty">{t('settings.profileMcpEmpty')}</p>
+        ) : (
+          <ul className="settings-form-mcp-list">
+            {mcpServers.map((server) => (
+              <li key={server.id} className="settings-form-mcp-item">
+                <CheckboxInput
+                  label={server.name}
+                  value={draft.mcpServerIds.includes(server.id)}
+                  onChange={(checked) =>
+                    set({
+                      mcpServerIds: checked
+                        ? [...draft.mcpServerIds, server.id]
+                        : draft.mcpServerIds.filter((id) => id !== server.id),
+                    })
+                  }
+                />
+                <span className="settings-form-mcp-meta truncate" title={mcpServerSummary(server)}>
+                  {mcpServerSummary(server)}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
       {initial && <p className="settings-card-desc">{t('settings.editNote')}</p>}

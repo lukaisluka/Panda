@@ -104,6 +104,20 @@ export function newMcpServerId(): string {
   return globalThis.crypto.randomUUID();
 }
 
+/** The session-establishment filter (#148): a profile's sessions carry only
+ * the servers on its whitelist; a null profile (custom-address direct
+ * connection) carries none. Unknown ids (a server deleted since the profile
+ * was last edited) drop out silently — the whitelist references ids, it
+ * never resurrects definitions. */
+export function mcpServersForProfile(
+  servers: readonly McpServerConfig[],
+  profile: { mcpServerIds: string[] } | null | undefined,
+): McpServerConfig[] {
+  if (!profile) return [];
+  const allowed = new Set(profile.mcpServerIds);
+  return servers.filter((server) => allowed.has(server.id));
+}
+
 /** Splits the one-line args field into the wire's array. Whitespace-only
  * segments collapse away; no quoting semantics — an arg with spaces needs a
  * real array surface if that ever bites. Exported for mcpText.ts, whose

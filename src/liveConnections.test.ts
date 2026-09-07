@@ -48,6 +48,7 @@ const profile = (id: string, url = `ws://${id}/acp`, workspace: Workspace = { ki
   kind: 'websocket',
   url,
   workspace,
+  mcpServerIds: [],
 });
 
 type StubbedClient = { handlers: LiveClientHandlers; client: LiveAcpClient };
@@ -535,6 +536,7 @@ describe('stdio targets (#121)', () => {
       command: ' node ',
       args: ' x  y ',
       workspace: { kind: 'local-directory', path: '/w' },
+      mcpServerIds: [],
     };
     saveProfiles([p]);
     const stubs = installStubClients();
@@ -567,6 +569,7 @@ describe('stdio targets (#121)', () => {
       command: 'node',
       args: '',
       workspace: { kind: 'none' },
+      mcpServerIds: [],
     };
     seedProfileSlots([p]);
     const slot = usePanda.getState().connections['s2']!;

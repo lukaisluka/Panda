@@ -41,6 +41,7 @@ const profile = (overrides: Partial<AgentProfile> = {}): AgentProfile => ({
   kind: 'websocket',
   url: 'ws://localhost:8765/acp',
   workspace: { kind: 'local-directory', path: '/tmp/project' },
+  mcpServerIds: [],
   ...overrides,
 } as AgentProfile);
 
@@ -51,6 +52,7 @@ const stdioProfile = (overrides: Partial<AgentProfile> = {}): AgentProfile => ({
   command: 'node',
   args: 'agent.js --stdio',
   workspace: { kind: 'local-directory', path: '/tmp/project' },
+  mcpServerIds: [],
   ...overrides,
 } as AgentProfile);
 
@@ -130,9 +132,9 @@ describe('loadProfiles', () => {
     const legacy = { id: 'legacy-1', name: '旧配置', url: 'ws://old:8765/acp', workspace: workspaces.local() };
     storage.setRaw(JSON.stringify([legacy]));
     const loaded = loadProfiles(storage);
-    expect(loaded).toEqual([{ ...legacy, kind: 'websocket' }]);
+    expect(loaded).toEqual([{ ...legacy, kind: 'websocket', mcpServerIds: [] }]);
     // The upgrade is written back once — a second load is a plain round-trip.
-    expect(JSON.parse(String(storage.raw))).toEqual([{ ...legacy, kind: 'websocket' }]);
+    expect(JSON.parse(String(storage.raw))).toEqual([{ ...legacy, kind: 'websocket', mcpServerIds: [] }]);
     expect(loadProfiles(storage)).toEqual(loaded);
   });
 
@@ -158,7 +160,7 @@ describe('loadProfiles', () => {
       JSON.stringify([{ id: 'a', name: 'A', kind: 'stdio', command: 'node', workspace: workspaces.none() }]),
     );
     expect(loadProfiles(storage)).toEqual([
-      { id: 'a', name: 'A', kind: 'stdio', command: 'node', args: '', workspace: workspaces.none() },
+      { id: 'a', name: 'A', kind: 'stdio', command: 'node', args: '', workspace: workspaces.none(), mcpServerIds: [] },
     ]);
   });
 });
@@ -263,5 +265,38 @@ describe('subscribeProfiles', () => {
     saveProfiles([profile()], storage);
 
     expect(seen).toEqual([[a], [{ ...a, url: 'ws://new:1/acp', workspace: workspaces.none() }]]);
+  });
+});
+describe('mcpServerIds whitelist (#148)', () => {
+  it('reads pre-#148 entries (no field) as an empty whitelist', () => {
+    const storage = new MemoryStorage();
+    storage.setRaw(JSON.stringify([
+      { id: 'p1', name: 'Old', kind: 'websocket', url: 'ws://x/acp', workspace: workspaces.local() },
+    ]));
+    expect(loadProfiles(storage)[0]?.mcpServerIds).toEqual([]);
+  });
+
+  it('round-trips whitelisted ids', () => {
+    const storage = new MemoryStorage();
+    saveProfiles([profile({ mcpServerIds: ['s1', 's2'] })], storage);
+    expect(loadProfiles(storage)[0]?.mcpServerIds).toEqual(['s1', 's2']);
+  });
+
+  it('drops non-string and empty entries from a hand-edited whitelist', () => {
+    const storage = new MemoryStorage();
+    storage.setRaw(JSON.stringify([
+      { id: 'p1', name: 'Old', kind: 'websocket', url: 'ws://x/acp', workspace: workspaces.local(),
+        mcpServerIds: ['s1', 42, '', null, 's2'] },
+    ]));
+    expect(loadProfiles(storage)[0]?.mcpServerIds).toEqual(['s1', 's2']);
+  });
+
+  it('reads a non-array whitelist as empty, not as an error', () => {
+    const storage = new MemoryStorage();
+    storage.setRaw(JSON.stringify([
+      { id: 'p1', name: 'Old', kind: 'websocket', url: 'ws://x/acp', workspace: workspaces.local(),
+        mcpServerIds: 's1' },
+    ]));
+    expect(loadProfiles(storage)[0]?.mcpServerIds).toEqual([]);
   });
 });

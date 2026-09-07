@@ -25,7 +25,7 @@ import {
   type ProfileFieldPatch,
 } from './profiles';
 import { getStdioTransportFactory, splitArgs } from './acp/transport/stdioHost';
-import { loadMcpServers } from './mcpServers';
+import { loadMcpServers, mcpServersForProfile } from './mcpServers';
 import { cwdToWorkspace, workspaceToCwd, type Workspace } from './workspace';
 import { alwaysAskPolicy, type PermissionDecision, type PermissionPolicy } from './policy';
 
@@ -184,6 +184,13 @@ type LiveConnection = {
   /** Profile targeted by the in-flight connect — consumed on success (write-back). */
   pendingProfile: { id: string; target: LiveTarget; workspace: Workspace } | null;
   /**
+   * The profile this entry connected as (#148): the MCP whitelist is read
+   * through it at every session establishment, so checklist edits apply to
+   * the next session, like server-definition edits. Null on custom-address
+   * direct connections — they carry no MCP.
+   */
+  profileId: string | null;
+  /**
    * The target the entry last connected with (issue #121) — the reconnect
    * flow's source of truth. A stdio endpoint string (`stdio: cmd args`) never
    * parses back into command/args, so the target itself is remembered here;
@@ -250,6 +257,7 @@ function ensureEntry(connectionId: string): LiveConnection {
     port: connectionStorePort(connectionId),
     stagedSwitch: null,
     pendingProfile: null,
+    profileId: null,
     lastTarget: null,
   };
   const factory =
@@ -260,8 +268,14 @@ function ensureEntry(connectionId: string): LiveConnection {
         policy: bindPolicyToConnection(connectionId),
         // The real MCP source (issue #71): read fresh at every session
         // establishment, so config edits apply to the next session. Injected
-        // as a provider — the client itself stays storage-free.
-        mcpServers: loadMcpServers,
+        // as a provider — the client itself stays storage-free. Since #148
+        // the read is filtered through the connecting profile's whitelist
+        // (direct connections: none).
+        mcpServers: () =>
+          mcpServersForProfile(
+            loadMcpServers(),
+            entry.profileId === null ? null : loadProfiles().find((profile) => profile.id === entry.profileId),
+          ),
       }));
   entry.client = factory(wireHandlers(entry));
   liveConnections.set(connectionId, entry);
@@ -464,6 +478,7 @@ export async function connectLiveConnection(
   remember(CWD_KEY, cwd);
   const entry = ensureEntry(connectionId);
   entry.lastTarget = normalizedTarget;
+  entry.profileId = opts?.profileId ?? null;
   entry.pendingProfile = opts?.profileId
     ? { id: opts.profileId, target: normalizedTarget, workspace: normalizedWorkspace }
     : null;

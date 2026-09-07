@@ -410,6 +410,19 @@ export const messages = {
     en: 'Endpoint and workspace changes apply on the next connection.',
     zh: '端点与工作区的修改在下一次连接时生效。',
   },
+  'settings.profileMcpGroup': { en: 'MCP servers', zh: 'MCP 服务器' },
+  'settings.profileMcpDesc': {
+    en: 'Checked servers ride this agent\'s sessions; unchecked ones stay off it.',
+    zh: '勾选的服务器随该 agent 的会话加载,未勾选的不加载。',
+  },
+  'settings.profileMcpEmpty': {
+    en: 'No MCP servers configured yet — add them on the MCP page.',
+    zh: '还没有配置 MCP 服务器——可在 MCP 分区添加。',
+  },
+  'settings.deleteMcpConfirmUsed': {
+    en: 'Delete MCP server “{name}”? {n} agent profile(s) include it.',
+    zh: '删除 MCP 服务器「{name}」?有 {n} 个 agent 配置正在使用它。',
+  },
   'settings.nameRequired': { en: 'Profile name is required', zh: '配置名称不能为空' },
   'settings.endpointRequired': { en: 'Endpoint is required', zh: '端点地址不能为空' },
   'settings.pathRequired': { en: 'A local directory needs a path', zh: '本机文件夹需要路径' },
