@@ -14,6 +14,13 @@ import { parseDevPage } from './routes';
 // Earliest possible (#105): the ring must catch startup errors too.
 installConsoleTap();
 
+// Desktop host boot (#125): the dynamic import keeps this module (and
+// @tauri-apps/api with it) out of the browser bundle — the chunk only loads
+// inside the Tauri shell, where it registers the stdio transport factory.
+if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+  void import('./desktop/boot').then((m) => m.bootDesktop());
+}
+
 const root = createRoot(document.getElementById('root')!);
 
 /** Runtime theme switch (#32 Phase 4): storage is the single source of truth

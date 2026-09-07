@@ -1,0 +1,26 @@
+<!doctype html>
+<!--
+  Desktop-shell acceptance harness (dev-only, issue #125).
+
+  A standalone vite page — not part of the app bundle — that runs the REAL
+  production stdio path inside the real WKWebView: boot.ts factory
+  registration → the factory call liveConnections makes → StdioTransport →
+  Tauri IPC → the Rust process plane → a live test-agent child. Progress and
+  verdict surface through document.title (readable via the window list),
+  localStorage key `panda.acceptance`, and this page's body.
+
+  Launch: point tauri.conf.json devUrl at
+  /desktop-acceptance.html?agent=<abs path to test-agent>
+  (sandbox/state default to /tmp/panda-desktop-accept[-state]; the harness
+  does not clean them — the outer shell harness controls seeding oracles).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>panda-acceptance:idle</title>
+  </head>
+  <body style="font: 12px/1.5 ui-monospace, monospace; padding: 12px; white-space: pre-wrap">
+    <pre id="log"></pre>
+    <script type="module" src="/src/desktop-acceptance.ts"></script>
+  </body>
+</html>

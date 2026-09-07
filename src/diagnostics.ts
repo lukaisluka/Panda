@@ -81,6 +81,9 @@ export interface DiagnosticsEnv {
   url: string;
   locale: string;
   userAgent: string;
+  /** Host the app is running in (#125): 'desktop' inside the Tauri shell
+   * (stdio agents available), 'browser' everywhere else. */
+  host: 'browser' | 'desktop';
 }
 
 function defaultEnv(): DiagnosticsEnv {
@@ -92,7 +95,13 @@ function defaultEnv(): DiagnosticsEnv {
     url: typeof location !== 'undefined' ? location.href : '(unavailable)',
     locale: nav?.language ?? '(unavailable)',
     userAgent: nav?.userAgent ?? '(unavailable)',
+    host: desktopHost() ? 'desktop' : 'browser',
   };
+}
+
+/** True only inside the Tauri shell — the same probe main.tsx boots from. */
+export function desktopHost(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
 export interface DiagnosticsInput {
@@ -116,6 +125,7 @@ export function buildDiagnostics(input: DiagnosticsInput = {}): string {
     `- url: ${env.url}`,
     `- locale: ${env.locale}`,
     `- userAgent: ${env.userAgent}`,
+    `- host: ${env.host}`,
   ];
 
   if (input.error !== undefined) {
