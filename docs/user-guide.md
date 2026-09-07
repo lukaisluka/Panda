@@ -6,9 +6,9 @@ Panda 是一个 ACP（Agent Client Protocol）通用客户端：连接任何说 
 
 三种获取方式，按需取用：
 
-**网页版（零安装）**：打开 <https://lukaisluka.github.io/Panda/>，浏览器里直接用。除桌面版独有的 stdio 直连外功能全部一致，数据（Agent 配置、端点记忆的会话列表、语言偏好）存在浏览器 localStorage 里。
+**网页版（零安装，推荐）**：打开 <https://lukaisluka.github.io/Panda/>，浏览器里直接用。除桌面版独有的 stdio 直连外功能全部一致，数据（Agent 配置、端点记忆的会话列表、语言偏好）存在浏览器 localStorage 里。
 
-**桌面版（macOS / Windows）**：从 [GitHub Releases](https://github.com/lukaisluka/Panda/releases) 下载——
+**桌面版（macOS / Windows，beta）**：从 [GitHub Releases](https://github.com/lukaisluka/Panda/releases) 下载。桌面版功能可用（与网页版同一套界面与协议栈，另加 stdio 直连），但**尚未经过专门的组织化测试**，当前以 beta 对待——日常使用推荐网页版——
 
 - macOS：`Panda_<版本>_aarch64.dmg`
 - Windows：`Panda_<版本>_x64-setup.exe`（安装版），或 `Panda_<版本>_x64-portable.zip`（免安装，解压即用；两者是同一个应用，用户数据都在系统用户目录，不随 exe 走）
@@ -34,7 +34,7 @@ pnpm dev            # http://127.0.0.1:5173
 
 ### 端点约定
 
-Panda 连接的远程端点必须满足：**WebSocket，一条 text 帧承载一条 JSON-RPC 消息**。这是官方 TypeScript SDK、ACP remote-transport 草案与主流 bridge 共同遵守的约定。（桌面版还能直连本地 stdio agent，见「桌面版：直连 stdio agent」。）
+Panda 连接的远程端点必须满足：**WebSocket，一条 text 帧承载一条 JSON-RPC 消息**。这是官方 TypeScript SDK、ACP remote-transport 草案与主流 bridge 共同遵守的约定。（桌面版还能直连本地 stdio agent，见「桌面版（beta）：直连 stdio agent」。）
 
 ### 评估起步：本仓库的 mock agent（需从源码运行）
 
@@ -61,9 +61,9 @@ mock agent 声明了全部会话能力（list / load / resume / delete）和图�
 
 **工作目录（cwd）的含义**：它随 `session/new` 发给服务端，由**服务端**解释。对远程服务，这是远端机器上的路径，不是你本机的路径。
 
-### 桌面版：直连 stdio agent
+### 桌面版（beta）：直连 stdio agent
 
-桌面壳（macOS dmg / Windows 安装包或免安装 zip）多一种连接类型：**stdio**——Panda 直接在你本机 spawn 一条命令，用 NDJSON 行协议对话，不需要任何 bridge。
+桌面壳（macOS dmg / Windows 安装包或免安装 zip）多一种连接类型：**stdio**——Panda 直接在你本机 spawn 一条命令，用 NDJSON 行协议对话，不需要任何 bridge。这是桌面版独有的能力；桌面版当前为 beta（见第 1 节），日常使用推荐网页版。
 
 1. 设置 → Agent profiles → 新建，连接类型选 **stdio**
 2. 填命令与参数，例如一个本地 ACP agent 的启动命令：命令 `npx`，参数 `some-acp-agent --mode stdio`（参数按空格拆分，含空格的值暂不支持加引号转义）

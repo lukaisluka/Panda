@@ -36,7 +36,7 @@ and a macOS/Windows desktop shell with stdio support.
   server list.
 - **Offline demo replay** — the same UI driven by a scripted agent,
   including an 80-turn long scenario (`?demo=long`).
-- **Desktop shell** — Tauri v2 shell (macOS dmg, Windows NSIS installer and
+- **Desktop shell (beta)** — Tauri v2 shell (macOS dmg, Windows NSIS installer and
   portable zip) hosting the same UI plus a local stdio process plane:
   spawn/write/kill with SIGTERM→SIGKILL lifecycle, no orphan processes,
   base64-chunk pipe streaming; `@tauri-apps/api` stays out of the browser

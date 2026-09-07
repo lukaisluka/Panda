@@ -6,6 +6,11 @@ The product is the webview; this executable exists only for that process
 plane (ADR
 [0007](../docs/adr/0007-desktop-shell-and-stdio-transport.md)).
 
+Status: the shell ships as **beta** — its stdio path is covered by the
+in-shell acceptance harness below, but it has not been through organized
+release testing. User-facing docs recommend the web version for day-to-day
+use; revisit this when a proper test pass happens.
+
 ## Commands
 
 ```sh
