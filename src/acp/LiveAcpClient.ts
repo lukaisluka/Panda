@@ -563,6 +563,14 @@ export class LiveAcpClient {
       notifyUser('error', t('acp.notice.notConnected'));
       return;
     }
+    if (this.pendingPrompt) {
+      // Same guard as loadSession (bug hunt #3): adopting session B while
+      // session A's turn is in flight would strand A — its updates get
+      // filtered by the foreign-session filter and it never settles.
+      console.warn('[panda/acp] newSession ignored: a turn is still in flight');
+      notifyUser('error', t('acp.notice.busy'));
+      return;
+    }
     if (this.sessionSwitch) {
       console.warn('[panda/acp] newSession ignored: a session switch is still in flight');
       notifyUser('error', t('acp.notice.busy'));

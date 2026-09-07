@@ -33,6 +33,17 @@
   border-color: var(--color-accent);
 }
 
+/* Bug hunt #3: a mid-turn agent is a dead end for session/new — visibly
+ * disabled instead of a click that does nothing. */
+.nsd-agent:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.nsd-agent:disabled:hover {
+  border-color: var(--color-border);
+}
+
 .nsd-agent-status {
   display: flex;
   align-items: center;

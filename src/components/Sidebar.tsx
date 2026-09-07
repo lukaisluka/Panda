@@ -418,20 +418,23 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
             {lifecycle.error}
           </p>
           <div className="sidebar-conn-error-actions">
+            {/* Row-level actions name their slot (bug hunt #1): reconnecting
+                THIS errored connection must never tear down the healthy
+                foreground one. */}
             {canResume && (
               <Button
                 variant="primary"
                 size="sm"
                 label={t('side.resume')}
                 tooltip={t('side.resumeTooltip')}
-                clickAction={() => live.reconnectForeground({ resume: true })}
+                clickAction={() => live.reconnectForeground({ connectionId, resume: true })}
               />
             )}
             <Button
               variant={canResume ? 'secondary' : 'primary'}
               size="sm"
               label={t('side.reconnect')}
-              clickAction={() => live.reconnectForeground()}
+              clickAction={() => live.reconnectForeground({ connectionId })}
             />
           </div>
         </div>

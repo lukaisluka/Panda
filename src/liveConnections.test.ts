@@ -13,6 +13,7 @@ import {
   newLiveSession,
   openLiveSession,
   persistSessionsSnapshot,
+  reconnectLiveConnection,
   removeLiveConnection,
   restoreEndpointSessions,
   seedProfileSlots,
@@ -188,6 +189,56 @@ describe('parallel connections (issue #21)', () => {
     foregroundConnection('ghost');
     expect(usePanda.getState().activeConnectionId).toBeNull();
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('unknown connection "ghost"'));
+  });
+});
+
+describe('row-level action routing (bug hunt #1/#5)', () => {
+  it('#1 错误块重连只拨本 slot:后台 error 的 agent-b 重连,前台健康的 agent-a 不被拆', async () => {
+    const stubs = installStubClients();
+    await connectedStub('agent-a', stubs, 's-a');
+    await connectedStub('agent-b', stubs, 's-b');
+    foregroundConnection('agent-a'); // a 是前台;b 即将转入后台错误
+
+    stubs[1]!.handlers.onDisconnected('boom'); // b: error, sessionId 保留
+
+    reconnectLiveConnection('agent-b');
+
+    expect(stubs[1]!.client.connect).toHaveBeenCalledTimes(2); // b 重拨
+    expect(stubs[0]!.client.connect).toHaveBeenCalledTimes(1); // a 从未被重拨
+    expect(stubs[0]!.client.disconnect).not.toHaveBeenCalled(); // 健康前台未被错杀
+  });
+
+  it('#1 resume 重连保留会话指针,且前台为空时行级重连仍可达', async () => {
+    const stubs = installStubClients();
+    await connectedStub('agent-a', stubs, 's-a');
+    stubs[0]!.handlers.onDisconnected('boom');
+    usePanda.setState({ activeConnectionId: null }); // 前台为空:旧按钮是死点
+
+    reconnectLiveConnection('agent-a', { resume: true });
+
+    expect(stubs[0]!.client.connect).toHaveBeenCalledTimes(2);
+    expect(usePanda.getState().connections['agent-a']!.connection.sessionId).toBe('s-a');
+  });
+
+  it('#5 行级 newSession 建在点中的连接上,前台跟随它', async () => {
+    const stubs = installStubClients();
+    await connectedStub('agent-a', stubs, 's-a');
+    await connectedStub('agent-b', stubs, 's-b');
+    foregroundConnection('agent-a'); // 点 b 的行时 a 是前台
+
+    await newLiveSession('/agent-b', 'agent-b');
+
+    expect(stubs[1]!.client.newSession).toHaveBeenCalledWith('/agent-b');
+    expect(stubs[0]!.client.newSession).not.toHaveBeenCalled(); // 没建在 a 上
+    expect(usePanda.getState().activeConnectionId).toBe('agent-b'); // 用户落在 b
+  });
+
+  it('#5 显式目标没有连接时大声跳过', async () => {
+    const stubs = installStubClients();
+    await connectedStub('agent-a', stubs, 's-a');
+    await newLiveSession('/x', 'ghost');
+    expect(stubs[0]!.client.newSession).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledWith('[panda/acp] newSession ignored: no live connection "ghost"');
   });
 });
 

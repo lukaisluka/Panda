@@ -9,7 +9,7 @@ import { Spinner } from '@astryxdesign/core/Spinner';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { usePanda } from '../store';
-import { connectionPhase, isLinkUp, type ConnectionPhase } from '../projector/connectionLifecycle';
+import { connectionLifecycle, connectionPhase, isLinkUp, type ConnectionPhase } from '../projector/connectionLifecycle';
 import { lastConnectionDefaults } from '../liveConnections';
 import type { AgentProfile } from '../profiles';
 import { profileEndpoint } from '../profiles';
@@ -53,6 +53,17 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
     ),
   );
   const cwds = usePanda(useShallow((s) => profiles.map((profile) => s.connections[profile.id]?.connection.cwd ?? null)));
+  // Mid-turn busy per profile (bug hunt #3): creating a session while the
+  // agent's turn runs would strand it — same guard as loadSession, surfaced
+  // here as a disabled row. Flat primitives, same shallow-stability reason.
+  const busys = usePanda(
+    useShallow((s) =>
+      profiles.map((profile) => {
+        const slot = s.connections[profile.id];
+        return slot ? connectionLifecycle(slot).busy : false;
+      }),
+    ),
+  );
 
   const [customUrl, setCustomUrl] = useState(() => lastConnectionDefaults().url);
   const [customWorkspace, setCustomWorkspace] = useState<Workspace>(() => lastConnectionDefaults().workspace);
@@ -85,20 +96,26 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
           {profiles.map((profile, index) => {
             const phase = phases[index] ?? 'disconnected';
             const cwd = cwds[index] ?? null;
+            const action = nsdRowAction({ phase, cwd, busy: busys[index] ?? false });
             return (
               <button
                 key={profile.id}
                 type="button"
                 className="nsd-agent"
+                disabled={action === 'blocked'}
                 onClick={() =>
                   start(() =>
-                    isLinkUp(phase) && cwd ? live.newSession(cwd) : live.connectProfile(profile),
+                    action === 'new'
+                      ? live.newSession(cwd ?? '/', profile.id)
+                      : live.connectProfile(profile),
                   )
                 }
                 title={
-                  isLinkUp(phase)
-                    ? t('nsd.newIn', { name: profile.name })
-                    : t('nsd.connect', { name: profile.name, url: profileEndpoint(profile) })
+                  action === 'blocked'
+                    ? t('nsd.busy')
+                    : action === 'new'
+                      ? t('nsd.newIn', { name: profile.name })
+                      : t('nsd.connect', { name: profile.name, url: profileEndpoint(profile) })
                 }
               >
                 <span className="nsd-agent-status">
@@ -216,4 +233,19 @@ export function customEndpointErrors(draft: { url: string; workspace: Workspace 
   if (!draft.url.trim()) errors.url = t('nsd.endpointRequired');
   if (draft.workspace.kind === 'local-directory' && !draft.workspace.path.trim()) errors.path = t('nsd.pathRequired');
   return errors;
+}
+
+/**
+ * What clicking one agent row does (unit-tested): `new` starts a session on
+ * the named connection, `connect` dials it first, `blocked` refuses — a
+ * mid-turn (or mid-switch) connection must not adopt a new session while
+ * its current one is unsettled (bug hunt #3).
+ */
+export function nsdRowAction(input: {
+  phase: ConnectionPhase;
+  cwd: string | null;
+  busy: boolean;
+}): 'new' | 'connect' | 'blocked' {
+  if (isLinkUp(input.phase) && input.cwd) return input.busy ? 'blocked' : 'new';
+  return 'connect';
 }
