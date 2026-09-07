@@ -50,6 +50,39 @@ export function serializeMcpServers(servers: readonly McpServerConfig[], format:
   return { text: format === 'json' ? `${JSON.stringify(doc, null, 2)}\n` : stringifyYaml(doc), renames };
 }
 
+/** What a server still is when its name changed: transport plus address.
+ * stdio's args are deliberately outside the identity — editing a server's
+ * args in the text view must not cost it the id (and the profile whitelists
+ * that reference it, #148). */
+function serverIdentity(server: McpServerConfig): string {
+  return server.type === 'stdio'
+    ? `stdio\0${server.command}`
+    : `${server.type}\0${server.url}`;
+}
+
+/** Rebinds parsed servers to existing ids (#12): parseMcpConfigText mints a
+ * fresh id per entry, so saving the text view used to replace the whole list
+ * and silently cut every profile whitelist (#148) — even for a no-op
+ * reformat. Survivors are matched same-name first (the text format's primary
+ * key — the map slot), then same transport+address (a rename); each existing
+ * id binds at most once, document order breaking ties. Unmatched entries
+ * keep their fresh ids: they are genuinely new servers. */
+export function rebindServerIds(
+  servers: readonly McpServerConfig[],
+  existing: readonly McpServerConfig[],
+): McpServerConfig[] {
+  const taken = new Set<string>();
+  const byName = new Map(existing.map((server) => [server.name, server]));
+  const byIdentity = new Map(existing.map((server) => [serverIdentity(server), server]));
+  return servers.map((server) => {
+    const prev = [byName.get(server.name), byIdentity.get(serverIdentity(server))]
+      .find((candidate) => candidate !== undefined && !taken.has(candidate.id));
+    if (prev === undefined) return server;
+    taken.add(prev.id);
+    return { ...server, id: prev.id };
+  });
+}
+
 /** Why an entry could not become a server — UI maps these to i18n strings. */
 export type McpSkipReason =
   | 'missing-name' // array entry without a name

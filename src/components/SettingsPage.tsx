@@ -23,7 +23,7 @@ import {
   subscribeMcpServers,
   type McpServerConfig,
 } from '../mcpServers';
-import { parseMcpConfigText, serializeMcpServers, type McpSkipReason, type McpTextFormat } from '../mcpText';
+import { parseMcpConfigText, rebindServerIds, serializeMcpServers, type McpSkipReason, type McpTextFormat } from '../mcpText';
 import { desktopHost, summarizeUserAgent } from '../diagnostics';
 import { navigate } from '../routes';
 import { isThemeId, loadThemeId, saveThemeId, subscribeTheme, THEMES, EXPOSED_THEME_IDS } from '../theme';
@@ -500,7 +500,8 @@ function McpSection() {
           onCancel={() => setCreating(false)}
           onTextConfig={enterTextView}
           onSave={(server) => {
-            saveMcpServers([...loadMcpServers(), server]);
+            // #18: a rejected write surfaces, not silently lost until reload.
+            if (!saveMcpServers([...loadMcpServers(), server])) notifyUser('error', t('settings.notice.saveFailed'));
             setCreating(false);
           }}
         />
@@ -520,7 +521,9 @@ function McpSection() {
                 onCancel={() => setEditingId(null)}
                 onTextConfig={enterTextView}
                 onSave={(fields) => {
-                  saveMcpServers(loadMcpServers().map((entry) => (entry.id === server.id ? fields : entry)));
+                  if (!saveMcpServers(loadMcpServers().map((entry) => (entry.id === server.id ? fields : entry)))) {
+                    notifyUser('error', t('settings.notice.saveFailed'));
+                  }
                   setEditingId(null);
                 }}
               />
@@ -569,7 +572,9 @@ function McpSection() {
                         actionLabel: t('settings.deleteMcp'),
                         actionVariant: 'destructive',
                         onAction: () => {
-                          saveMcpServers(loadMcpServers().filter((entry) => entry.id !== server.id));
+                          if (!saveMcpServers(loadMcpServers().filter((entry) => entry.id !== server.id))) {
+                            notifyUser('error', t('settings.notice.saveFailed'));
+                          }
                           if (editingId === server.id) setEditingId(null);
                           deleteAlert.hide();
                         },
@@ -641,7 +646,14 @@ function McpTextEditor({ servers, onDone }: {
 
   const save = () => {
     if (parsed.error !== null) return;
-    saveMcpServers(parsed.servers);
+    // #12: the parser minted fresh ids — rebind survivors to their existing
+    // ids so profile whitelists (#148) survive the text round-trip. A failed
+    // write stays HERE (#18): the text exists nowhere else, closing would
+    // silently eat the user's edit.
+    if (!saveMcpServers(rebindServerIds(parsed.servers, servers))) {
+      notifyUser('error', t('settings.notice.saveFailed'));
+      return;
+    }
     // With warnings (skipped/renamed/dropped) stay here and show the
     // details; otherwise the edit is done.
     if (parsed.skipped.length > 0 || parsed.renames.length > 0 || parsed.droppedFields.length > 0) {

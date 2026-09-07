@@ -90,14 +90,20 @@ export function loadMcpServers(storage: McpServerStorage = defaultStorage()): Mc
   }
 }
 
-/** Persists the full list; failures warn but never throw. */
-export function saveMcpServers(servers: McpServerConfig[], storage: McpServerStorage = defaultStorage()): void {
+/** Persists the whole list. Returns false when storage rejected the write —
+ * callers surface it (#18, same #160 contract as saveProfiles); a silently
+ * lost 配置 is indistinguishable from success until the next reload. On
+ * failure listeners are NOT notified: they still mirror the last-good list,
+ * which is exactly what storage holds too. */
+export function saveMcpServers(servers: McpServerConfig[], storage: McpServerStorage = defaultStorage()): boolean {
   try {
     storage.setItem(MCP_KEY, JSON.stringify(servers));
   } catch (err) {
     console.warn('[panda/mcp] could not persist MCP server config', err);
+    return false;
   }
   notifyMcpServers(storage);
+  return true;
 }
 
 export function newMcpServerId(): string {

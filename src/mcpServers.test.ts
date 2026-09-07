@@ -16,6 +16,16 @@ function memoryStorage(initial: Record<string, string> = {}): McpServerStorage {
   };
 }
 
+/** setItem always rejects — the quota-exceeded / private-mode storage shape. */
+function failingStorage(): McpServerStorage {
+  return {
+    getItem: () => null,
+    setItem: () => {
+      throw new DOMException('QuotaExceededError', 'QuotaExceededError');
+    },
+  };
+}
+
 describe('mcpServers storage (issue #71)', () => {
   it('loads empty when nothing is stored', () => {
     expect(loadMcpServers(memoryStorage())).toEqual([]);
@@ -77,6 +87,24 @@ describe('mcpServers storage (issue #71)', () => {
     saveMcpServers([], memoryStorage());
     unsubscribe();
     expect(lengths).toEqual([1, 0]);
+  });
+
+  it('saveMcpServers reports rejected writes and does not notify on them (#18)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const notified: number[] = [];
+    const unsubscribe = subscribeMcpServers((servers) => notified.push(servers.length));
+    try {
+      expect(saveMcpServers([{ id: 'a', name: 'fs', type: 'stdio', command: 'x', args: '' }], failingStorage())).toBe(false);
+      expect(warn).toHaveBeenCalledTimes(1);
+
+      expect(saveMcpServers([{ id: 'a', name: 'fs', type: 'stdio', command: 'x', args: '' }], memoryStorage())).toBe(true);
+    } finally {
+      warn.mockRestore();
+      unsubscribe();
+    }
+    // Only the successful save fired — a failed write changed neither
+    // storage nor the subscribed copies, so there is nothing to announce.
+    expect(notified).toEqual([1]);
   });
 });
 
