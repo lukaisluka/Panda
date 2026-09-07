@@ -1,0 +1,96 @@
+name: Desktop
+
+# Desktop shell artifacts (#127): macOS dmg + Windows NSIS installer and a
+# portable zip (the bare exe from `tauri build --no-bundle`). Manual runs on
+# dispatch; tag pushes additionally attach everything to a GitHub Release.
+# Artifacts are unsigned (a deliberate scope decision) — SmartScreen and
+# first-run Gatekeeper prompts are expected.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write # tag runs attach release assets
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest # arm64 runner -> aarch64 dmg
+          - os: windows-latest # NSIS setup.exe + portable exe zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # 与 ci.yml 同一约束:仓库无 packageManager 字段,须显式指定版本
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      # e2e 依赖 node:sqlite 无 flag 可用,固着 Node 24(与本地开发一致)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # 与浏览器 CI 同门槛:壳产物必须先过全量测试再打包
+      - run: pnpm typecheck
+      - run: pnpm --filter panda-test-agent typecheck
+      - run: pnpm test
+      - run: pnpm --filter panda-test-agent test
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      - name: Build bundled artifacts (dmg / NSIS)
+        run: pnpm desktop:build
+
+      # Portable = the bare exe; Windows users who cannot run installers get
+      # the same binary the NSIS package lays down, zipped.
+      - name: Build portable exe (Windows)
+        if: runner.os == 'Windows'
+        run: pnpm --filter panda-desktop exec tauri build --no-bundle
+
+      - name: Collect artifacts (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          VER=$(jq -r .version desktop/src-tauri/tauri.conf.json)
+          DIR="$RUNNER_TEMP/artifacts"
+          mkdir -p "$DIR"
+          mv "desktop/src-tauri/target/release/bundle/dmg/Panda_${VER}_aarch64.dmg" "$DIR/"
+          echo "ARTIFACTS=$DIR" >> "$GITHUB_ENV"
+
+      - name: Collect artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ver = (Get-Content desktop/src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $dir = "$env:RUNNER_TEMP/artifacts"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Move-Item "desktop/src-tauri/target/release/bundle/nsis/Panda_${ver}_x64-setup.exe" $dir
+          Compress-Archive -Path "desktop/src-tauri/target/release/panda-desktop.exe" -DestinationPath "$dir/Panda_${ver}_x64-portable.zip"
+          "ARTIFACTS=$dir" >> $env:GITHUB_ENV
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: panda-desktop-${{ runner.os }}
+          path: ${{ env.ARTIFACTS }}/*
+          if-no-files-found: error
+
+      - name: Attach release assets (tag builds)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ARTIFACTS }}/*

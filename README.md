@@ -77,10 +77,18 @@ shell's `devUrl` pins port 5173, and on macOS Node resolves `localhost`
 IPv6-only while WKWebView looks IPv4-first — a drifting port or a `::1`-only
 listener leaves the shell window blank.
 
+Release artifacts build in [`.github/workflows/desktop.yml`](.github/workflows/desktop.yml)
+(manual dispatch, or automatically on `v*` tags): `Panda_<ver>_aarch64.dmg`,
+`Panda_<ver>_x64-setup.exe` (NSIS), `Panda_<ver>_x64-portable.zip` (the bare
+exe — same app, data stays in the per-user data directory, it does not travel
+with the exe). Windows needs WebView2 (preinstalled on Windows 11 and updated
+Windows 10; the installer downloads the bootstrapper when missing). Artifacts
+are unsigned: SmartScreen / first-run Gatekeeper prompts are expected.
+
 ## Roadmap
 
-- **Done** — live ACP client, session lifecycle & recovery, image sending, diff polish, virtualized streams, saved agent profiles (one active connection, [ADR 0001](docs/adr/0001-single-active-connection.md)), [user guide](docs/user-guide.md), CI + [live deployment](https://lukaisluka.github.io/Panda/), stdio transport + macOS desktop shell
-- **Later** — Windows CI artifacts (installer + portable)
+- **Done** — live ACP client, session lifecycle & recovery, image sending, diff polish, virtualized streams, saved agent profiles (one active connection, [ADR 0001](docs/adr/0001-single-active-connection.md)), [user guide](docs/user-guide.md), CI + [live deployment](https://lukaisluka.github.io/Panda/), stdio transport + desktop shell with dual-platform CI artifacts (macOS dmg, Windows installer & portable zip — unsigned, [ADR 0007](docs/adr/0007-desktop-shell-and-stdio-transport.md))
+- **Later** — code signing / auto-update for desktop artifacts
 
 Consciously out of scope: *terminal* tool content — in v1 that means the client executes commands on the agent's behalf, which a browser chat client doesn't declare; Panda skips such blocks with a warning.
 
