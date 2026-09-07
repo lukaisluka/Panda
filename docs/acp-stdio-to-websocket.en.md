@@ -64,6 +64,13 @@ wss.on('connection', (socket) => {
   const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'inherit'] }); // stderr passthrough
   log(`connection in: started ${command} (pid ${child.pid})`);
 
+  // Frames still in flight after the child died EPIPE on write; without an
+  // error handler on stdin the async EPIPE becomes an unhandled 'error'
+  // event and takes down the whole bridge — healthy connections included.
+  child.stdin.on('error', (err) => {
+    if (err.code !== 'EPIPE') log(`stdin write failed: ${err}`);
+  });
+
   socket.on('message', (data, isBinary) => {
     if (!isBinary && child.stdin && !child.stdin.destroyed) {
       child.stdin.write(`${data.toString('utf8')}\n`); // frame → line

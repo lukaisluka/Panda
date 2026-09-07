@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::engine::Engine as _;
@@ -213,10 +213,68 @@ async fn stdio_kill(table: tauri::State<'_, ProcTable>, id: u32) -> Result<(), S
     }
 }
 
+/// Sweeps every tracked child (#7): drops the stdin handle (EOF — a
+/// well-behaved stdio agent exits itself on a closed stdin) and arms the
+/// graceful kill (SIGTERM -> 3s -> SIGKILL via the exit watcher). Used on app
+/// exit and on webview (re)load; returns how many children were swept.
+fn sweep_orphans(table: &ProcTable) -> usize {
+    let procs = table.procs.lock().unwrap();
+    let count = procs.len();
+    for entry in procs.values() {
+        // try_lock: the only writer competition is a stdio_write already in
+        // flight — losing the race just means this child gets no EOF, the
+        // kill below still terminates it.
+        if let Ok(mut stdin) = entry.stdin.try_lock() {
+            *stdin = None;
+        }
+        entry.kill.notify_one();
+    }
+    count
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(ProcTable::default())
         .invoke_handler(tauri::generate_handler![stdio_spawn, stdio_write, stdio_kill])
-        .run(tauri::generate_context!())
-        .expect("panda desktop shell failed to start");
+        // Webview (re)load sweep (#7): a reload destroys the JS state that
+        // owned these children — nobody will ever read their stdout again,
+        // and without this they linger forever (a reconnect then races a
+        // second agent over the same workspace). First boot hits an empty
+        // table — a no-op.
+        .on_page_load(|webview, payload| {
+            if let tauri::webview::PageLoadEvent::Started = payload.event() {
+                let swept = sweep_orphans(&webview.state::<ProcTable>());
+                if swept > 0 {
+                    println!("[panda-desktop] page (re)load: sweeping {swept} orphaned agent process(es)");
+                }
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("panda desktop shell failed to start")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                // #7: tao ends its event loop with std::process::exit —
+                // destructors and the async runtime never run, so
+                // kill_on_drop is dead code here. Terminating the agents at
+                // Exit, synchronously waiting for the watchers, is the whole
+                // of docs/user-guide.md's「退出 Panda 时所有 agent 子进程
+                // 一并清理」promise.
+                let table = app.state::<ProcTable>();
+                let swept = sweep_orphans(&table);
+                if swept > 0 {
+                    println!("[panda-desktop] exiting: terminating {swept} agent process(es)");
+                    // 3s SIGTERM grace + margin; past the deadline the
+                    // watcher's SIGKILL is already armed — leaving beats
+                    // hanging the quit forever.
+                    let deadline = Instant::now() + Duration::from_secs(5);
+                    while !table.procs.lock().unwrap().is_empty() {
+                        if Instant::now() >= deadline {
+                            println!("[panda-desktop] exit sweep timed out with agent(s) still dying (SIGKILL armed)");
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_millis(25));
+                    }
+                }
+            }
+        });
 }
