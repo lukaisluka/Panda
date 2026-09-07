@@ -1290,6 +1290,33 @@ describe('LiveAcpClient', () => {
     h.closeAll();
   });
 
+  it('refuses a new session while a turn is still in flight (bug hunt #3)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let releaseTurn: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => (releaseTurn = resolve));
+    const h = await setup({
+      onPrompt: async (ctx) => {
+        await notifyUpdate(ctx, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'working' } });
+        await gate;
+        return { stopReason: 'end_turn' };
+      },
+    });
+    const turn = h.acpClient.send([{ type: 'text', text: 'still running' }]);
+    await waitFor(() => h.updates.length > 0);
+
+    await h.acpClient.newSession('/tmp/other'); // refused mid-turn
+
+    expect(warnSpy).toHaveBeenCalledWith('[panda/acp] newSession ignored: a turn is still in flight');
+    expect(h.agentState.newSessionParams).toHaveLength(1); // only connect's initial session/new
+    // The in-flight turn settles normally on its own session — nothing was
+    // stranded, no session/close was sent for it.
+    releaseTurn!();
+    await turn;
+    expect(h.agentState.closeRequests).toEqual([]);
+    warnSpy.mockRestore();
+    h.closeAll();
+  });
+
   it('routes session_info_update to onSessionInfo, not into the document stream', async () => {
     const onPrompt: PromptHandler = async (ctx) => {
       await notifyUpdate(ctx, { sessionUpdate: 'session_info_update', title: '重构 token 校验' });

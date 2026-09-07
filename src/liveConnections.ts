@@ -541,6 +541,61 @@ export function reconnectTargetFor(connectionId: string): LiveTarget | null {
   return profile ? profileToLiveTarget(profile) : null;
 }
 
+/** Reconnect tuning — form edits ride along; the target slot is named by the
+ * caller (bug hunt #1: an error block's buttons reconnect THAT slot, never
+ * the healthy foreground). */
+export type ReconnectOptions = {
+  /** The slot to reconnect; omitted means the foreground. */
+  connectionId?: string;
+  /** Resume the slot's retained session (transcript kept) instead of a fresh one. */
+  resume?: boolean;
+  /** Form-edited WEBSOCKET endpoint; omitted ones fall back to the remembered
+   * target. Ignored (loudly) for stdio targets — their command edits live in
+   * the settings editor. */
+  url?: string;
+  workspace?: Workspace;
+};
+
+/**
+ * Reconnects one slot by id. Everything the target remembers (endpoint,
+ * workspace) is reused unless overridden — same establishment chain as a
+ * fresh connect (`connectLiveConnection`).
+ */
+export function reconnectLiveConnection(
+  connectionId: string | null,
+  opts?: Omit<ReconnectOptions, 'connectionId'>,
+): void {
+  if (connectionId === null) {
+    console.warn('[panda/acp] reconnect ignored: no target connection');
+    return;
+  }
+  const state = usePanda.getState();
+  // A stdio endpoint string never parses back into command/args — the
+  // remembered target (or the profile, for offline-seeded slots) is the
+  // reconnect's source of truth (issue #121).
+  const remembered = reconnectTargetFor(connectionId);
+  if (!remembered) {
+    console.warn(`[panda/acp] reconnect ignored: slot "${connectionId}" has no remembered target`);
+    return;
+  }
+  const target: LiveTarget =
+    opts?.url !== undefined
+      ? remembered.kind === 'websocket'
+        ? { kind: 'websocket', url: opts.url.trim() || remembered.url }
+        : (console.warn('[panda/acp] reconnect ignored the url edit on a stdio target — edit the profile instead'), remembered)
+      : remembered;
+  // The slot remembers the derived cwd it last used; `/` reads back as
+  // 无工作区 (ADR 0005's accepted equivalence).
+  const slot = state.connections[connectionId];
+  const workspace = opts?.workspace ?? (slot?.connection.cwd != null ? cwdToWorkspace(slot.connection.cwd) : null);
+  if (!workspace) {
+    console.warn(`[panda/acp] reconnect ignored: slot "${connectionId}" has no remembered workspace`);
+    return;
+  }
+  const profileId = isDirectConnectionId(connectionId) ? null : connectionId;
+  void connectLiveConnection(connectionId, target, workspace, { resume: opts?.resume, profileId });
+}
+
 /**
  * Disconnects one connection. Profile slots are retained (历史可见、可重连);
  * a 临时直连 ends with its disconnect — slot, documents and all.
@@ -757,14 +812,23 @@ export function setLiveConfigOption(configId: string, value: string | boolean): 
   if (entry) void entry.client.setConfigOption(configId, value);
 }
 
-export async function newLiveSession(cwd: string): Promise<void> {
+export async function newLiveSession(cwd: string, connectionId?: string): Promise<void> {
   const trimmedCwd = cwd.trim();
   if (!trimmedCwd) {
     console.warn('[panda/acp] newSession ignored: cwd is required');
     return;
   }
-  const entry = foregroundEntry('newSession');
-  if (!entry) return;
+  // Row-level callers name their connection (bug hunt #5): the session is
+  // created on THAT agent and the foreground follows it — never on whatever
+  // connection happens to hold the foreground.
+  const entry = connectionId
+    ? liveConnections.get(connectionId) ?? null
+    : foregroundEntry('newSession');
+  if (!entry) {
+    if (connectionId) console.warn(`[panda/acp] newSession ignored: no live connection "${connectionId}"`);
+    return;
+  }
+  if (connectionId) foregroundConnection(connectionId);
   remember(CWD_KEY, trimmedCwd);
   // The new session adopts a fresh document; the old one is retained.
   await entry.client.newSession(trimmedCwd);

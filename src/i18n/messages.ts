@@ -189,6 +189,10 @@ export const messages = {
   'nsd.connectStart': { en: 'Connect & start', zh: '连接并开始' },
   'nsd.endpointRequired': { en: 'Endpoint is required', zh: '端点地址不能为空' },
   'nsd.pathRequired': { en: 'A local directory needs a path', zh: '本机文件夹需要路径' },
+  'nsd.busy': {
+    en: 'A turn is still running on this agent — let it finish before starting a new session',
+    zh: '这个 agent 还有轮次在跑,等它结束再新建会话',
+  },
 
   // ---- Sidebar ----
   'side.newSession': { en: 'New session', zh: '新建会话' },
