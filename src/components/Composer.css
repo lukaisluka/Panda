@@ -123,6 +123,13 @@
   gap: 8px;
 }
 
+/* Settings popover anchor (like the mode picker's root): the popover hugs
+ * its trigger button, so this wrapper — not the composer card — is its
+ * positioning context. */
+.composer-config-anchor {
+  position: relative;
+}
+
 .composer-file-input {
   display: none;
 }

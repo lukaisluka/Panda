@@ -125,9 +125,6 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
         <div
           className={`composer-card ${disabled ? 'composer-card--disabled' : ''}`}
         >
-          {configOpen && hasConfigOptions && (
-            <ConfigPanelCard options={configOptions} disabled={disabled} onSetOption={onSetConfigOption} />
-          )}
           {commandItems && (
             <div className="composer-commands" role="listbox" aria-label={t('composer.commands')}>
               {commandItems.map((command, index) => (
@@ -237,15 +234,20 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
               />
               {modes && <ModePicker modes={modes} onSetMode={onSetMode} />}
               {hasConfigOptions && (
-                <IconButton
-                  variant={configOpen ? 'secondary' : 'ghost'}
-                  size="sm"
-                  icon={<SlidersHorizontal size={16} />}
-                  label={t('composer.settings')}
-                  isDisabled={disabled}
-                  tooltip={disabled ? t('composer.settingsDisabled') : t('composer.settings')}
-                  clickAction={() => setConfigOpen((v) => !v)}
-                />
+                <div className="composer-config-anchor">
+                  {configOpen && (
+                    <ConfigPanelCard options={configOptions} disabled={disabled} onSetOption={onSetConfigOption} />
+                  )}
+                  <IconButton
+                    variant={configOpen ? 'secondary' : 'ghost'}
+                    size="sm"
+                    icon={<SlidersHorizontal size={16} />}
+                    label={t('composer.settings')}
+                    isDisabled={disabled}
+                    tooltip={disabled ? t('composer.settingsDisabled') : t('composer.settings')}
+                    clickAction={() => setConfigOpen((v) => !v)}
+                  />
+                </div>
               )}
             </div>
             {stopping ? (

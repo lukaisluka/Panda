@@ -1,10 +1,14 @@
-/* Session settings card (agent-advertised config options). Mounted at the
-   composer-card level so it floats above the card like the command panel. */
+/* Session settings card (agent-advertised config options). Mounted inside
+   the settings button's anchor wrapper, so it opens upward hugging the
+   button (like the mode picker's menu), not from the card's far corner.
+   The viewport bounds the width cap so the card itself never gets wider
+   than the window (same narrow-window caveat as the mode menu: the anchor
+   offset can still push the right edge past a very narrow viewport). */
 .config-panel-card {
   position: absolute;
-  right: 0;
+  left: 0;
   bottom: calc(100% + 8px);
-  width: min(360px, 100%);
+  width: min(360px, calc(100vw - 32px));
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 12px;
