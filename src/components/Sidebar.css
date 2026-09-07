@@ -405,3 +405,10 @@
   color: var(--color-fg);
   background: color-mix(in oklab, var(--color-accent) 12%, transparent);
 }
+
+/* Save-as-配置 dialog action row (#160): trailing-aligned buttons. */
+.sidebar-save-as-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

@@ -28,6 +28,7 @@ import { getStdioTransportFactory, splitArgs } from './acp/transport/stdioHost';
 import { loadMcpServers, mcpServersForProfile } from './mcpServers';
 import { cwdToWorkspace, workspaceToCwd, type Workspace } from './workspace';
 import { alwaysAskPolicy, type PermissionDecision, type PermissionPolicy } from './policy';
+import { notifyUser } from './userNotice';
 
 /**
  * Live connection manager (issue #21, ADR 0002): one `LiveAcpClient` + one
@@ -401,6 +402,9 @@ function wireHandlers(entry: LiveConnection) {
       // a stale error banner must not linger.
       if (usePanda.getState().connections[connectionId]?.connection.status === 'connected') {
         port.setConnection({ error: t('live.switchFailed', { reason }) });
+        // The status-bar banner alone proved too quiet (#160): a failed
+        // session/load looks like a dead click unless a toast says why.
+        notifyUser('error', t('live.switchFailed', { reason }));
       }
     },
   };
@@ -647,6 +651,7 @@ export function openLiveSession(connectionId: string, sessionId: string, cwd: st
   const slot = usePanda.getState().connections[connectionId];
   if (!entry || !slot) {
     console.warn(`[panda/acp] openSession ignored: unknown connection "${connectionId}"`);
+    notifyUser('error', t('live.notice.unknownConnection'));
     return;
   }
   const connected = slot.connection.status === 'connected';
@@ -774,6 +779,7 @@ export async function deleteLiveSession(
   const entry = liveConnections.get(connectionId);
   if (!entry) {
     console.warn(`[panda/acp] deleteSession ignored: no live connection "${connectionId}"`);
+    notifyUser('error', t('live.notice.unknownConnection'));
     return;
   }
   const url = usePanda.getState().connections[connectionId]?.connection.url ?? null;

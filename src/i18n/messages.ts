@@ -323,6 +323,8 @@ export const messages = {
     en: 'Discard unsaved changes to the text config?',
     zh: '放弃文本配置的未保存修改?',
   },
+  'settings.mcpDirtyTitle': { en: 'Unsaved changes', zh: '有未保存的修改' },
+  'settings.mcpDirtyLeave': { en: 'Discard & leave', zh: '放弃并离开' },
   'settings.mcpDroppedFields': {
     en: 'Fields Panda does not store were dropped: {fields}',
     zh: 'Panda 暂不存储的字段已丢弃:{fields}',
@@ -480,6 +482,11 @@ export const messages = {
 
   // ---- live connection driver ----
   'live.switchFailed': { en: 'Session switch failed: {reason}', zh: '切换会话失败: {reason}' },
+  'live.notice.unknownConnection': { en: 'That connection no longer exists.', zh: '该连接已不存在。' },
+  'settings.notice.saveFailed': {
+    en: 'Could not save the agent configuration (storage rejected the write).',
+    zh: 'agent 配置保存失败(存储写入被拒)。',
+  },
 
   // ---- ACP client errors (surface via connection.error) ----
   'acp.timeout': { en: '{method} timed out after {s}s', zh: '{method} 超过 {s}s 未应答' },
@@ -498,6 +505,19 @@ export const messages = {
     zh: 'stdio agent 需要在 Panda 桌面版中连接',
   },
   'acp.newSessionFailed': { en: 'New session failed: {error}', zh: '新建会话失败: {error}' },
+  // ---- operation notices (#160): console-only guard/failure paths surfaced as toasts ----
+  'acp.notice.notConnected': { en: 'Not connected to the agent — reconnect first.', zh: '尚未连接 agent,请先重连。' },
+  'acp.notice.busy': { en: 'The agent is busy (a turn or a session switch is still in flight) — try again shortly.', zh: 'agent 正忙(回合或会话切换仍在进行),请稍后再试。' },
+  'acp.notice.loadUnsupported': {
+    en: 'This agent does not support session/load — switching to another session is unavailable.',
+    zh: '该 agent 不支持 session/load,无法切换到其他会话。',
+  },
+  'acp.notice.deleteUnsupported': { en: 'This agent does not support session/delete.', zh: '该 agent 不支持 session/delete。' },
+  'acp.notice.listFailed': { en: 'Session list fetch failed: {error}', zh: '会话列表拉取失败:{error}' },
+  'acp.notice.permissionGone': {
+    en: 'That permission request is no longer pending — the answer was not delivered.',
+    zh: '该权限请求已不在等待应答,本次应答未能送达。',
+  },
   'acp.loginFailed': { en: 'Sign-in failed: {error}', zh: '登录失败: {error}' },
   'acp.deleteSessionFailed': { en: 'Session deletion failed: {error}', zh: '删除会话失败: {error}' },
   'acp.imageHostUnsupported': { en: 'the host does not support this capability', zh: '宿主不支持该能力' },

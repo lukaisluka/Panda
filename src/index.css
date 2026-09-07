@@ -208,6 +208,28 @@ body {
   outline: none;
 }
 
+/* Astryx toasts (#160). useToast's fallback viewport mounts at document.body;
+ * it mirrors the html theme attrs so tokens resolve inside, but the error
+ * variant paints --color-background-error-inverted — a token the matcha
+ * theme never defines, so it falls back to core #AA071E with near-black
+ * MediaTheme text on top: unreadable. Panda owns the toast surface instead:
+ * a quiet card on --color-background-card (the same pairing every dialog
+ * uses), a red rail for errors, chrome-size type. Anchors are themeProps'
+ * stable data attributes — the stylex class names churn per build. */
+.astryx-toast {
+  font-size: 13px; /* chrome role (DESIGN.md「字体」) */
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  background: var(--color-background-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-md);
+  box-shadow: var(--shadow-med);
+  padding: var(--space-2_5) var(--space-3);
+}
+.astryx-toast[data-type='error'] {
+  border-inline-start: 3px solid var(--color-error);
+}
+
 /* Touch floor (#107): on coarse pointers interactive controls get the 44px
  * minimum hit size (Apple HIG; Material asks 48 but 44 is the classic chat-app
  * compromise). Scoped to (pointer: coarse), so the desktop density is

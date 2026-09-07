@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import { IconButton } from '@astryxdesign/core/IconButton';
+import { useImperativeAlertDialog } from '@astryxdesign/core/AlertDialog';
+import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
+import { LayoutContent } from '@astryxdesign/core/Layout';
+import { TextInput } from '@astryxdesign/core/TextInput';
 import pandaBadge from '../assets/brand/panda-badge.png';
 import { Button } from '@astryxdesign/core/Button';
 import { Spinner } from '@astryxdesign/core/Spinner';
@@ -25,10 +29,10 @@ import { isLinkUp, type AttentionReason, type ConnectionPhase } from '../project
 import { isDirectConnectionId, reconcileProfileSlots } from '../liveConnections';
 import { effectiveCapability, PANDA_HOST_CAPABILITIES } from '../capabilities';
 import { useI18n } from '../i18n/context';
-import { t } from '../i18n';
 import type { AgentProfile } from '../profiles';
 import { loadProfiles, newProfileId, profileEndpoint, saveProfiles, subscribeProfiles } from '../profiles';
 import { navigate, useHashRoute } from '../routes';
+import { notifyUser } from '../userNotice';
 import { cwdToWorkspace, workspaceLabel } from '../workspace';
 import type { LiveSessionFacade } from '../useLiveSession';
 import { NewSessionDialog } from './NewSessionDialog';
@@ -214,22 +218,28 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose, settingsSection
  * Saves a 临时直连's endpoint as an Agent 配置 (phase 4): the running
  * connection is deliberately NOT migrated — the 配置's seeded slot appears
  * ready for the next session, and the temporary one ends with its disconnect
- * as always. Default name is the endpoint's host:port.
+ * as always. The name arrives from the save-as dialog (#160 — the former
+ * window.prompt); returns false when storage rejects the write.
  */
-function saveDirectAsProfile(url: string, cwd: string | null): void {
+function saveDirectAsProfile(url: string, cwd: string | null, name: string): boolean {
   const trimmedUrl = url.trim();
-  if (!trimmedUrl) return;
+  const trimmedName = name.trim();
+  if (!trimmedUrl || !trimmedName) return false;
   const workspace = cwdToWorkspace(cwd ?? '/');
-  const defaultName = (() => {
-    try {
-      return new URL(trimmedUrl).host;
-    } catch {
-      return trimmedUrl;
-    }
-  })();
-  const name = window.prompt(t('side.profileNamePrompt'), defaultName)?.trim();
-  if (!name) return; // cancelled or left blank
-  saveProfiles([...loadProfiles(), { id: newProfileId(), name, kind: 'websocket', url: trimmedUrl, workspace, mcpServerIds: [] }]);
+  return saveProfiles([
+    ...loadProfiles(),
+    { id: newProfileId(), name: trimmedName, kind: 'websocket', url: trimmedUrl, workspace, mcpServerIds: [] },
+  ]);
+}
+
+/** The save-as dialog's prefilled name: the endpoint's host:port. */
+function endpointDefaultName(url: string): string {
+  const trimmed = url.trim();
+  try {
+    return new URL(trimmed).host;
+  } catch {
+    return trimmed;
+  }
 }
 
 /** Astryx StatusDot per lifecycle phase; 运行中 overlays a pulse. Phase →
@@ -279,6 +289,12 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
   const lifecycle = useConnectionLifecycle(connectionId);
   const activeSessionId = usePanda((s) => s.activeSessionId);
   const { t } = useI18n();
+  // #160: the remove-connection confirm and the save-as-配置 name prompt
+  // used to be window.confirm/window.prompt — native browser chrome that
+  // breaks the Astryx surface (and the desktop shell).
+  const removeAlert = useImperativeAlertDialog();
+  const [saveAs, setSaveAs] = useState<{ url: string; cwd: string | null } | null>(null);
+  const [saveAsName, setSaveAsName] = useState('');
   if (!slot || !lifecycle) return null;
 
   const { phase } = lifecycle;
@@ -346,7 +362,10 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
               icon={<BookmarkPlus size={12} />}
               label={t('side.saveProfile')}
               tooltip={t('side.saveProfileTooltip')}
-              clickAction={() => saveDirectAsProfile(slot.connection.url!, slot.connection.cwd)}
+              clickAction={() => {
+                setSaveAsName(endpointDefaultName(slot.connection.url!));
+                setSaveAs({ url: slot.connection.url!, cwd: slot.connection.cwd });
+              }}
             />
           )}
           {(connected || phase === 'connecting') && (
@@ -377,9 +396,16 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
               label={t('side.removeConnection')}
               tooltip={t('side.removeConnectionTooltip')}
               clickAction={() => {
-                if (window.confirm(t('side.removeConfirm', { title }))) {
-                  live.remove(connectionId);
-                }
+                removeAlert.show({
+                  title: t('side.removeConnection'),
+                  description: t('side.removeConfirm', { title }),
+                  actionLabel: t('side.removeConnection'),
+                  actionVariant: 'destructive',
+                  onAction: () => {
+                    live.remove(connectionId);
+                    removeAlert.hide();
+                  },
+                });
               }}
             />
           )}
@@ -476,6 +502,48 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
           })}
         </div>
       )}
+      {removeAlert.element}
+      <Dialog
+        isOpen={saveAs !== null}
+        onOpenChange={(open) => {
+          if (!open) setSaveAs(null);
+        }}
+        purpose="form"
+        width={380}
+      >
+        <DialogHeader
+          title={t('side.saveProfile')}
+          subtitle={saveAs?.url}
+          onOpenChange={() => setSaveAs(null)}
+        />
+        <LayoutContent>
+          <TextInput
+            label={t('side.profileNamePrompt')}
+            value={saveAsName}
+            onChange={setSaveAsName}
+          />
+          <div className="sidebar-save-as-actions">
+            <Button
+              variant="secondary"
+              size="sm"
+              label={t('settings.cancel')}
+              clickAction={() => setSaveAs(null)}
+            />
+            <Button
+              variant="primary"
+              size="sm"
+              label={t('settings.save')}
+              isDisabled={saveAsName.trim().length === 0}
+              clickAction={() => {
+                if (saveAs && !saveDirectAsProfile(saveAs.url, saveAs.cwd, saveAsName)) {
+                  notifyUser('error', t('settings.notice.saveFailed'));
+                }
+                setSaveAs(null);
+              }}
+            />
+          </div>
+        </LayoutContent>
+      </Dialog>
     </div>
   );
 }

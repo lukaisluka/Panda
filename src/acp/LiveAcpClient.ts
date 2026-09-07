@@ -43,6 +43,7 @@ import { EchoReconciler } from './echoReconciliation';
 import { toWireMcpServers, type McpServerConfig } from '../mcpServers';
 import { PANDA_HOST_CAPABILITIES, effectiveCapability, type AgentCapabilityDeclarations, type CapabilityKey, type EffectiveCapability } from '../capabilities';
 import { alwaysAskPolicy, denyResolution, UNKNOWN_POLICY_CONTEXT, type PermissionDecision } from '../policy';
+import { notifyUser } from '../userNotice';
 
 /**
  * Live ACP client (Phase 1+2): speaks v1 ACP over an injected `AcpTransport`
@@ -559,10 +560,12 @@ export class LiveAcpClient {
     const generation = this.connectionGeneration;
     if (!connection) {
       console.warn('[panda/acp] newSession ignored: not connected');
+      notifyUser('error', t('acp.notice.notConnected'));
       return;
     }
     if (this.sessionSwitch) {
       console.warn('[panda/acp] newSession ignored: a session switch is still in flight');
+      notifyUser('error', t('acp.notice.busy'));
       return;
     }
     this.lastCwd = cwd;
@@ -667,18 +670,22 @@ export class LiveAcpClient {
     const generation = this.connectionGeneration;
     if (!connection) {
       console.warn('[panda/acp] loadSession ignored: not connected');
+      notifyUser('error', t('acp.notice.notConnected'));
       return;
     }
     if (!this.can('loadSession')) {
       console.warn('[panda/acp] loadSession ignored: agent does not support session/load');
+      notifyUser('error', t('acp.notice.loadUnsupported'));
       return;
     }
     if (this.pendingPrompt) {
       console.warn('[panda/acp] loadSession ignored: a turn is still in flight');
+      notifyUser('error', t('acp.notice.busy'));
       return;
     }
     if (this.sessionSwitch) {
       console.warn('[panda/acp] loadSession ignored: another switch is still in flight');
+      notifyUser('error', t('acp.notice.busy'));
       return;
     }
     try {
@@ -704,16 +711,19 @@ export class LiveAcpClient {
     const generation = this.connectionGeneration;
     if (!connection) {
       console.warn('[panda/acp] deleteSession ignored: not connected');
+      notifyUser('error', t('acp.notice.notConnected'));
       return;
     }
     if (!this.can('delete')) {
       console.warn('[panda/acp] deleteSession ignored: agent does not support session/delete');
+      notifyUser('error', t('acp.notice.deleteUnsupported'));
       return;
     }
     if (this.sessionSwitch) {
       // Deleting the staged target mid-switch would make the pending
       // commit/rollback land on a session that no longer exists.
       console.warn('[panda/acp] deleteSession ignored: a session switch is still in flight');
+      notifyUser('error', t('acp.notice.busy'));
       return;
     }
     try {
@@ -916,6 +926,7 @@ export class LiveAcpClient {
       console.warn(
         `[panda/acp] resolvePermission ignored: no pending request for toolCallId ${toolCallId}`,
       );
+      notifyUser('error', t('acp.notice.permissionGone'));
       return;
     }
     const option = entry.waiter.wireOptions.find((o) => o.kind === kind);
@@ -923,6 +934,7 @@ export class LiveAcpClient {
       console.error(
         `[panda/acp] permission option "${kind}" was not offered by the agent for toolCallId ${toolCallId}`,
       );
+      notifyUser('error', t('acp.notice.permissionGone'));
       this.settlePermission(entry.key, toolCallId, { outcome: { outcome: 'cancelled' } }, { outcome: 'cancelled' });
     } else {
       // The user's own move — an 'always' choice starts (or joins) this
@@ -1215,8 +1227,10 @@ export class LiveAcpClient {
       }
       this.handlers.onSessions(entries);
     } catch (err) {
-      // Non-fatal: the list is a sidebar convenience, the session still works.
+      // Non-fatal for the connection, but no longer invisible (#160): an
+      // empty sidebar with no reason is its own support case.
       console.error('[panda/acp] session/list failed', err);
+      notifyUser('error', t('acp.notice.listFailed', { error: describeError(err) }));
     }
   }
 
