@@ -54,7 +54,13 @@
   justify-content: center;
   border-radius: var(--panda-radius-lg);
   background: var(--color-raised);
-  font-size: 16px; /* text-base */
+  overflow: hidden;
+}
+
+.sidebar-logo img {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
 }
 
 .sidebar-close {

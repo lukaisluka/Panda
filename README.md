@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="branding/clean/concept-retro-badge.png" alt="Panda" width="160" />
+</p>
+
 # Panda 🐼
 
 **A universal client for every ACP-compatible agent, built around a meticulously crafted message stream.**

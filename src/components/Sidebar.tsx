@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { IconButton } from '@astryxdesign/core/IconButton';
+import pandaBadge from '../assets/brand/panda-badge.png';
 import { Button } from '@astryxdesign/core/Button';
 import { Spinner } from '@astryxdesign/core/Spinner';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
@@ -86,7 +87,9 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose, settingsSection
   return (
     <aside className={`sidebar ${mobileOpen ? 'sidebar--open' : ''}`}>
       <div className="sidebar-brand">
-        <span className="sidebar-logo">🐼</span>
+        <span className="sidebar-logo">
+          <img src={pandaBadge} alt="" />
+        </span>
         Panda
         <span className="sidebar-brand-actions">
           <span className="sidebar-close">
