@@ -24,9 +24,10 @@ export function groupChoices(choices: AcpConfigChoice[]): { group: string | null
  * `session/set_config_option` and the panel only moves when the confirmed
  * result comes back, so a failed write honestly leaves the old value.
  *
- * The card is mounted by the Composer at the composer-card level (floating
- * above the card like the slash-command panel); the Composer owns the open
- * state and renders the toolbar entry button.
+ * The card is mounted by the Composer inside the settings button's anchor
+ * wrapper, so it opens upward hugging that button (the mode picker's menu
+ * anchors the same way); the Composer owns the open state and renders the
+ * toolbar entry button.
  */
 export function ConfigPanelCard({ options, disabled, onSetOption }: {
   options: AcpConfigOption[];
