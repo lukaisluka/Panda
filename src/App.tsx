@@ -19,6 +19,7 @@ import { navigate, useHashRoute } from './routes';
 import { SettingsPage, SETTINGS_SECTIONS, type SettingsSectionId } from './components/SettingsPage';
 import { useReplaySession } from './useReplaySession';
 import { useLiveSession } from './useLiveSession';
+import { UserNoticeToasts } from './components/UserNoticeToasts';
 import type { ForegroundSessionController } from './session-controller';
 import './App.css';
 import { useI18n } from './i18n/context';
@@ -88,6 +89,7 @@ function MainScreen() {
 
   return (
     <div className="app-shell">
+      <UserNoticeToasts />
       {mobileNavigationOpen && (
         <button
           type="button"

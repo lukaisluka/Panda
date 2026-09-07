@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Activity, ArrowLeft, Bot, Check, Copy, Pencil, Play, Plug, Plus, SlidersHorizontal, Trash2, WandSparkles } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
+import { useImperativeAlertDialog } from '@astryxdesign/core/AlertDialog';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { IconButton } from '@astryxdesign/core/IconButton';
 import { Selector } from '@astryxdesign/core/Selector';
@@ -30,6 +31,7 @@ import { workspaceDisplay } from '../workspace';
 import { LOCALES, saveLocale } from '../i18n';
 import { t } from '../i18n';
 import { useI18n } from '../i18n/context';
+import { notifyUser } from '../userNotice';
 import { copyDiagnosticsReport } from './ErrorBoundary';
 import './SettingsPage.css';
 
@@ -298,6 +300,8 @@ function AgentsSection({ profiles }: { profiles: AgentProfile[] }) {
   const { t } = useI18n();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  // #160: destructive confirm used to be window.confirm.
+  const deleteAlert = useImperativeAlertDialog();
 
   return (
     <section className="settings-card">
@@ -320,7 +324,7 @@ function AgentsSection({ profiles }: { profiles: AgentProfile[] }) {
         <ProfileForm
           onCancel={() => setCreating(false)}
           onSave={(profile) => {
-            saveProfiles([...loadProfiles(), profile]);
+            if (!saveProfiles([...loadProfiles(), profile])) notifyUser('error', t('settings.notice.saveFailed'));
             setCreating(false);
           }}
         />
@@ -342,7 +346,11 @@ function AgentsSection({ profiles }: { profiles: AgentProfile[] }) {
                   // Full replace, not updateProfileFields: the form may switch
                   // the endpoint kind (websocket ↔ stdio), which the
                   // same-kind write-back API deliberately refuses (#121).
-                  saveProfiles(loadProfiles().map((entry) => (entry.id === profile.id ? next : entry)));
+                  if (
+                    !saveProfiles(loadProfiles().map((entry) => (entry.id === profile.id ? next : entry)))
+                  ) {
+                    notifyUser('error', t('settings.notice.saveFailed'));
+                  }
                   setEditingId(null);
                 }}
               />
@@ -379,10 +387,19 @@ function AgentsSection({ profiles }: { profiles: AgentProfile[] }) {
                     label={t('settings.deleteProfile')}
                     tooltip={t('settings.deleteProfileTooltip')}
                     clickAction={() => {
-                      if (window.confirm(t('settings.deleteProfileConfirm', { name: profile.name }))) {
-                        saveProfiles(loadProfiles().filter((entry) => entry.id !== profile.id));
-                        if (editingId === profile.id) setEditingId(null);
-                      }
+                      deleteAlert.show({
+                        title: t('settings.deleteProfile'),
+                        description: t('settings.deleteProfileConfirm', { name: profile.name }),
+                        actionLabel: t('settings.deleteProfile'),
+                        actionVariant: 'destructive',
+                        onAction: () => {
+                          if (!saveProfiles(loadProfiles().filter((entry) => entry.id !== profile.id))) {
+                            notifyUser('error', t('settings.notice.saveFailed'));
+                          }
+                          if (editingId === profile.id) setEditingId(null);
+                          deleteAlert.hide();
+                        },
+                      });
                     }}
                   />
                 </div>
@@ -391,6 +408,7 @@ function AgentsSection({ profiles }: { profiles: AgentProfile[] }) {
           )}
         </div>
       )}
+      {deleteAlert.element}
     </section>
   );
 }
@@ -407,6 +425,8 @@ function McpSection() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [textView, setTextView] = useState(false);
+  // #160: destructive confirm used to be window.confirm.
+  const deleteAlert = useImperativeAlertDialog();
   const enterTextView = () => {
     setCreating(false);
     setEditingId(null);
@@ -502,10 +522,17 @@ function McpSection() {
                       const message = users > 0
                         ? t('settings.deleteMcpConfirmUsed', { name: server.name, n: String(users) })
                         : t('settings.deleteMcpConfirm', { name: server.name });
-                      if (window.confirm(message)) {
-                        saveMcpServers(loadMcpServers().filter((entry) => entry.id !== server.id));
-                        if (editingId === server.id) setEditingId(null);
-                      }
+                      deleteAlert.show({
+                        title: t('settings.deleteMcp'),
+                        description: message,
+                        actionLabel: t('settings.deleteMcp'),
+                        actionVariant: 'destructive',
+                        onAction: () => {
+                          saveMcpServers(loadMcpServers().filter((entry) => entry.id !== server.id));
+                          if (editingId === server.id) setEditingId(null);
+                          deleteAlert.hide();
+                        },
+                      });
                     }}
                   />
                 </div>
@@ -514,6 +541,7 @@ function McpSection() {
           )}
         </div>
       )}
+      {deleteAlert.element}
     </section>
   );
 }
@@ -544,6 +572,8 @@ function McpTextEditor({ servers, onDone }: {
   const baseline = useRef(text);
   const parsed = useMemo(() => parseMcpConfigText(text), [text]);
   const dirty = text !== baseline.current;
+  // #160: the dirty-leave confirm used to be window.confirm.
+  const dirtyAlert = useImperativeAlertDialog();
 
   const reserialize = (target: McpTextFormat) => {
     if (parsed.error !== null) return;
@@ -552,7 +582,20 @@ function McpTextEditor({ servers, onDone }: {
   };
 
   const leave = () => {
-    if (!dirty || window.confirm(t('settings.mcpDirtyConfirm'))) onDone();
+    if (!dirty) {
+      onDone();
+      return;
+    }
+    dirtyAlert.show({
+      title: t('settings.mcpDirtyTitle'),
+      description: t('settings.mcpDirtyConfirm'),
+      actionLabel: t('settings.mcpDirtyLeave'),
+      actionVariant: 'destructive',
+      onAction: () => {
+        dirtyAlert.hide();
+        onDone();
+      },
+    });
   };
 
   const save = () => {
@@ -646,6 +689,7 @@ function McpTextEditor({ servers, onDone }: {
           )}
         </div>
       )}
+      {dirtyAlert.element}
     </div>
   );
 }

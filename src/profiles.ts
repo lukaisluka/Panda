@@ -11,6 +11,8 @@
  * the default), unit tests pass an in-memory fake — node has no localStorage.
  */
 import { isWorkspace, type Workspace } from './workspace';
+import { t } from './i18n';
+import { notifyUser } from './userNotice';
 
 /** One saved connection preset. `name` is user-chosen — never the protocol's
  * agent-reported name (agentName at initialize; see CONTEXT.md).
@@ -222,13 +224,18 @@ export function loadProfiles(storage: ProfileStorage = defaultStorage()): AgentP
 
 /** Persists the full list; failures warn but never throw (best-effort, like the
  * session persistence in useLiveSession). */
-export function saveProfiles(profiles: AgentProfile[], storage: ProfileStorage = defaultStorage()): void {
+/** Persists the whole list. Returns false when storage rejected the write —
+ * callers surface it (#160); a silently lost 配置 is indistinguishable from
+ * success until the next reload. */
+export function saveProfiles(profiles: AgentProfile[], storage: ProfileStorage = defaultStorage()): boolean {
   try {
     storage.setItem(PROFILES_KEY, JSON.stringify(profiles));
   } catch (err) {
     console.warn('[panda/profiles] could not persist profiles', err);
+    return false;
   }
   notifyProfiles(storage);
+  return true;
 }
 
 /**
@@ -285,7 +292,7 @@ export function updateProfileFields(
     }
     return { ...profile, ...applied } as AgentProfile;
   });
-  saveProfiles(updated, storage);
+  if (!saveProfiles(updated, storage)) notifyUser('error', t('settings.notice.saveFailed'));
   return updated;
 }
 

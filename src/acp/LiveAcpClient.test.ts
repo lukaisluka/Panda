@@ -18,6 +18,7 @@ import type { McpServerConfig } from '../mcpServers';
 import type { PermissionDecision } from '../policy';
 import { StreamTransport } from './transport/StreamTransport';
 import type { AcpTransport } from './transport/AcpTransport';
+import { subscribeUserNotices } from '../userNotice';
 import {
   connectionStorePort,
   usePanda,
@@ -828,6 +829,22 @@ describe('LiveAcpClient', () => {
     expect(h.statuses.at(-1)).toBe('idle');
     warnSpy.mockRestore();
     h.closeAll();
+  });
+
+  it('拒绝的操作守卫发布用户通知(#160):无 loadSession 能力时切换会话', async () => {
+    const notices: { kind: string; message: string }[] = [];
+    const off = subscribeUserNotices((notice) => notices.push({ kind: notice.kind, message: notice.message }));
+    try {
+      // The fake agent declares no loadSession by default — the guard fires.
+      const h = await setup();
+      await h.acpClient.loadSession('whatever', '/tmp/project');
+      expect(notices).toHaveLength(1);
+      expect(notices[0]!.kind).toBe('error');
+      expect(notices[0]!.message).toContain('session/load');
+      h.closeAll();
+    } finally {
+      off();
+    }
   });
 
   it('settles the waiter as cancelled when the agent aborts its request ($/cancel_request, issue #18)', async () => {
