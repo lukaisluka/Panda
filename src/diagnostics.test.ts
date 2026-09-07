@@ -3,6 +3,7 @@ import {
   buildDiagnostics,
   installConsoleTap,
   recentConsole,
+  summarizeUserAgent,
   type ConsoleEntry,
 } from './diagnostics';
 
@@ -133,5 +134,51 @@ describe('buildDiagnostics', () => {
     const report = buildDiagnostics({ error: 'plain string' });
     expect(report).toContain('- url: (unavailable)');
     expect(report).toContain('plain string');
+  });
+});
+
+describe('summarizeUserAgent', () => {
+  it('Chrome on macOS', () => {
+    expect(
+      summarizeUserAgent(
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+      ),
+    ).toBe('Chrome 140 · macOS');
+  });
+
+  it('Edge UAs also carry a Chrome token but report Edge (match order)', () => {
+    expect(
+      summarizeUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0',
+      ),
+    ).toBe('Edge 140 · Windows');
+  });
+
+  it('Firefox on Windows', () => {
+    expect(
+      summarizeUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0'),
+    ).toBe('Firefox 141 · Windows');
+  });
+
+  it('Safari on iOS (Android before Linux, iOS before macOS)', () => {
+    expect(
+      summarizeUserAgent(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+      ),
+    ).toBe('Safari 18 · iOS');
+  });
+
+  it('Android UA reports Android, not the embedded Linux token', () => {
+    expect(
+      summarizeUserAgent('Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36'),
+    ).toBe('Chrome 140 · Android');
+  });
+
+  it('unknown browser falls back to the platform alone', () => {
+    expect(summarizeUserAgent('Mozilla/5.0 (X11; Linux x86_64) some-custom-agent/1.0')).toBe('Linux');
+  });
+
+  it('nothing recognizable stays visible as (unknown)', () => {
+    expect(summarizeUserAgent('curl/8.7.1')).toBe('(unknown)');
   });
 });

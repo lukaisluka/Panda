@@ -1,8 +1,18 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// The settings page displays the release version; inject it from package.json
+// at build time so web and desktop (one shared build) can never disagree.
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
+  version: string;
+};
+
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   server: {
     // The Tauri shell's devUrl pins 5173; a busy port must fail loudly
     // instead of drifting to 5174 where the shell would load a stale build.

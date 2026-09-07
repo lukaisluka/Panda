@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Activity, ArrowLeft, Bot, Check, Copy, Languages, Palette, Pencil, Play, Plug, Plus, SlidersHorizontal, Terminal, Trash2 } from 'lucide-react';
+import { Activity, ArrowLeft, Bot, Check, Copy, Pencil, Play, Plug, Plus, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { IconButton } from '@astryxdesign/core/IconButton';
 import { Selector } from '@astryxdesign/core/Selector';
@@ -20,6 +20,7 @@ import {
   subscribeMcpServers,
   type McpServerConfig,
 } from '../mcpServers';
+import { desktopHost, summarizeUserAgent } from '../diagnostics';
 import { navigate } from '../routes';
 import { isThemeId, loadThemeId, saveThemeId, subscribeTheme, THEMES, EXPOSED_THEME_IDS } from '../theme';
 import { workspaceDisplay } from '../workspace';
@@ -144,52 +145,75 @@ export function SettingsPage({ section }: { section: SettingsSectionId }) {
   );
 }
 
-/** 通用: theme + language — the two sparse preference cards grouped onto one
- * page. They keep their own card heads (their titles differ from the page
- * title); the header carries only the page-level context. */
+/** One setting per row (Codex-style, #138): title + description on the left,
+ * the control on the right; a hairline separates consecutive rows. The card
+ * supplies the group title above; this is the row inside it. */
+function SettingsRow({ title, description, children }: {
+  title: string;
+  description?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="settings-row">
+      <div className="settings-row-text">
+        <span className="settings-row-title">{title}</span>
+        {description && <span className="settings-row-desc">{description}</span>}
+      </div>
+      {children && <div className="settings-row-control">{children}</div>}
+    </div>
+  );
+}
+
+/** 通用: theme + language — one card, one row each; the row titles carry
+ * what the old per-card descriptions explained. */
 function GeneralSection({ section }: { section: (typeof SETTINGS_SECTIONS)[number] }) {
   const { t } = useI18n();
   return (
     <>
       <SectionHeader section={section} />
       <section className="settings-card">
-        <div className="settings-card-head">
-          <span className="settings-card-icon" aria-hidden>
-            <Palette size={14} />
-          </span>
-          <h2 className="settings-card-title">{t('settings.appearance')}</h2>
-        </div>
-        <p className="settings-card-desc">{t('settings.appearanceDesc')}</p>
-        <ThemeSwatches />
-      </section>
-
-      <section className="settings-card">
-        <div className="settings-card-head">
-          <span className="settings-card-icon" aria-hidden>
-            <Languages size={14} />
-          </span>
-          <h2 className="settings-card-title">{t('settings.language')}</h2>
-        </div>
-        <p className="settings-card-desc">{t('settings.languageDesc')}</p>
-        <LanguageChips />
+        <h2 className="settings-group-title">{t('settings.appearanceGroup')}</h2>
+        <SettingsRow title={t('settings.themeRow')} description={t('settings.themeRowDesc')}>
+          <ThemeSwatches />
+        </SettingsRow>
+        <SettingsRow title={t('settings.language')} description={t('settings.languageRowDesc')}>
+          <LanguageChips />
+        </SettingsRow>
       </section>
     </>
   );
 }
 
-/** One-click diagnostics report (#105): the non-crash path — copies the
- * environment + recent-console ring so a bug report carries its context.
- * Nothing is uploaded; the clipboard is the transport. The copy action
- * lives in the page header; the dev tools card rides this page
- * (dev-build-only). */
+/** Diagnostics (#105, #138): environment rows make the page carry real
+ * content in production builds (version/host/locale/UA are already known to
+ * the client), and the copy action sits on its own row instead of floating
+ * alone in the page header. Dev tools ride below (dev-build-only). */
 function DiagnosticsSection({ section }: { section: (typeof SETTINGS_SECTIONS)[number] }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [copy, setCopy] = useState<'idle' | 'ok' | 'fail'>('idle');
   return (
     <>
-      <SectionHeader
-        section={section}
-        actions={
+      <SectionHeader section={section} />
+      <section className="settings-card">
+        <h2 className="settings-group-title">{t('settings.envGroup')}</h2>
+        <SettingsRow title={t('settings.versionRow')}>
+          <span className="settings-row-value">{__APP_VERSION__}</span>
+        </SettingsRow>
+        <SettingsRow title={t('settings.hostRow')}>
+          <span className="settings-row-value">
+            {desktopHost() ? t('settings.hostDesktop') : t('settings.hostBrowser')}
+          </span>
+        </SettingsRow>
+        <SettingsRow title={t('settings.language')}>
+          <span className="settings-row-value">{locale === 'en' ? 'English' : '中文'}</span>
+        </SettingsRow>
+        <SettingsRow title={t('settings.userAgentRow')}>
+          <span className="settings-row-value">{summarizeUserAgent(navigator.userAgent)}</span>
+        </SettingsRow>
+      </section>
+      <section className="settings-card">
+        <h2 className="settings-group-title">{t('settings.reportGroup')}</h2>
+        <SettingsRow title={t('diag.copyDiagnostics')} description={t('settings.reportRowDesc')}>
           <Button
             variant="secondary"
             size="sm"
@@ -204,27 +228,21 @@ function DiagnosticsSection({ section }: { section: (typeof SETTINGS_SECTIONS)[n
             clickAction={() => void copyDiagnosticsReport().then(setCopy)}
             tooltip={t('diag.cardDesc')}
           />
-        }
-      />
+        </SettingsRow>
+      </section>
       {import.meta.env.DEV && (
         <section className="settings-card settings-card--muted">
-          <div className="settings-card-head">
-            <span className="settings-card-icon" aria-hidden>
-              <Terminal size={14} />
-            </span>
-            <h2 className="settings-card-title">{t('settings.dev')}</h2>
-            <div className="settings-card-actions">
-              <Button
-                variant="secondary"
-                size="sm"
-                label={t('settings.demoReplay')}
-                icon={<Play size={12} />}
-                clickAction={() => navigate('demo')}
-                tooltip={t('settings.demoReplayTooltip')}
-              />
-            </div>
-          </div>
-          <p className="settings-card-desc">{t('settings.devDesc')}</p>
+          <h2 className="settings-group-title">{t('settings.dev')}</h2>
+          <SettingsRow title={t('settings.demoReplay')} description={t('settings.devRowDesc')}>
+            <Button
+              variant="secondary"
+              size="sm"
+              label={t('settings.demoReplay')}
+              icon={<Play size={12} />}
+              clickAction={() => navigate('demo')}
+              tooltip={t('settings.demoReplayTooltip')}
+            />
+          </SettingsRow>
         </section>
       )}
     </>
