@@ -20,6 +20,10 @@ follow the releases published from this repository.
   meaningful order. Suppressed during `session/load` replay (history is not
   activity); agent reports (`session/list`, `session_info_update`) still
   overwrite on arrival — last writer wins, no cross-clock comparison.
+- **New sessions sort first (#180)** — a session entering the sidebar for the
+  first time (session/new) is stamped at that moment, so a freshly created
+  conversation heads its group instead of sinking to the untimed bottom;
+  adopting a known session (resume) still keeps its existing time.
 - **Stable sidebar order (#175)** — the "foreground pinned first" rule is
   removed from both the agent groups and the session rows: order now tracks
   only last activity, so switching no longer jumps rows around; the current

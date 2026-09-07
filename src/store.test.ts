@@ -334,11 +334,38 @@ describe('local activity stamping (#175)', () => {
     usePanda.getState().ensureConnection('live');
     const port = connectionStorePort('live');
     port.adoptSession('s-1', '/a');
+    const adoptedAt = usePanda.getState().connections['live']!.sessions.find((e) => e.sessionId === 's-1')!.updatedAt;
 
     port.update({ sessionUpdate: 'usage_update', used: 1, size: 2 });
     port.update({ sessionUpdate: 'commands_update', commands: [] });
 
-    expect(usePanda.getState().connections['live']!.sessions.find((e) => e.sessionId === 's-1')!.updatedAt).toBeNull();
+    // Bookkeeping events never advance the stamp past its adoption value.
+    expect(usePanda.getState().connections['live']!.sessions.find((e) => e.sessionId === 's-1')!.updatedAt)
+      .toBe(adoptedAt);
+  });
+
+  it('a session first entering the sidebar is stamped at first sight — new sessions sort first (#180)', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-09-07T10:00:00Z'));
+      usePanda.getState().ensureConnection('live');
+      const port = connectionStorePort('live');
+      port.upsertSession({ sessionId: 'old', cwd: '/a', title: null, updatedAt: '2026-01-01T00:00:00Z' });
+
+      port.adoptSession('fresh', '/a'); // the session/new path: first seen
+
+      let slot = usePanda.getState().connections['live']!;
+      expect(slot.sessions.find((e) => e.sessionId === 'fresh')!.updatedAt).toBe('2026-09-07T10:00:00.000Z');
+      expect(orderedSessions(slot.sessions).map((e) => e.sessionId)).toEqual(['fresh', 'old']);
+
+      // Adopting a KNOWN session (resume/reconnect) keeps its value — no bump.
+      vi.advanceTimersByTime(60_000);
+      port.adoptSession('old', '/a');
+      slot = usePanda.getState().connections['live']!;
+      expect(slot.sessions.find((e) => e.sessionId === 'old')!.updatedAt).toBe('2026-01-01T00:00:00Z');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('a session/load replay stamps nothing — history is not activity', () => {
