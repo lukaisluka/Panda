@@ -6,14 +6,35 @@ follow the releases published from this repository.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-07
+
+Bug-hunt hardening (18 confirmed fixes from #182/#183) plus the MCP config
+surface, the settings redesign, and activity-ordered sessions.
+
 ### Added
 
+- **MCP server configuration (#142–#149)** — servers are managed in settings
+  with a form or a JSON/YAML text view that tolerantly parses other clients'
+  dialects (Claude Desktop/Code, Cursor, VS Code, Gemini, Continue…); each
+  agent profile carries a whitelist deciding which servers ride its
+  sessions.
 - **Sidebar session last-activity times (#175)** — session rows show a coarse
   relative label ("3 min ago"; absolute date beyond a week, exact time on
   hover) for their last conversation activity.
+- **Claude Code contract tests (#154)** — recorded real-traffic fixtures
+  replay in CI; an opt-in live e2e (`PANDA_CLAUDE_CODE_E2E=1`) covers the
+  real adapter.
+- **Onboarding docs** — ACP agent contract (zh/en) and the stdio→WebSocket
+  bridge guide (zh/en) for third-party implementers and web users.
 
 ### Changed
 
+- **Settings redesign (#138/#140/#171)** — Codex-style one-setting-per-row
+  pages with the section title in the top bar; font size converges to three
+  presets (one message-stream knob, one interface knob).
+- **Visible failures (#160)** — destructive confirms are Astryx AlertDialogs
+  (no more `window.confirm`); silent failure paths (clipboard, failed saves)
+  now surface as toasts.
 - **Local activity stamping (#175)** — conversation events (user input, agent
   replies, tool calls) now stamp `sessions[].updatedAt` and the connection's
   ordering key on the host, so agents that never report `updatedAt` still get
@@ -28,6 +49,52 @@ follow the releases published from this repository.
   removed from both the agent groups and the session rows: order now tracks
   only last activity, so switching no longer jumps rows around; the current
   agent/session is recognized by its highlight.
+- **New-session form (#157)** — with agents configured, the custom address
+  collapses into an advanced option.
+- **Branding (#155/#176)** — retro-badge panda across favicon, Tauri icon,
+  sidebar logo, and the crash page.
+
+### Fixed
+
+- **IME input (#182-2)** — Enter during composition no longer sends
+  half-typed pinyin; command parsing respects composition too.
+- **Session-scoped UI state (#182-15, #183-16/17)** — composer drafts and
+  attachments, half-filled elicitation forms, expanded tool cards, and
+  scroll/follow modes are keyed per session: switching the foreground session
+  no longer leaks them across sessions or silently drops them.
+- **Row-level action routing (#182-1/5/3)** — a background connection's
+  reconnect/resume buttons act on THAT connection (not the foreground one);
+  the new-session dialog's profile rows create the session on the clicked
+  agent; mid-turn session creation is refused with a busy notice instead of
+  wedging the old session.
+- **Protocol flow dead-ends (#182-4, #183-13/8)** — settled elicitation
+  records no longer block legitimate id reuse (the new request used to hang
+  forever); `session/load` replay no longer merges two distinct user
+  messages into one; request-scoped auth elicitations (OAuth url / key form)
+  during a mid-connection re-login now render and complete.
+- **MCP settings honesty (#183-12/18)** — saving the text view keeps
+  surviving servers' ids (profile whitelists stay intact across a text
+  round-trip); rejected writes surface as an error toast instead of silently
+  rolling back.
+- **Persistence & unread signals (#183-9/14)** — the session persistence pump
+  no longer lets stale stored values overwrite fresh live ones (last-activity
+  times used to freeze at their first-ever write); disconnecting a background
+  connection mid-turn no longer lights the "unread completion" indicator for
+  a turn the user killed.
+- **Diff & highlighting (#182-6, #183-10)** — copied patches carry the
+  `\ No newline at end of file` marker (git used to reject patches of
+  newline-less files); oversized code (>600 lines / 30K chars) degrades to
+  plain text instead of freezing the UI for seconds, and a re-tokenizing
+  diff no longer paints the previous file's content in the new geometry.
+- **Process lifecycle (#183-7/11)** — quitting Panda terminates every agent
+  child (SIGTERM → 3 s → SIGKILL, waited synchronously) and a webview reload
+  sweeps orphaned children, honoring the documented promise; the
+  test-agent serve bridge survives EPIPE when an agent child dies with
+  frames in flight (the bridge guide's teaching example now shows the fix).
+- **Sparse session patches (#178)** — absent fields no longer erase known
+  values (an undefined `updatedAt` used to blank the stamp).
+- **Layout overflow (#150–#153)** — sidebar error cards wrap instead of
+  overflowing; long URLs and unbreakable words truncate cleanly.
 
 ## [0.1.0] - 2026-09-07
 
@@ -84,5 +151,6 @@ and a macOS/Windows desktop shell with stdio support.
 - Desktop build: `frontendDist` resolved relative to `src-tauri`, so the
   previous `../dist` pointed inside `desktop/` and broke release bundling.
 
-[Unreleased]: https://github.com/lukaisluka/Panda/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/lukaisluka/Panda/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/lukaisluka/Panda/releases/tag/v0.1.1
 [0.1.0]: https://github.com/lukaisluka/Panda/releases/tag/v0.1.0
