@@ -1,0 +1,187 @@
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+    "modes": {
+      "currentModeId": "default",
+      "availableModes": [
+        {
+          "id": "default",
+          "name": "Manual",
+          "description": "Always ask before making changes",
+          "_meta": {
+            "kind": "standard"
+          }
+        },
+        {
+          "id": "acceptEdits",
+          "name": "Accept edits",
+          "description": "Automatically accept all file edits",
+          "_meta": {
+            "kind": "standard"
+          }
+        },
+        {
+          "id": "plan",
+          "name": "Plan",
+          "description": "Create a plan before making changes",
+          "_meta": {
+            "kind": "plan"
+          }
+        },
+        {
+          "id": "auto",
+          "name": "Auto",
+          "description": "Claude handles permission decisions",
+          "_meta": {
+            "kind": "auto_review"
+          }
+        },
+        {
+          "id": "bypassPermissions",
+          "name": "Bypass permissions",
+          "description": "Accepts all permissions",
+          "_meta": {
+            "kind": "full_access"
+          }
+        }
+      ]
+    },
+    "configOptions": [
+      {
+        "id": "mode",
+        "name": "Mode",
+        "description": "Session permission mode",
+        "category": "mode",
+        "type": "select",
+        "currentValue": "default",
+        "options": [
+          {
+            "value": "default",
+            "name": "Manual",
+            "description": "Always ask before making changes",
+            "_meta": {
+              "kind": "standard"
+            }
+          },
+          {
+            "value": "acceptEdits",
+            "name": "Accept edits",
+            "description": "Automatically accept all file edits",
+            "_meta": {
+              "kind": "standard"
+            }
+          },
+          {
+            "value": "plan",
+            "name": "Plan",
+            "description": "Create a plan before making changes",
+            "_meta": {
+              "kind": "plan"
+            }
+          },
+          {
+            "value": "auto",
+            "name": "Auto",
+            "description": "Claude handles permission decisions",
+            "_meta": {
+              "kind": "auto_review"
+            }
+          },
+          {
+            "value": "bypassPermissions",
+            "name": "Bypass permissions",
+            "description": "Accepts all permissions",
+            "_meta": {
+              "kind": "full_access"
+            }
+          }
+        ]
+      },
+      {
+        "id": "model",
+        "name": "Model",
+        "description": "AI model to use",
+        "category": "model",
+        "type": "select",
+        "currentValue": "default",
+        "options": [
+          {
+            "value": "default",
+            "name": "Default (recommended)",
+            "description": "glm-5.3[1m]"
+          },
+          {
+            "value": "opus",
+            "name": "glm-5.3[1m]",
+            "description": "Custom Opus model (1M context)"
+          },
+          {
+            "value": "sonnet",
+            "name": "glm-5.3[1m]",
+            "description": "Custom Sonnet model (1M context)"
+          },
+          {
+            "value": "haiku",
+            "name": "glm-5.3-flash",
+            "description": "Custom Haiku model"
+          }
+        ]
+      },
+      {
+        "id": "effort",
+        "name": "Effort",
+        "description": "Available effort levels for this model",
+        "category": "thought_level",
+        "type": "select",
+        "currentValue": "default",
+        "options": [
+          {
+            "value": "default",
+            "name": "Default"
+          },
+          {
+            "value": "low",
+            "name": "Low"
+          },
+          {
+            "value": "medium",
+            "name": "Medium"
+          },
+          {
+            "value": "high",
+            "name": "High"
+          },
+          {
+            "value": "xhigh",
+            "name": "Xhigh"
+          },
+          {
+            "value": "max",
+            "name": "Max"
+          }
+        ]
+      },
+      {
+        "id": "agent",
+        "name": "Agent",
+        "description": "Main-thread agent persona",
+        "type": "select",
+        "currentValue": "default",
+        "options": [
+          {
+            "value": "default",
+            "name": "Default",
+            "description": "Standard Claude Code agent"
+          },
+          {
+            "value": "code-simplifier:code-simplifier",
+            "name": "code-simplifier:code-simplifier",
+            "description": "Simplifies and refines code for clarity, consistency, and maintainability while preserving all functionality. Focuses on recently modified code unless instructed otherwise."
+          }
+        ]
+      }
+    ]
+  }
+}

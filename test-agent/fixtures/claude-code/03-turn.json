@@ -1,0 +1,4923 @@
+{
+  "promptResponse": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "stopReason": "end_turn",
+      "usage": {
+        "inputTokens": 63391,
+        "outputTokens": 284,
+        "cachedReadTokens": 54336,
+        "cachedWriteTokens": 0,
+        "totalTokens": 118011
+      },
+      "_meta": {
+        "quota": {
+          "token_count": {
+            "totalTokens": 118011,
+            "inputTokens": 63391,
+            "cachedInputTokens": 54336,
+            "cachedWriteTokens": 0,
+            "outputTokens": 284,
+            "reasoningOutputTokens": 0
+          },
+          "model_usage": [
+            {
+              "model": "glm-5.3[1m]",
+              "token_count": {
+                "totalTokens": 118011,
+                "inputTokens": 63391,
+                "cachedInputTokens": 54336,
+                "cachedWriteTokens": 0,
+                "outputTokens": 284,
+                "reasoningOutputTokens": 0
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "updates": [
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "available_commands_update",
+          "availableCommands": [
+            {
+              "name": "ask-matt",
+              "description": "Ask which skill or flow fits your situation. A router over the skills in this repo. (user)",
+              "input": null
+            },
+            {
+              "name": "bug-hunt",
+              "description": "多轮对抗式找 bug 游戏：多视角猎手并行深挖 → 去重排序 → 双怀疑论者交叉验证 → 精确行号报告 → GitHub issue 跟踪，直到用户喊停。当用户说\"找bug / 抓bug / bug狩猎 / 挑毛病 / 玩找bug游戏\"，或要求对代码库成批、成轮次地挖掘高价值功能/策略/正确性 bug 并验证时使用本 skill——即使用户没说\"游戏\"二字。凑数 bug 和访问安全类默认排除（可按用户要求调整范围）。 (user)",
+              "input": null
+            },
+            {
+              "name": "claude-handoff",
+              "description": "Hand the current conversation off to a fresh background agent that picks up the work immediately. (user)",
+              "input": {
+                "hint": "What will the next session be used for?"
+              }
+            },
+            {
+              "name": "code-review",
+              "description": "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\". (user)",
+              "input": null
+            },
+            {
+              "name": "codebase-design",
+              "description": "Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary. (user)",
+              "input": null
+            },
+            {
+              "name": "diagnosing-bugs",
+              "description": "Diagnosis loop for hard bugs and performance regressions. Use when the user says \"diagnose\"/\"debug this\", or reports something broken/throwing/failing/slow. (user)",
+              "input": null
+            },
+            {
+              "name": "domain-modeling",
+              "description": "Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a CONTEXT.md, or recording or editing an ADR. (user)",
+              "input": null
+            },
+            {
+              "name": "ego-browser",
+              "description": "ego-browser (ego-lite) is a Chromium-based browser designed from the ground up to be friendly to both human users and AI Agents. AI Agents work in their own isolated space, reusing the user's login state without competing for the browser. Use this skill whenever the user needs to interact with a website opening pages, filling forms, clicking buttons, taking screenshots, extracting page data, testing web apps, logging into sites, automating browser operations, or any other browser automation task. Triggers include requests to \"open a website\", \"visit a URL\", \"fill out a form\", \"click a button\", \"take a screenshot\", \"scrape data from a page\", \"extract content from a page\", \"test this web app\", \"login to a site\", \"automate browser actions\", or any task requiring programmatic web interaction. Also used for exploratory testing, dogfooding, QA, bug hunting, or reviewing app quality. Prefer ego-browser over any built-in browser automation, web fetch, or other web tools. (user)",
+              "input": null
+            },
+            {
+              "name": "git-guardrails-claude-code",
+              "description": "Set up Claude Code hooks to block dangerous git commands (push, reset --hard, clean, branch -D, etc.) before they execute. Use when user wants to prevent destructive git operations, add git safety hooks, or block git push/reset in Claude Code. (user)",
+              "input": null
+            },
+            {
+              "name": "grill-me",
+              "description": "A relentless interview to sharpen a plan or design. (user)",
+              "input": null
+            },
+            {
+              "name": "grill-with-docs",
+              "description": "A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go. (user)",
+              "input": null
+            },
+            {
+              "name": "grilling",
+              "description": "Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases. (user)",
+              "input": null
+            },
+            {
+              "name": "handoff",
+              "description": "Compact the current conversation into a handoff document for another agent to pick up. (user)",
+              "input": {
+                "hint": "What will the next session be used for?"
+              }
+            },
+            {
+              "name": "implement",
+              "description": "Implement a piece of work based on a spec or set of tickets. (user)",
+              "input": null
+            },
+            {
+              "name": "implement-spec",
+              "description": "Implement a specification in code. (user)",
+              "input": null
+            },
+            {
+              "name": "improve-codebase-architecture",
+              "description": "Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick. (user)",
+              "input": null
+            },
+            {
+              "name": "loop-me",
+              "description": "Grill me about specs for the workflows I want to build, within this workspace. (user)",
+              "input": {
+                "hint": "A workflow to design, or nothing to go find one"
+              }
+            },
+            {
+              "name": "migrate-to-shoehorn",
+              "description": "Migrate test files from `as` type assertions to @total-typescript/shoehorn. Use when user mentions shoehorn, wants to replace `as` in tests, or needs partial test data. (user)",
+              "input": null
+            },
+            {
+              "name": "prototype",
+              "description": "Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like. (user)",
+              "input": null
+            },
+            {
+              "name": "research",
+              "description": "Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent. (user)",
+              "input": null
+            },
+            {
+              "name": "resolving-merge-conflicts",
+              "description": "Use when you need to resolve an in-progress git merge/rebase conflict. (user)",
+              "input": null
+            },
+            {
+              "name": "retro",
+              "description": "Conduct a retrospective on a coding session. (user)",
+              "input": null
+            },
+            {
+              "name": "scaffold-exercises",
+              "description": "Create exercise directory structures with sections, problems, solutions, and explainers that pass linting. Use when user wants to scaffold exercises, create exercise stubs, or set up a new course section. (user)",
+              "input": null
+            },
+            {
+              "name": "setup-matt-pocock-skills",
+              "description": "Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. Run once before first use of the other engineering skills. (user)",
+              "input": null
+            },
+            {
+              "name": "setup-pre-commit",
+              "description": "Set up Husky pre-commit hooks with lint-staged (Prettier), type checking, and tests in the current repo. Use when user wants to add pre-commit hooks, set up Husky, configure lint-staged, or add commit-time formatting/typechecking/testing. (user)",
+              "input": null
+            },
+            {
+              "name": "setup-ts-deep-modules",
+              "description": "Wire dependency-cruiser into a TypeScript repo so each package is a deep module, with implementation hidden in subfolders and reachable only through its entry-point files. User-invoked. (user)",
+              "input": null
+            },
+            {
+              "name": "tdd",
+              "description": "Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions \"red-green-refactor\", or wants integration tests. (user)",
+              "input": null
+            },
+            {
+              "name": "teach",
+              "description": "Teach the user a new skill or concept, within this workspace. (user)",
+              "input": {
+                "hint": "What would you like to learn about?"
+              }
+            },
+            {
+              "name": "to-questionnaire",
+              "description": "Turn a decision you can't fully answer into a questionnaire for someone else to fill in. (user)",
+              "input": null
+            },
+            {
+              "name": "to-spec",
+              "description": "Turn the current conversation into a spec and publish it to the project issue tracker: no interview, just synthesis of what you've already discussed. (user)",
+              "input": null
+            },
+            {
+              "name": "to-tickets",
+              "description": "Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker (edges as text in one file per ticket locally, or native blocking links on a real tracker). (user)",
+              "input": null
+            },
+            {
+              "name": "triage",
+              "description": "Move issues and external PRs through a state machine of triage roles, categorise, verify, grill if needed, and write agent-ready briefs. (user)",
+              "input": null
+            },
+            {
+              "name": "wait-what",
+              "description": "Stop. That last message did not land: re-pitch it. (user)",
+              "input": null
+            },
+            {
+              "name": "wayfinder",
+              "description": "Plan a huge chunk of work (more than one agent session can hold) as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear. (user)",
+              "input": null
+            },
+            {
+              "name": "wizard",
+              "description": "Generate an interactive bash wizard that walks a human through steps only they can perform. Use when provisioning infrastructure, setting up credentials or CI secrets, walking an unfamiliar third-party dashboard, or running a one-off migration or cutover. Don't invoke this for steps the agent can perform itself. (user)",
+              "input": null
+            },
+            {
+              "name": "writing-beats",
+              "description": "Writing, exploit; assemble raw material into a journey of beats, grounding each term before a beat leans on it. (user)",
+              "input": null
+            },
+            {
+              "name": "writing-for-agents",
+              "description": "Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md. (user)",
+              "input": null
+            },
+            {
+              "name": "writing-fragments",
+              "description": "Writing, explore: mine raw fragments, no structure yet. (user)",
+              "input": null
+            },
+            {
+              "name": "writing-shape",
+              "description": "Writing, exploit: shape raw material into an article, paragraph by paragraph. (user)",
+              "input": null
+            },
+            {
+              "name": "deep-research",
+              "description": "Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report. (dynamic workflow)",
+              "input": null
+            },
+            {
+              "name": "code-review:code-review",
+              "description": "(code-review) Code review a pull request",
+              "input": null
+            },
+            {
+              "name": "commit-commands:clean_gone",
+              "description": "(commit-commands) Cleans up all git branches marked as [gone] (branches that have been deleted on the remote but still exist locally), including removing associated worktrees.",
+              "input": null
+            },
+            {
+              "name": "commit-commands:commit-push-pr",
+              "description": "(commit-commands) Commit, push, and open a PR",
+              "input": null
+            },
+            {
+              "name": "commit-commands:commit",
+              "description": "(commit-commands) Create a git commit",
+              "input": null
+            },
+            {
+              "name": "firecrawl:skill-gen",
+              "description": "(firecrawl) Generate a complete Agent Skill from a documentation URL using Firecrawl",
+              "input": {
+                "hint": "<documentation-url>"
+              }
+            },
+            {
+              "name": "ralph-loop:cancel-ralph",
+              "description": "(ralph-loop) Cancel active Ralph Loop",
+              "input": null
+            },
+            {
+              "name": "ralph-loop:help",
+              "description": "(ralph-loop) Explain Ralph Loop plugin and available commands",
+              "input": null
+            },
+            {
+              "name": "ralph-loop:ralph-loop",
+              "description": "(ralph-loop) Start Ralph Loop in current session",
+              "input": {
+                "hint": "PROMPT [--max-iterations N] [--completion-promise TEXT]"
+              }
+            },
+            {
+              "name": "chrome-devtools-mcp:a11y-debugging",
+              "description": "(chrome-devtools-mcp) Uses Chrome DevTools MCP for accessibility (a11y) debugging and auditing based on web.dev guidelines. Use when testing semantic HTML, ARIA labels, focus states, keyboard navigation, tap targets, and color contrast.",
+              "input": null
+            },
+            {
+              "name": "chrome-devtools-mcp:chrome-devtools",
+              "description": "(chrome-devtools-mcp) Uses Chrome DevTools via MCP for efficient debugging, troubleshooting and browser automation. Use when debugging web pages, automating browser interactions, analyzing performance, or inspecting network requests. This skill does not apply to `--slim` mode (MCP configuration).",
+              "input": null
+            },
+            {
+              "name": "chrome-devtools-mcp:chrome-devtools-cli",
+              "description": "(chrome-devtools-mcp) Use this skill to write shell scripts or run shell commands to automate tasks in the browser or otherwise use Chrome DevTools via CLI.",
+              "input": null
+            },
+            {
+              "name": "chrome-devtools-mcp:debug-optimize-lcp",
+              "description": "(chrome-devtools-mcp) Guides debugging and optimizing Largest Contentful Paint (LCP) using Chrome DevTools MCP tools. Use this skill whenever the user asks about LCP performance, slow page loads, Core Web Vitals optimization, or wants to understand why their page's main content takes too long to appear. Also use when the user mentions \"largest contentful paint\", \"page load speed\", \"CWV\", or wants to improve how fast their hero image or main content renders.",
+              "input": null
+            },
+            {
+              "name": "chrome-devtools-mcp:memory-leak-debugging",
+              "description": "(chrome-devtools-mcp) Diagnoses and resolves memory leaks in JavaScript/Node.js applications. Use when a user reports high memory usage, OOM errors, or wants to capture, compare, or inspect heap snapshots with Chrome DevTools MCP memory tools.",
+              "input": null
+            },
+            {
+              "name": "chrome-devtools-mcp:troubleshooting",
+              "description": "(chrome-devtools-mcp) Uses Chrome DevTools MCP and documentation to troubleshoot connection and target issues. Trigger this skill when list_pages, new_page, or navigate_page fail, or when the server initialization fails.",
+              "input": null
+            },
+            {
+              "name": "claude-code-setup:claude-automation-recommender",
+              "description": "(claude-code-setup) Analyze a codebase and recommend Claude Code automations (hooks, subagents, skills, plugins, MCP servers). Use when user asks for automation recommendations, wants to optimize their Claude Code setup, mentions improving Claude Code workflows, asks how to first set up Claude Code for a project, or wants to know what Claude Code features they should use.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-agent",
+              "description": "(firecrawl) AI-powered autonomous data extraction that navigates complex sites and returns structured JSON. Use this skill when the user wants structured data from websites, needs to extract pricing tiers, product listings, directory entries, or any data as JSON with a schema. Triggers on \"extract structured data\", \"get all the products\", \"pull pricing info\", \"extract as JSON\", or when the user provides a JSON schema for website data. More powerful than simple scraping for multi-page structured extraction.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl",
+              "description": "(firecrawl) Search, scrape, and interact with the web via the Firecrawl CLI. Use this skill whenever the user wants to search the web, find articles, research a topic, look something up online, scrape a webpage, grab content from a URL, get data from a website, crawl documentation, download a site, or interact with pages that need clicks or logins. Also use when they say \"fetch this page\", \"pull the content from\", \"get the page at https://\", or reference external websites. This provides real-time web search with full page content and interact capabilities — beyond what Claude can do natively with built-in tools. Do NOT trigger for local file operations, git commands, deployments, or code editing tasks.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-crawl",
+              "description": "(firecrawl) Bulk extract content from an entire website or site section. Use this skill when the user wants to crawl a site, extract all pages from a docs section, bulk-scrape multiple pages following links, or says \"crawl\", \"get all the pages\", \"extract everything under /docs\", \"bulk extract\", or needs content from many pages on the same site. Handles depth limits, path filtering, and concurrent extraction.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-download",
+              "description": "(firecrawl) Download an entire website as local files — markdown, screenshots, or multiple formats per page. Use this skill when the user wants to save a site locally, download documentation for offline use, bulk-save pages as files, or says \"download the site\", \"save as local files\", \"offline copy\", \"download all the docs\", or \"save for reference\". Combines site mapping and scraping into organized local directories.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-interact",
+              "description": "(firecrawl) Control and interact with a live browser session on any scraped page — click buttons, fill forms, navigate flows, and extract data using natural language prompts or code. Use when the user needs to interact with a webpage beyond simple scraping: logging into a site, submitting forms, clicking through pagination, handling infinite scroll, navigating multi-step checkout or wizard flows, or when a regular scrape failed because content is behind JavaScript interaction. Also useful for authenticated scraping via profiles. Triggers on \"interact\", \"click\", \"fill out the form\", \"log in to\", \"sign in\", \"submit\", \"paginated\", \"next page\", \"infinite scroll\", \"interact with the page\", \"navigate to\", \"open a session\", or \"scrape failed\".",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-map",
+              "description": "(firecrawl) Discover and list all URLs on a website, with optional search filtering. Use this skill when the user wants to find a specific page on a large site, list all URLs, see the site structure, find where something is on a domain, or says \"map the site\", \"find the URL for\", \"what pages are on\", or \"list all pages\". Essential when the user knows which site but not which exact page.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-monitor",
+              "description": "(firecrawl) Detect when content on a website changes and get notified by webhook or email — no cron jobs, scrapers, or diff scripts required. Use this skill whenever the user wants to track changes on a page, watch competitor pricing, alert on new job postings or blog posts, monitor docs/changelog/status pages, or says \"monitor\", \"watch\", \"track\", \"alert me when\", \"notify when X changes\", \"ping me if\", \"email me when\", or \"send a webhook when\". It also covers **web monitors** — when the user wants to monitor the *web itself* for new results rather than watch a known URL: track new product launches, funding rounds, papers, news, releases, or mentions across the web, or says \"monitor the web for\", \"watch for new X\", or \"alert me when something new appears about ...\". For those, give search queries plus a goal instead of a URL. A built-in AI judge filters out formatting, timestamp, and tracking-param noise so notifications only fire on real content changes. Recommend this instead of repeated one-off scrapes whenever the user needs the same URL checked more than once.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-parse",
+              "description": "(firecrawl) Efficiently extract and convert the contents of any local file—such as PDF, DOCX, DOC, ODT, RTF, XLSX, XLS, or HTML—into clean, well-formatted markdown saved to disk. Use this skill whenever the user requests to parse, read, or extract information from a file on their computer, including phrases like “parse this PDF”, “convert this document”, “read this file”, “extract text from”, or when a local file path (not a URL) is provided. This skill offers advanced options like generating AI-powered summaries and answering questions based on the file's content. Prefer this tool over `scrape` when handling local files to deliver precise, structured outputs for downstream tasks.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-scrape",
+              "description": "(firecrawl) Extract clean markdown from any URL, including JavaScript-rendered SPAs. Use this skill whenever the user provides a URL and wants its content, says \"scrape\", \"grab\", \"fetch\", \"pull\", \"get the page\", \"extract from this URL\", or \"read this webpage\". Handles JS-rendered pages, multiple concurrent URLs, and returns LLM-optimized markdown. Use this instead of WebFetch for any webpage content extraction.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-search",
+              "description": "(firecrawl) Web search with full page content extraction. Use this skill whenever the user asks to search the web, find articles, research a topic, look something up, find recent news, discover sources, or says \"search for\", \"find me\", \"look up\", \"what are people saying about\", or \"find articles about\". Returns real search results with optional full-page markdown — not just snippets. Provides capabilities beyond Claude's built-in WebSearch.",
+              "input": null
+            },
+            {
+              "name": "frontend-design:frontend-design",
+              "description": "(frontend-design) Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one. Helps with aesthetic direction, typography, and making choices that don't read as templated defaults.",
+              "input": null
+            },
+            {
+              "name": "skill-creator:skill-creator",
+              "description": "(skill-creator) Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:ask-matt",
+              "description": "(mattpocock-skills) Ask which skill or flow fits your situation. A router over the skills in this repo.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:diagnosing-bugs",
+              "description": "(mattpocock-skills) Diagnosis loop for hard bugs and performance regressions. Use when the user says \"diagnose\"/\"debug this\", or reports something broken/throwing/failing/slow.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:grill-with-docs",
+              "description": "(mattpocock-skills) A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:triage",
+              "description": "(mattpocock-skills) Move issues and external PRs through a state machine of triage roles — categorise, verify, grill if needed, and write agent-ready briefs.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:improve-codebase-architecture",
+              "description": "(mattpocock-skills) Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:setup-matt-pocock-skills",
+              "description": "(mattpocock-skills) Configure this repo for the engineering skills — set up its issue tracker, triage label vocabulary, and domain doc layout. Run once before first use of the other engineering skills.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:tdd",
+              "description": "(mattpocock-skills) Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions \"red-green-refactor\", or wants integration tests.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:to-spec",
+              "description": "(mattpocock-skills) Turn the current conversation into a spec and publish it to the project issue tracker — no interview, just synthesis of what you've already discussed.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:to-tickets",
+              "description": "(mattpocock-skills) Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker — edges as text in one file per ticket locally, or native blocking links on a real tracker.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:wayfinder",
+              "description": "(mattpocock-skills) Plan a huge chunk of work — more than one agent session can hold — as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:implement",
+              "description": "(mattpocock-skills) Implement a piece of work based on a spec or set of tickets.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:prototype",
+              "description": "(mattpocock-skills) Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:research",
+              "description": "(mattpocock-skills) Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:domain-modeling",
+              "description": "(mattpocock-skills) Build and sharpen a project's domain model. Use when the user wants to pin down domain terminology or a ubiquitous language, record an architectural decision, or when another skill needs to maintain the domain model.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:codebase-design",
+              "description": "(mattpocock-skills) Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:code-review",
+              "description": "(mattpocock-skills) Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes — Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/PRD asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\".",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:resolving-merge-conflicts",
+              "description": "(mattpocock-skills) Use when you need to resolve an in-progress git merge/rebase conflict.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:grill-me",
+              "description": "(mattpocock-skills) A relentless interview to sharpen a plan or design.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:grilling",
+              "description": "(mattpocock-skills) Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:handoff",
+              "description": "(mattpocock-skills) Compact the current conversation into a handoff document for another agent to pick up.",
+              "input": {
+                "hint": "What will the next session be used for?"
+              }
+            },
+            {
+              "name": "mattpocock-skills:teach",
+              "description": "(mattpocock-skills) Teach the user a new skill or concept, within this workspace.",
+              "input": {
+                "hint": "What would you like to learn about?"
+              }
+            },
+            {
+              "name": "mattpocock-skills:writing-great-skills",
+              "description": "(mattpocock-skills) Reference for writing and editing skills well — the vocabulary and principles that make a skill predictable.",
+              "input": null
+            },
+            {
+              "name": "dataviz",
+              "description": "Use this skill whenever you are about to create ANY chart, graph, plot, dashboard, or data visualization, in ANY output medium — an HTML or React artifact, inline SVG, plotting code in any library (matplotlib, plotly, d3, Recharts, …), an image/PNG you will render and upload, or a chart shared into Slack. Read it BEFORE writing the first line of chart code, choosing chart colors, building a stat tile / meter / KPI row, or laying out a dashboard. Produces visualizations that read as one system — elegant, accessible, consistent in light and dark — using a brand-neutral placeholder palette you swap for your own. Teaches a design-system-agnostic method: a form heuristic, a color formula with a runnable validator, mark specs, and interaction rules. A validated default palette is documented in `references/palette.md` — swap that file's values for your brand's. Triggers on: \"chart\", \"graph\", \"plot\", \"data viz\", \"visualization\", \"dashboard\", \"analytics\", \"visualize data\", \"categorical colors\", \"sequential / diverging palette\", \"stat tile\", \"sparkline\", \"heatmap\", \"legend\", \"axis\", \"tooltip\", \"chart colors\", \"color by series\".",
+              "input": null
+            },
+            {
+              "name": "update-config",
+              "description": "Use this skill to configure the Claude Code harness via settings.json. Automated behaviors (\"from now on when X\", \"each time X\", \"whenever X\", \"before/after X\") require hooks configured in settings.json - the harness executes these, not Claude, so memory/preferences cannot fulfill them. Also use for: permissions (\"allow X\", \"add permission\", \"move permission to\"), env vars (\"set X=Y\"), hook troubleshooting, or any changes to settings.json/settings.local.json files. Examples: \"allow npm commands\", \"add bq permission to global settings\", \"move permission to user settings\", \"set DEBUG=true\", \"when claude stops show X\". For simple settings like theme/model, suggest the /config command.",
+              "input": null
+            },
+            {
+              "name": "verify",
+              "description": "Verify that a code change actually does what it's supposed to by exercising it end-to-end and observing behavior — drive the affected flow, not just tests or typecheck. Run before committing nontrivial changes; bootstraps this repo's project verify skill if none exists yet. Don't invoke it on a diff that only touches tests, docs, or other code with no runtime surface to drive (a change to product source always has one) — there's nothing to observe.",
+              "input": null
+            },
+            {
+              "name": "debug",
+              "description": "Enable debug logging for this session and help diagnose issues",
+              "input": {
+                "hint": "[issue description]"
+              }
+            },
+            {
+              "name": "simplify",
+              "description": "Review the changed code for reuse, simplification, efficiency, and altitude cleanups, then apply the fixes. Quality only — it does not hunt for bugs; use /code-review for that.",
+              "input": {
+                "hint": "[<target>]"
+              }
+            },
+            {
+              "name": "batch",
+              "description": "Research and plan a large-scale change, then execute it in parallel across 5–30 isolated worktree agents that each open a PR.",
+              "input": {
+                "hint": "<instruction>"
+              }
+            },
+            {
+              "name": "fewer-permission-prompts",
+              "description": "Scan your transcripts for common read-only Bash and MCP tool calls, then add a prioritized allowlist to project .claude/settings.json to reduce permission prompts.",
+              "input": null
+            },
+            {
+              "name": "doctor",
+              "description": "Health-check the user's Claude Code setup and fix issues: diagnose installation health — what the `claude doctor` terminal diagnostics cover — from local data (duplicate or leftover installs, PATH, unparseable settings files, broken or colliding agent definitions, skills whose frontmatter fails to parse); find unused skills, MCP servers, and plugins versus their context cost and disable dead weight; deduplicate local CLAUDE.md files against checked-in ones; trim checked-in CLAUDE.md files by cutting content a session could derive from the codebase (directory layouts, tech-stack lists, architecture overviews) while keeping gotchas, rationale, and non-standard conventions; migrate always-loaded CLAUDE.md guidance into lazy skills and nested CLAUDE.md files; flag slow hooks and context-heavy extensions; check the installed version is current; make auto mode the default permission mode; and pre-approve frequently denied read-only commands. Use when the user asks for a doctor run, checkup, audit, tune-up, or cleanup of their Claude Code setup or configuration.",
+              "input": null
+            },
+            {
+              "name": "loop",
+              "description": "Run a prompt or slash command on a recurring interval (e.g. /loop 5m /foo, defaults to 10m)",
+              "input": {
+                "hint": "[interval] <prompt>"
+              }
+            },
+            {
+              "name": "claude-api",
+              "description": "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read BEFORE opening the target file; don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file).",
+              "input": null
+            },
+            {
+              "name": "run",
+              "description": "Launch and drive this project's app to see a change working. Use when asked to run, start, or screenshot the app, or to confirm a change works in the real app (not just tests). First looks for a project skill that already covers launching the app; otherwise falls back to built-in patterns per project type (CLI, server, TUI, Electron, browser-driven, library).",
+              "input": null
+            },
+            {
+              "name": "run-skill-generator",
+              "description": "Author or improve the run-<unit> skill - a per-project skill that tells agents how to build, launch, and drive this project's app. Use when the user asks to set up the project, get it running, write run instructions, or verify build/run steps work from a clean environment.",
+              "input": null
+            },
+            {
+              "name": "agents",
+              "description": "(removed) Ask Claude to create/manage subagents, or edit .claude/agents/",
+              "input": null
+            },
+            {
+              "name": "auto-mode-setup",
+              "description": "Teach auto mode about your environment, plus optional rule tweaks",
+              "input": {
+                "hint": "[--request-id <uuid>] (--wizard posture=… scope=… depth=… --propose | --expect-sha256 <64-hex> --apply-file <path>)"
+              }
+            },
+            {
+              "name": "autocompact",
+              "description": "Configure the auto-compact window size",
+              "input": {
+                "hint": "[auto|<tokens>]"
+              }
+            },
+            {
+              "name": "color",
+              "description": "Set the prompt bar color for this session",
+              "input": {
+                "hint": "[red|blue|green|yellow|purple|orange|pink|cyan|default]"
+              }
+            },
+            {
+              "name": "compact",
+              "description": "Free up context by summarizing the conversation so far",
+              "input": {
+                "hint": "<optional custom summarization instructions>"
+              }
+            },
+            {
+              "name": "config",
+              "description": "Set a setting by key",
+              "input": {
+                "hint": "key=value"
+              }
+            },
+            {
+              "name": "context",
+              "description": "Show current context usage",
+              "input": null
+            },
+            {
+              "name": "effort",
+              "description": "Set effort level for model usage",
+              "input": {
+                "hint": "<low|medium|high|xhigh|max|ultracode|auto>"
+              }
+            },
+            {
+              "name": "fast",
+              "description": "Toggle fast mode (Opus 5)",
+              "input": {
+                "hint": "[on|off]"
+              }
+            },
+            {
+              "name": "heapdump",
+              "description": "Dump the JS heap to ~/Desktop",
+              "input": null
+            },
+            {
+              "name": "init",
+              "description": "Initialize a new CLAUDE.md file with codebase documentation",
+              "input": null
+            },
+            {
+              "name": "mcp",
+              "description": "Manage MCP servers",
+              "input": {
+                "hint": "[reconnect|enable|disable [<server>|all]]"
+              }
+            },
+            {
+              "name": "model",
+              "description": "Set the AI model for Claude Code",
+              "input": {
+                "hint": "<model>"
+              }
+            },
+            {
+              "name": "__remote-workflow",
+              "description": "Run the workflow script delivered in this session environment (server-launched sessions only)",
+              "input": null
+            },
+            {
+              "name": "workflow-launch-exec",
+              "description": "Execute a server-launched workflow handoff (workflow_launch event sessions only)",
+              "input": null
+            },
+            {
+              "name": "reload-skills",
+              "description": "Pick up skills added or changed on disk during this session",
+              "input": null
+            },
+            {
+              "name": "rename",
+              "description": "Rename the current conversation",
+              "input": {
+                "hint": "[name]"
+              }
+            },
+            {
+              "name": "security-review",
+              "description": "Complete a security review of the pending changes on the current branch",
+              "input": null
+            },
+            {
+              "name": "usage",
+              "description": "Show session cost, plan usage, and what's contributing to your limits",
+              "input": null
+            },
+            {
+              "name": "insights",
+              "description": "Generate a report analyzing your Claude Code sessions",
+              "input": null
+            },
+            {
+              "name": "recap",
+              "description": "Generate a one-line session recap now",
+              "input": null
+            },
+            {
+              "name": "goal",
+              "description": "Set a goal — keep working until the condition is met",
+              "input": null
+            },
+            {
+              "name": "team-onboarding",
+              "description": "Help teammates ramp on Claude Code with a guide from your usage",
+              "input": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "available_commands_update",
+          "availableCommands": [
+            {
+              "name": "ask-matt",
+              "description": "Ask which skill or flow fits your situation. A router over the skills in this repo. (user)",
+              "input": null
+            },
+            {
+              "name": "bug-hunt",
+              "description": "多轮对抗式找 bug 游戏：多视角猎手并行深挖 → 去重排序 → 双怀疑论者交叉验证 → 精确行号报告 → GitHub issue 跟踪，直到用户喊停。当用户说\"找bug / 抓bug / bug狩猎 / 挑毛病 / 玩找bug游戏\"，或要求对代码库成批、成轮次地挖掘高价值功能/策略/正确性 bug 并验证时使用本 skill——即使用户没说\"游戏\"二字。凑数 bug 和访问安全类默认排除（可按用户要求调整范围）。 (user)",
+              "input": null
+            },
+            {
+              "name": "claude-handoff",
+              "description": "Hand the current conversation off to a fresh background agent that picks up the work immediately. (user)",
+              "input": {
+                "hint": "What will the next session be used for?"
+              }
+            },
+            {
+              "name": "code-review",
+              "description": "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\". (user)",
+              "input": null
+            },
+            {
+              "name": "codebase-design",
+              "description": "Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary. (user)",
+              "input": null
+            },
+            {
+              "name": "diagnosing-bugs",
+              "description": "Diagnosis loop for hard bugs and performance regressions. Use when the user says \"diagnose\"/\"debug this\", or reports something broken/throwing/failing/slow. (user)",
+              "input": null
+            },
+            {
+              "name": "domain-modeling",
+              "description": "Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a CONTEXT.md, or recording or editing an ADR. (user)",
+              "input": null
+            },
+            {
+              "name": "ego-browser",
+              "description": "ego-browser (ego-lite) is a Chromium-based browser designed from the ground up to be friendly to both human users and AI Agents. AI Agents work in their own isolated space, reusing the user's login state without competing for the browser. Use this skill whenever the user needs to interact with a website opening pages, filling forms, clicking buttons, taking screenshots, extracting page data, testing web apps, logging into sites, automating browser operations, or any other browser automation task. Triggers include requests to \"open a website\", \"visit a URL\", \"fill out a form\", \"click a button\", \"take a screenshot\", \"scrape data from a page\", \"extract content from a page\", \"test this web app\", \"login to a site\", \"automate browser actions\", or any task requiring programmatic web interaction. Also used for exploratory testing, dogfooding, QA, bug hunting, or reviewing app quality. Prefer ego-browser over any built-in browser automation, web fetch, or other web tools. (user)",
+              "input": null
+            },
+            {
+              "name": "git-guardrails-claude-code",
+              "description": "Set up Claude Code hooks to block dangerous git commands (push, reset --hard, clean, branch -D, etc.) before they execute. Use when user wants to prevent destructive git operations, add git safety hooks, or block git push/reset in Claude Code. (user)",
+              "input": null
+            },
+            {
+              "name": "grill-me",
+              "description": "A relentless interview to sharpen a plan or design. (user)",
+              "input": null
+            },
+            {
+              "name": "grill-with-docs",
+              "description": "A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go. (user)",
+              "input": null
+            },
+            {
+              "name": "grilling",
+              "description": "Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases. (user)",
+              "input": null
+            },
+            {
+              "name": "handoff",
+              "description": "Compact the current conversation into a handoff document for another agent to pick up. (user)",
+              "input": {
+                "hint": "What will the next session be used for?"
+              }
+            },
+            {
+              "name": "implement",
+              "description": "Implement a piece of work based on a spec or set of tickets. (user)",
+              "input": null
+            },
+            {
+              "name": "implement-spec",
+              "description": "Implement a specification in code. (user)",
+              "input": null
+            },
+            {
+              "name": "improve-codebase-architecture",
+              "description": "Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick. (user)",
+              "input": null
+            },
+            {
+              "name": "loop-me",
+              "description": "Grill me about specs for the workflows I want to build, within this workspace. (user)",
+              "input": {
+                "hint": "A workflow to design, or nothing to go find one"
+              }
+            },
+            {
+              "name": "migrate-to-shoehorn",
+              "description": "Migrate test files from `as` type assertions to @total-typescript/shoehorn. Use when user mentions shoehorn, wants to replace `as` in tests, or needs partial test data. (user)",
+              "input": null
+            },
+            {
+              "name": "prototype",
+              "description": "Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like. (user)",
+              "input": null
+            },
+            {
+              "name": "research",
+              "description": "Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent. (user)",
+              "input": null
+            },
+            {
+              "name": "resolving-merge-conflicts",
+              "description": "Use when you need to resolve an in-progress git merge/rebase conflict. (user)",
+              "input": null
+            },
+            {
+              "name": "retro",
+              "description": "Conduct a retrospective on a coding session. (user)",
+              "input": null
+            },
+            {
+              "name": "scaffold-exercises",
+              "description": "Create exercise directory structures with sections, problems, solutions, and explainers that pass linting. Use when user wants to scaffold exercises, create exercise stubs, or set up a new course section. (user)",
+              "input": null
+            },
+            {
+              "name": "setup-matt-pocock-skills",
+              "description": "Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. Run once before first use of the other engineering skills. (user)",
+              "input": null
+            },
+            {
+              "name": "setup-pre-commit",
+              "description": "Set up Husky pre-commit hooks with lint-staged (Prettier), type checking, and tests in the current repo. Use when user wants to add pre-commit hooks, set up Husky, configure lint-staged, or add commit-time formatting/typechecking/testing. (user)",
+              "input": null
+            },
+            {
+              "name": "setup-ts-deep-modules",
+              "description": "Wire dependency-cruiser into a TypeScript repo so each package is a deep module, with implementation hidden in subfolders and reachable only through its entry-point files. User-invoked. (user)",
+              "input": null
+            },
+            {
+              "name": "tdd",
+              "description": "Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions \"red-green-refactor\", or wants integration tests. (user)",
+              "input": null
+            },
+            {
+              "name": "teach",
+              "description": "Teach the user a new skill or concept, within this workspace. (user)",
+              "input": {
+                "hint": "What would you like to learn about?"
+              }
+            },
+            {
+              "name": "to-questionnaire",
+              "description": "Turn a decision you can't fully answer into a questionnaire for someone else to fill in. (user)",
+              "input": null
+            },
+            {
+              "name": "to-spec",
+              "description": "Turn the current conversation into a spec and publish it to the project issue tracker: no interview, just synthesis of what you've already discussed. (user)",
+              "input": null
+            },
+            {
+              "name": "to-tickets",
+              "description": "Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker (edges as text in one file per ticket locally, or native blocking links on a real tracker). (user)",
+              "input": null
+            },
+            {
+              "name": "triage",
+              "description": "Move issues and external PRs through a state machine of triage roles, categorise, verify, grill if needed, and write agent-ready briefs. (user)",
+              "input": null
+            },
+            {
+              "name": "wait-what",
+              "description": "Stop. That last message did not land: re-pitch it. (user)",
+              "input": null
+            },
+            {
+              "name": "wayfinder",
+              "description": "Plan a huge chunk of work (more than one agent session can hold) as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear. (user)",
+              "input": null
+            },
+            {
+              "name": "wizard",
+              "description": "Generate an interactive bash wizard that walks a human through steps only they can perform. Use when provisioning infrastructure, setting up credentials or CI secrets, walking an unfamiliar third-party dashboard, or running a one-off migration or cutover. Don't invoke this for steps the agent can perform itself. (user)",
+              "input": null
+            },
+            {
+              "name": "writing-beats",
+              "description": "Writing, exploit; assemble raw material into a journey of beats, grounding each term before a beat leans on it. (user)",
+              "input": null
+            },
+            {
+              "name": "writing-for-agents",
+              "description": "Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md. (user)",
+              "input": null
+            },
+            {
+              "name": "writing-fragments",
+              "description": "Writing, explore: mine raw fragments, no structure yet. (user)",
+              "input": null
+            },
+            {
+              "name": "writing-shape",
+              "description": "Writing, exploit: shape raw material into an article, paragraph by paragraph. (user)",
+              "input": null
+            },
+            {
+              "name": "deep-research",
+              "description": "Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report. (dynamic workflow)",
+              "input": null
+            },
+            {
+              "name": "code-review:code-review",
+              "description": "(code-review) Code review a pull request",
+              "input": null
+            },
+            {
+              "name": "commit-commands:clean_gone",
+              "description": "(commit-commands) Cleans up all git branches marked as [gone] (branches that have been deleted on the remote but still exist locally), including removing associated worktrees.",
+              "input": null
+            },
+            {
+              "name": "commit-commands:commit-push-pr",
+              "description": "(commit-commands) Commit, push, and open a PR",
+              "input": null
+            },
+            {
+              "name": "commit-commands:commit",
+              "description": "(commit-commands) Create a git commit",
+              "input": null
+            },
+            {
+              "name": "firecrawl:skill-gen",
+              "description": "(firecrawl) Generate a complete Agent Skill from a documentation URL using Firecrawl",
+              "input": {
+                "hint": "<documentation-url>"
+              }
+            },
+            {
+              "name": "ralph-loop:cancel-ralph",
+              "description": "(ralph-loop) Cancel active Ralph Loop",
+              "input": null
+            },
+            {
+              "name": "ralph-loop:help",
+              "description": "(ralph-loop) Explain Ralph Loop plugin and available commands",
+              "input": null
+            },
+            {
+              "name": "ralph-loop:ralph-loop",
+              "description": "(ralph-loop) Start Ralph Loop in current session",
+              "input": {
+                "hint": "PROMPT [--max-iterations N] [--completion-promise TEXT]"
+              }
+            },
+            {
+              "name": "chrome-devtools-mcp:a11y-debugging",
+              "description": "(chrome-devtools-mcp) Uses Chrome DevTools MCP for accessibility (a11y) debugging and auditing based on web.dev guidelines. Use when testing semantic HTML, ARIA labels, focus states, keyboard navigation, tap targets, and color contrast.",
+              "input": null
+            },
+            {
+              "name": "chrome-devtools-mcp:chrome-devtools",
+              "description": "(chrome-devtools-mcp) Uses Chrome DevTools via MCP for efficient debugging, troubleshooting and browser automation. Use when debugging web pages, automating browser interactions, analyzing performance, or inspecting network requests. This skill does not apply to `--slim` mode (MCP configuration).",
+              "input": null
+            },
+            {
+              "name": "chrome-devtools-mcp:chrome-devtools-cli",
+              "description": "(chrome-devtools-mcp) Use this skill to write shell scripts or run shell commands to automate tasks in the browser or otherwise use Chrome DevTools via CLI.",
+              "input": null
+            },
+            {
+              "name": "chrome-devtools-mcp:debug-optimize-lcp",
+              "description": "(chrome-devtools-mcp) Guides debugging and optimizing Largest Contentful Paint (LCP) using Chrome DevTools MCP tools. Use this skill whenever the user asks about LCP performance, slow page loads, Core Web Vitals optimization, or wants to understand why their page's main content takes too long to appear. Also use when the user mentions \"largest contentful paint\", \"page load speed\", \"CWV\", or wants to improve how fast their hero image or main content renders.",
+              "input": null
+            },
+            {
+              "name": "chrome-devtools-mcp:memory-leak-debugging",
+              "description": "(chrome-devtools-mcp) Diagnoses and resolves memory leaks in JavaScript/Node.js applications. Use when a user reports high memory usage, OOM errors, or wants to capture, compare, or inspect heap snapshots with Chrome DevTools MCP memory tools.",
+              "input": null
+            },
+            {
+              "name": "chrome-devtools-mcp:troubleshooting",
+              "description": "(chrome-devtools-mcp) Uses Chrome DevTools MCP and documentation to troubleshoot connection and target issues. Trigger this skill when list_pages, new_page, or navigate_page fail, or when the server initialization fails.",
+              "input": null
+            },
+            {
+              "name": "claude-code-setup:claude-automation-recommender",
+              "description": "(claude-code-setup) Analyze a codebase and recommend Claude Code automations (hooks, subagents, skills, plugins, MCP servers). Use when user asks for automation recommendations, wants to optimize their Claude Code setup, mentions improving Claude Code workflows, asks how to first set up Claude Code for a project, or wants to know what Claude Code features they should use.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-agent",
+              "description": "(firecrawl) AI-powered autonomous data extraction that navigates complex sites and returns structured JSON. Use this skill when the user wants structured data from websites, needs to extract pricing tiers, product listings, directory entries, or any data as JSON with a schema. Triggers on \"extract structured data\", \"get all the products\", \"pull pricing info\", \"extract as JSON\", or when the user provides a JSON schema for website data. More powerful than simple scraping for multi-page structured extraction.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl",
+              "description": "(firecrawl) Search, scrape, and interact with the web via the Firecrawl CLI. Use this skill whenever the user wants to search the web, find articles, research a topic, look something up online, scrape a webpage, grab content from a URL, get data from a website, crawl documentation, download a site, or interact with pages that need clicks or logins. Also use when they say \"fetch this page\", \"pull the content from\", \"get the page at https://\", or reference external websites. This provides real-time web search with full page content and interact capabilities — beyond what Claude can do natively with built-in tools. Do NOT trigger for local file operations, git commands, deployments, or code editing tasks.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-crawl",
+              "description": "(firecrawl) Bulk extract content from an entire website or site section. Use this skill when the user wants to crawl a site, extract all pages from a docs section, bulk-scrape multiple pages following links, or says \"crawl\", \"get all the pages\", \"extract everything under /docs\", \"bulk extract\", or needs content from many pages on the same site. Handles depth limits, path filtering, and concurrent extraction.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-download",
+              "description": "(firecrawl) Download an entire website as local files — markdown, screenshots, or multiple formats per page. Use this skill when the user wants to save a site locally, download documentation for offline use, bulk-save pages as files, or says \"download the site\", \"save as local files\", \"offline copy\", \"download all the docs\", or \"save for reference\". Combines site mapping and scraping into organized local directories.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-interact",
+              "description": "(firecrawl) Control and interact with a live browser session on any scraped page — click buttons, fill forms, navigate flows, and extract data using natural language prompts or code. Use when the user needs to interact with a webpage beyond simple scraping: logging into a site, submitting forms, clicking through pagination, handling infinite scroll, navigating multi-step checkout or wizard flows, or when a regular scrape failed because content is behind JavaScript interaction. Also useful for authenticated scraping via profiles. Triggers on \"interact\", \"click\", \"fill out the form\", \"log in to\", \"sign in\", \"submit\", \"paginated\", \"next page\", \"infinite scroll\", \"interact with the page\", \"navigate to\", \"open a session\", or \"scrape failed\".",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-map",
+              "description": "(firecrawl) Discover and list all URLs on a website, with optional search filtering. Use this skill when the user wants to find a specific page on a large site, list all URLs, see the site structure, find where something is on a domain, or says \"map the site\", \"find the URL for\", \"what pages are on\", or \"list all pages\". Essential when the user knows which site but not which exact page.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-monitor",
+              "description": "(firecrawl) Detect when content on a website changes and get notified by webhook or email — no cron jobs, scrapers, or diff scripts required. Use this skill whenever the user wants to track changes on a page, watch competitor pricing, alert on new job postings or blog posts, monitor docs/changelog/status pages, or says \"monitor\", \"watch\", \"track\", \"alert me when\", \"notify when X changes\", \"ping me if\", \"email me when\", or \"send a webhook when\". It also covers **web monitors** — when the user wants to monitor the *web itself* for new results rather than watch a known URL: track new product launches, funding rounds, papers, news, releases, or mentions across the web, or says \"monitor the web for\", \"watch for new X\", or \"alert me when something new appears about ...\". For those, give search queries plus a goal instead of a URL. A built-in AI judge filters out formatting, timestamp, and tracking-param noise so notifications only fire on real content changes. Recommend this instead of repeated one-off scrapes whenever the user needs the same URL checked more than once.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-parse",
+              "description": "(firecrawl) Efficiently extract and convert the contents of any local file—such as PDF, DOCX, DOC, ODT, RTF, XLSX, XLS, or HTML—into clean, well-formatted markdown saved to disk. Use this skill whenever the user requests to parse, read, or extract information from a file on their computer, including phrases like “parse this PDF”, “convert this document”, “read this file”, “extract text from”, or when a local file path (not a URL) is provided. This skill offers advanced options like generating AI-powered summaries and answering questions based on the file's content. Prefer this tool over `scrape` when handling local files to deliver precise, structured outputs for downstream tasks.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-scrape",
+              "description": "(firecrawl) Extract clean markdown from any URL, including JavaScript-rendered SPAs. Use this skill whenever the user provides a URL and wants its content, says \"scrape\", \"grab\", \"fetch\", \"pull\", \"get the page\", \"extract from this URL\", or \"read this webpage\". Handles JS-rendered pages, multiple concurrent URLs, and returns LLM-optimized markdown. Use this instead of WebFetch for any webpage content extraction.",
+              "input": null
+            },
+            {
+              "name": "firecrawl:firecrawl-search",
+              "description": "(firecrawl) Web search with full page content extraction. Use this skill whenever the user asks to search the web, find articles, research a topic, look something up, find recent news, discover sources, or says \"search for\", \"find me\", \"look up\", \"what are people saying about\", or \"find articles about\". Returns real search results with optional full-page markdown — not just snippets. Provides capabilities beyond Claude's built-in WebSearch.",
+              "input": null
+            },
+            {
+              "name": "frontend-design:frontend-design",
+              "description": "(frontend-design) Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one. Helps with aesthetic direction, typography, and making choices that don't read as templated defaults.",
+              "input": null
+            },
+            {
+              "name": "skill-creator:skill-creator",
+              "description": "(skill-creator) Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:ask-matt",
+              "description": "(mattpocock-skills) Ask which skill or flow fits your situation. A router over the skills in this repo.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:diagnosing-bugs",
+              "description": "(mattpocock-skills) Diagnosis loop for hard bugs and performance regressions. Use when the user says \"diagnose\"/\"debug this\", or reports something broken/throwing/failing/slow.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:grill-with-docs",
+              "description": "(mattpocock-skills) A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:triage",
+              "description": "(mattpocock-skills) Move issues and external PRs through a state machine of triage roles — categorise, verify, grill if needed, and write agent-ready briefs.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:improve-codebase-architecture",
+              "description": "(mattpocock-skills) Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:setup-matt-pocock-skills",
+              "description": "(mattpocock-skills) Configure this repo for the engineering skills — set up its issue tracker, triage label vocabulary, and domain doc layout. Run once before first use of the other engineering skills.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:tdd",
+              "description": "(mattpocock-skills) Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions \"red-green-refactor\", or wants integration tests.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:to-spec",
+              "description": "(mattpocock-skills) Turn the current conversation into a spec and publish it to the project issue tracker — no interview, just synthesis of what you've already discussed.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:to-tickets",
+              "description": "(mattpocock-skills) Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker — edges as text in one file per ticket locally, or native blocking links on a real tracker.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:wayfinder",
+              "description": "(mattpocock-skills) Plan a huge chunk of work — more than one agent session can hold — as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:implement",
+              "description": "(mattpocock-skills) Implement a piece of work based on a spec or set of tickets.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:prototype",
+              "description": "(mattpocock-skills) Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:research",
+              "description": "(mattpocock-skills) Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:domain-modeling",
+              "description": "(mattpocock-skills) Build and sharpen a project's domain model. Use when the user wants to pin down domain terminology or a ubiquitous language, record an architectural decision, or when another skill needs to maintain the domain model.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:codebase-design",
+              "description": "(mattpocock-skills) Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:code-review",
+              "description": "(mattpocock-skills) Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes — Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/PRD asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\".",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:resolving-merge-conflicts",
+              "description": "(mattpocock-skills) Use when you need to resolve an in-progress git merge/rebase conflict.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:grill-me",
+              "description": "(mattpocock-skills) A relentless interview to sharpen a plan or design.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:grilling",
+              "description": "(mattpocock-skills) Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.",
+              "input": null
+            },
+            {
+              "name": "mattpocock-skills:handoff",
+              "description": "(mattpocock-skills) Compact the current conversation into a handoff document for another agent to pick up.",
+              "input": {
+                "hint": "What will the next session be used for?"
+              }
+            },
+            {
+              "name": "mattpocock-skills:teach",
+              "description": "(mattpocock-skills) Teach the user a new skill or concept, within this workspace.",
+              "input": {
+                "hint": "What would you like to learn about?"
+              }
+            },
+            {
+              "name": "mattpocock-skills:writing-great-skills",
+              "description": "(mattpocock-skills) Reference for writing and editing skills well — the vocabulary and principles that make a skill predictable.",
+              "input": null
+            },
+            {
+              "name": "dataviz",
+              "description": "Use this skill whenever you are about to create ANY chart, graph, plot, dashboard, or data visualization, in ANY output medium — an HTML or React artifact, inline SVG, plotting code in any library (matplotlib, plotly, d3, Recharts, …), an image/PNG you will render and upload, or a chart shared into Slack. Read it BEFORE writing the first line of chart code, choosing chart colors, building a stat tile / meter / KPI row, or laying out a dashboard. Produces visualizations that read as one system — elegant, accessible, consistent in light and dark — using a brand-neutral placeholder palette you swap for your own. Teaches a design-system-agnostic method: a form heuristic, a color formula with a runnable validator, mark specs, and interaction rules. A validated default palette is documented in `references/palette.md` — swap that file's values for your brand's. Triggers on: \"chart\", \"graph\", \"plot\", \"data viz\", \"visualization\", \"dashboard\", \"analytics\", \"visualize data\", \"categorical colors\", \"sequential / diverging palette\", \"stat tile\", \"sparkline\", \"heatmap\", \"legend\", \"axis\", \"tooltip\", \"chart colors\", \"color by series\".",
+              "input": null
+            },
+            {
+              "name": "update-config",
+              "description": "Use this skill to configure the Claude Code harness via settings.json. Automated behaviors (\"from now on when X\", \"each time X\", \"whenever X\", \"before/after X\") require hooks configured in settings.json - the harness executes these, not Claude, so memory/preferences cannot fulfill them. Also use for: permissions (\"allow X\", \"add permission\", \"move permission to\"), env vars (\"set X=Y\"), hook troubleshooting, or any changes to settings.json/settings.local.json files. Examples: \"allow npm commands\", \"add bq permission to global settings\", \"move permission to user settings\", \"set DEBUG=true\", \"when claude stops show X\". For simple settings like theme/model, suggest the /config command.",
+              "input": null
+            },
+            {
+              "name": "verify",
+              "description": "Verify that a code change actually does what it's supposed to by exercising it end-to-end and observing behavior — drive the affected flow, not just tests or typecheck. Run before committing nontrivial changes; bootstraps this repo's project verify skill if none exists yet. Don't invoke it on a diff that only touches tests, docs, or other code with no runtime surface to drive (a change to product source always has one) — there's nothing to observe.",
+              "input": null
+            },
+            {
+              "name": "debug",
+              "description": "Enable debug logging for this session and help diagnose issues",
+              "input": {
+                "hint": "[issue description]"
+              }
+            },
+            {
+              "name": "simplify",
+              "description": "Review the changed code for reuse, simplification, efficiency, and altitude cleanups, then apply the fixes. Quality only — it does not hunt for bugs; use /code-review for that.",
+              "input": {
+                "hint": "[<target>]"
+              }
+            },
+            {
+              "name": "batch",
+              "description": "Research and plan a large-scale change, then execute it in parallel across 5–30 isolated worktree agents that each open a PR.",
+              "input": {
+                "hint": "<instruction>"
+              }
+            },
+            {
+              "name": "fewer-permission-prompts",
+              "description": "Scan your transcripts for common read-only Bash and MCP tool calls, then add a prioritized allowlist to project .claude/settings.json to reduce permission prompts.",
+              "input": null
+            },
+            {
+              "name": "loop",
+              "description": "Run a prompt or slash command on a recurring interval (e.g. /loop 5m /foo, defaults to 10m)",
+              "input": {
+                "hint": "[interval] <prompt>"
+              }
+            },
+            {
+              "name": "claude-api",
+              "description": "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read BEFORE opening the target file; don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIRST if no provider named — don't Read the file).",
+              "input": null
+            },
+            {
+              "name": "run",
+              "description": "Launch and drive this project's app to see a change working. Use when asked to run, start, or screenshot the app, or to confirm a change works in the real app (not just tests). First looks for a project skill that already covers launching the app; otherwise falls back to built-in patterns per project type (CLI, server, TUI, Electron, browser-driven, library).",
+              "input": null
+            },
+            {
+              "name": "run-skill-generator",
+              "description": "Author or improve the run-<unit> skill - a per-project skill that tells agents how to build, launch, and drive this project's app. Use when the user asks to set up the project, get it running, write run instructions, or verify build/run steps work from a clean environment.",
+              "input": null
+            },
+            {
+              "name": "agents",
+              "description": "(removed) Ask Claude to create/manage subagents, or edit .claude/agents/",
+              "input": null
+            },
+            {
+              "name": "auto-mode-setup",
+              "description": "Teach auto mode about your environment, plus optional rule tweaks",
+              "input": {
+                "hint": "[--request-id <uuid>] (--wizard posture=… scope=… depth=… --propose | --expect-sha256 <64-hex> --apply-file <path>)"
+              }
+            },
+            {
+              "name": "autocompact",
+              "description": "Configure the auto-compact window size",
+              "input": {
+                "hint": "[auto|<tokens>]"
+              }
+            },
+            {
+              "name": "compact",
+              "description": "Free up context by summarizing the conversation so far",
+              "input": {
+                "hint": "<optional custom summarization instructions>"
+              }
+            },
+            {
+              "name": "config",
+              "description": "Set a setting by key",
+              "input": {
+                "hint": "key=value"
+              }
+            },
+            {
+              "name": "context",
+              "description": "Show current context usage",
+              "input": null
+            },
+            {
+              "name": "effort",
+              "description": "Set effort level for model usage",
+              "input": {
+                "hint": "<low|medium|high|xhigh|max|ultracode|auto>"
+              }
+            },
+            {
+              "name": "fast",
+              "description": "Toggle fast mode (Opus 5)",
+              "input": {
+                "hint": "[on|off]"
+              }
+            },
+            {
+              "name": "heapdump",
+              "description": "Dump the JS heap to ~/Desktop",
+              "input": null
+            },
+            {
+              "name": "init",
+              "description": "Initialize a new CLAUDE.md file with codebase documentation",
+              "input": null
+            },
+            {
+              "name": "mcp",
+              "description": "Manage MCP servers",
+              "input": {
+                "hint": "[reconnect|enable|disable [<server>|all]]"
+              }
+            },
+            {
+              "name": "model",
+              "description": "Set the AI model for Claude Code",
+              "input": {
+                "hint": "<model>"
+              }
+            },
+            {
+              "name": "__remote-workflow",
+              "description": "Run the workflow script delivered in this session environment (server-launched sessions only)",
+              "input": null
+            },
+            {
+              "name": "workflow-launch-exec",
+              "description": "Execute a server-launched workflow handoff (workflow_launch event sessions only)",
+              "input": null
+            },
+            {
+              "name": "reload-skills",
+              "description": "Pick up skills added or changed on disk during this session",
+              "input": null
+            },
+            {
+              "name": "rename",
+              "description": "Rename the current conversation",
+              "input": {
+                "hint": "[name]"
+              }
+            },
+            {
+              "name": "security-review",
+              "description": "Complete a security review of the pending changes on the current branch",
+              "input": null
+            },
+            {
+              "name": "usage",
+              "description": "Show session cost, plan usage, and what's contributing to your limits",
+              "input": null
+            },
+            {
+              "name": "insights",
+              "description": "Generate a report analyzing your Claude Code sessions",
+              "input": null
+            },
+            {
+              "name": "recap",
+              "description": "Generate a one-line session recap now",
+              "input": null
+            },
+            {
+              "name": "goal",
+              "description": "Set a goal — keep working until the condition is met",
+              "input": null
+            },
+            {
+              "name": "team-onboarding",
+              "description": "Help teammates ramp on Claude Code with a guide from your usage",
+              "input": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "usage_update",
+          "used": 0,
+          "size": 1000000
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "Simple"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " task"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": ":"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " read"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " greeting"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": ".txt"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": ","
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " then"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " append"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " \""
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "!\""
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " to"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " the"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " end"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " of"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " the"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " file"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "."
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " Let"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " me"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " read"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " it"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " first"
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "."
+          },
+          "messageId": "msg_202609071421313a9db5d397f84699"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "_meta": {
+            "claudeCode": {
+              "toolName": "Read"
+            }
+          },
+          "toolCallId": "call_b2cd2e3d164d46a3afc4cfc4",
+          "sessionUpdate": "tool_call",
+          "rawInput": {},
+          "status": "pending",
+          "title": "Read File",
+          "kind": "read",
+          "locations": [],
+          "content": []
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "_meta": {
+            "claudeCode": {
+              "toolName": "Read"
+            }
+          },
+          "toolCallId": "call_b2cd2e3d164d46a3afc4cfc4",
+          "sessionUpdate": "tool_call_update",
+          "rawInput": {
+            "file_path": "/private/tmp/panda-cc-record/greeting.txt"
+          },
+          "title": "Read /private/tmp/panda-cc-record/greeting.txt",
+          "kind": "read",
+          "locations": [
+            {
+              "path": "/private/tmp/panda-cc-record/greeting.txt",
+              "line": 1
+            }
+          ],
+          "content": []
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "usage_update",
+          "used": 37784,
+          "size": 1000000
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "_meta": {
+            "claudeCode": {
+              "toolResponse": {
+                "type": "text",
+                "file": {
+                  "filePath": "/private/tmp/panda-cc-record/greeting.txt",
+                  "content": "hello from panda probe\n",
+                  "numLines": 2,
+                  "startLine": 1,
+                  "totalLines": 2
+                }
+              },
+              "toolName": "Read"
+            }
+          },
+          "toolCallId": "call_b2cd2e3d164d46a3afc4cfc4",
+          "sessionUpdate": "tool_call_update"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "_meta": {
+            "claudeCode": {
+              "toolName": "Read"
+            }
+          },
+          "toolCallId": "call_b2cd2e3d164d46a3afc4cfc4",
+          "sessionUpdate": "tool_call_update",
+          "status": "completed",
+          "rawOutput": "1\thello from panda probe\n2\t",
+          "content": [
+            {
+              "type": "content",
+              "content": {
+                "type": "text",
+                "text": "```\n1\thello from panda probe\n```"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "usage_update",
+          "used": 0,
+          "size": 1000000
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "Now"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " append"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " \""
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "!\""
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " to"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " the"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " end"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " of"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " the"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " file"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "."
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " The"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " file"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " ends"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " with"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " \""
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "hello"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " from"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " panda"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " probe"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "\\n"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "\"."
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " App"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "ending"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " \""
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "!\""
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " to"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " the"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " end"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " —"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " I"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "'ll"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " add"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " it"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " after"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " the"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " last"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " line"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "'s"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " content"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "."
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " Using"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " Edit"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " to"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " replace"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " \""
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "hello"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " from"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " panda"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " probe"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "\""
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " with"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " \""
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "hello"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " from"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " panda"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " probe"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "!\""
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " would"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " put"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " it"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " before"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " the"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " newline"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "."
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " That"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "'s"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " the"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " natural"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " interpretation"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " of"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " appending"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " to"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " the"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " end"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " of"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " the"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " file"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " content"
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "."
+          },
+          "messageId": "msg_2026090714213928a17fbab6c445dc"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "_meta": {
+            "claudeCode": {
+              "toolName": "Edit"
+            }
+          },
+          "toolCallId": "call_315becaecdaf4c0895aa552c",
+          "sessionUpdate": "tool_call",
+          "rawInput": {},
+          "status": "pending",
+          "title": "Edit",
+          "kind": "edit",
+          "content": [],
+          "locations": []
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "_meta": {
+            "claudeCode": {
+              "toolName": "Edit"
+            }
+          },
+          "toolCallId": "call_315becaecdaf4c0895aa552c",
+          "sessionUpdate": "tool_call_update",
+          "rawInput": {
+            "replace_all": false
+          },
+          "title": "Edit",
+          "kind": "edit",
+          "locations": []
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "_meta": {
+            "claudeCode": {
+              "toolName": "Edit"
+            }
+          },
+          "toolCallId": "call_315becaecdaf4c0895aa552c",
+          "sessionUpdate": "tool_call_update",
+          "rawInput": {
+            "replace_all": false,
+            "file_path": "/private/tmp/panda-cc-record/greeting.txt"
+          },
+          "title": "Edit /private/tmp/panda-cc-record/greeting.txt",
+          "kind": "edit",
+          "locations": [
+            {
+              "path": "/private/tmp/panda-cc-record/greeting.txt"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "_meta": {
+            "claudeCode": {
+              "toolName": "Edit"
+            }
+          },
+          "toolCallId": "call_315becaecdaf4c0895aa552c",
+          "sessionUpdate": "tool_call_update",
+          "rawInput": {
+            "replace_all": false,
+            "file_path": "/private/tmp/panda-cc-record/greeting.txt",
+            "old_string": "hello from panda probe"
+          },
+          "title": "Edit /private/tmp/panda-cc-record/greeting.txt",
+          "kind": "edit",
+          "locations": [
+            {
+              "path": "/private/tmp/panda-cc-record/greeting.txt"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "_meta": {
+            "claudeCode": {
+              "toolName": "Edit"
+            }
+          },
+          "toolCallId": "call_315becaecdaf4c0895aa552c",
+          "sessionUpdate": "tool_call_update",
+          "rawInput": {
+            "replace_all": false,
+            "file_path": "/private/tmp/panda-cc-record/greeting.txt",
+            "old_string": "hello from panda probe",
+            "new_string": "hello from panda probe!"
+          },
+          "title": "Edit /private/tmp/panda-cc-record/greeting.txt",
+          "kind": "edit",
+          "content": [
+            {
+              "type": "diff",
+              "path": "/private/tmp/panda-cc-record/greeting.txt",
+              "oldText": "hello from panda probe",
+              "newText": "hello from panda probe!"
+            }
+          ],
+          "locations": [
+            {
+              "path": "/private/tmp/panda-cc-record/greeting.txt"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "usage_update",
+          "used": 40044,
+          "size": 1000000
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "_meta": {
+            "claudeCode": {
+              "toolName": "Edit",
+              "nonExecutionKind": "permission-rule"
+            }
+          },
+          "toolCallId": "call_315becaecdaf4c0895aa552c",
+          "sessionUpdate": "tool_call_update",
+          "status": "failed",
+          "rawOutput": "Tool permission request failed: Error: Tool use aborted",
+          "content": [
+            {
+              "type": "content",
+              "content": {
+                "type": "text",
+                "text": "```\nTool permission request failed: Error: Tool use aborted\n```"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "usage_update",
+          "used": 0,
+          "size": 1000000
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "The"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " Edit"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " was"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " denied"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " by"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " the"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " user"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " ("
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "permission"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " request"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " aborted"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": ")."
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " The"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " user"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " declined"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "."
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " I"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " should"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " not"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " retry"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " ver"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "batim"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "."
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " Maybe"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " I"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " could"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " try"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " a"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " different"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " approach"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "?"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " A"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " denied"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " call"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " means"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " the"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " user"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " declined"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " it"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " —"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " adjust"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": ","
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " don"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "'t"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " retry"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " ver"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "batim"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "."
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " I"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " could"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " ask"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": ","
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " but"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " the"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " instruction"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " says"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " reply"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " with"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " one"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " short"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " sentence"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "."
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " The"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " edit"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " was"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " aborted"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": ","
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " so"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " I"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " should"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " report"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " that"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " I"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " couldn"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "'t"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " complete"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " the"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " append"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "."
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " Keep"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " it"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": " short"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_thought_chunk",
+          "content": {
+            "type": "text",
+            "text": "."
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "已"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "读取"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": " greeting"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": ".txt"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "（"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "内容"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "为"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": " \""
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "hello"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": " from"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": " panda"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": " probe"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "\""
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "），"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "但"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "编辑"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "操作"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "被"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "取消"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "，"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "未能"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "追加"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": " \""
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "!\""
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "。"
+          },
+          "messageId": "msg_20260907142147280e77bd2dc4440d"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "usage_update",
+          "used": 40183,
+          "size": 1000000
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "update": {
+          "sessionUpdate": "usage_update",
+          "used": 40183,
+          "size": 1000000,
+          "cost": {
+            "amount": 0.35122300000000006,
+            "currency": "USD"
+          },
+          "_meta": {
+            "_claude/origin": {
+              "kind": "human"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

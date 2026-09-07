@@ -11,6 +11,7 @@
   "scripts": {
     "serve": "tsx src/main.ts serve",
     "stdio": "tsx src/main.ts stdio",
+    "record:claude-code": "tsx scripts/record-claude-code.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
