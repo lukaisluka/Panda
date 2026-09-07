@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { ChevronRight, PlugZap } from 'lucide-react';
+import { ChevronDown, ChevronRight, PlugZap } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { LayoutContent } from '@astryxdesign/core/Layout';
@@ -25,7 +25,9 @@ import { t } from '../i18n';
  * IS creating the session. Connected agents start a session/new right away;
  * connecting ones show their progress; the rest connect first (a successful
  * connect establishes a fresh session by itself). 自定义地址 starts a
- * temporary direct connection, never a saved 配置.
+ * temporary direct connection, never a saved 配置; with configured agents
+ * it folds behind an advanced toggle (#157), in the agentless 空态 it stays
+ * expanded as the only entry.
  */
 export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profiles }: {
   isOpen: boolean;
@@ -55,6 +57,11 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
   const [customUrl, setCustomUrl] = useState(() => lastConnectionDefaults().url);
   const [customWorkspace, setCustomWorkspace] = useState<Workspace>(() => lastConnectionDefaults().workspace);
   const [showCustomErrors, setShowCustomErrors] = useState(false);
+  // #157: with configured agents the custom form is an advanced aside —
+  // collapsed behind a toggle; with none it is the only entry and stays
+  // expanded as-is. The dialog is conditionally mounted (Sidebar), so every
+  // open re-derives this default.
+  const [customOpen, setCustomOpen] = useState(() => profiles.length === 0);
   const customErrors = customEndpointErrors({ url: customUrl, workspace: customWorkspace });
   // Astryx TextInput surfaces errors through its status object; they appear
   // only after a rejected submit, never while the user is still typing.
@@ -118,66 +125,85 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
         </div>
 
         <div className="nsd-custom">
-          <span className="nsd-custom-title">{t('nsd.custom')}</span>
-          <p className="nsd-hint">{t('nsd.customHint')}</p>
-          <TextInput
-            label={t('nsd.endpoint')}
-            value={customUrl}
-            onChange={setCustomUrl}
-            placeholder="ws://host:port/acp"
-            status={statusOf('url')}
-          />
-          <div className="nsd-custom-fields">
-            <div className="nsd-custom-kind">
-              <Selector
-                label={t('nsd.workspace')}
-                isLabelHidden
-                value={customWorkspace.kind}
-                onChange={(kind) =>
-                  setCustomWorkspace(kind === 'none' ? { kind: 'none' } : { kind: 'local-directory', path: '' })
-                }
-                options={[
-                  { value: 'local-directory', label: t('nsd.localDir') },
-                  { value: 'none', label: t('nsd.noWorkspace') },
-                ]}
-                labelTooltip={t('nsd.workspaceTooltip')}
+          {profiles.length > 0 ? (
+            <button
+              type="button"
+              className="nsd-custom-toggle"
+              aria-expanded={customOpen}
+              onClick={() => setCustomOpen((open) => !open)}
+            >
+              <span className="nsd-custom-toggle-label">{t('nsd.customToggle')}</span>
+              <ChevronDown
+                size={13}
+                className={`nsd-custom-toggle-chevron ${customOpen ? 'nsd-custom-toggle-chevron--open' : ''}`}
               />
-            </div>
-            {customWorkspace.kind === 'local-directory' && (
-              <div className="nsd-custom-path">
-                <TextInput
-                  label={t('nsd.workspacePath')}
-                  isLabelHidden
-                  width="100%"
-                  value={customWorkspace.path}
-                  onChange={(path) => setCustomWorkspace({ kind: 'local-directory', path })}
-                  placeholder="/absolute/path/on/the/agent"
-                  status={statusOf('path')}
-                />
+            </button>
+          ) : (
+            <span className="nsd-custom-title">{t('nsd.custom')}</span>
+          )}
+          {(profiles.length === 0 || customOpen) && (
+            <>
+              <p className="nsd-hint">{t('nsd.customHint')}</p>
+              <TextInput
+                label={t('nsd.endpoint')}
+                value={customUrl}
+                onChange={setCustomUrl}
+                placeholder="ws://host:port/acp"
+                status={statusOf('url')}
+              />
+              <div className="nsd-custom-fields">
+                <div className="nsd-custom-kind">
+                  <Selector
+                    label={t('nsd.workspace')}
+                    isLabelHidden
+                    value={customWorkspace.kind}
+                    onChange={(kind) =>
+                      setCustomWorkspace(kind === 'none' ? { kind: 'none' } : { kind: 'local-directory', path: '' })
+                    }
+                    options={[
+                      { value: 'local-directory', label: t('nsd.localDir') },
+                      { value: 'none', label: t('nsd.noWorkspace') },
+                    ]}
+                    labelTooltip={t('nsd.workspaceTooltip')}
+                  />
+                </div>
+                {customWorkspace.kind === 'local-directory' && (
+                  <div className="nsd-custom-path">
+                    <TextInput
+                      label={t('nsd.workspacePath')}
+                      isLabelHidden
+                      width="100%"
+                      value={customWorkspace.path}
+                      onChange={(path) => setCustomWorkspace({ kind: 'local-directory', path })}
+                      placeholder="/absolute/path/on/the/agent"
+                      status={statusOf('path')}
+                    />
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            width="100%"
-            label={t('nsd.connectStart')}
-            icon={<PlugZap size={12} />}
-            clickAction={() => {
-              if (customErrors.url || customErrors.path) {
-                setShowCustomErrors(true);
-                return;
-              }
-              start(() =>
-                live.connectDirect(
-                  customUrl.trim(),
-                  customWorkspace.kind === 'local-directory'
-                    ? { kind: 'local-directory', path: customWorkspace.path.trim() }
-                    : customWorkspace,
-                ),
-              );
-            }}
-          />
+              <Button
+                variant="secondary"
+                size="sm"
+                width="100%"
+                label={t('nsd.connectStart')}
+                icon={<PlugZap size={12} />}
+                clickAction={() => {
+                  if (customErrors.url || customErrors.path) {
+                    setShowCustomErrors(true);
+                    return;
+                  }
+                  start(() =>
+                    live.connectDirect(
+                      customUrl.trim(),
+                      customWorkspace.kind === 'local-directory'
+                        ? { kind: 'local-directory', path: customWorkspace.path.trim() }
+                        : customWorkspace,
+                    ),
+                  );
+                }}
+              />
+            </>
+          )}
         </div>
       </LayoutContent>
     </Dialog>
