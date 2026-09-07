@@ -104,6 +104,38 @@ export function desktopHost(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
+/** One-line user-agent summary for the settings diagnostics page, e.g.
+ * `Chrome 140 · macOS`. Pure parsing, deliberately not localized: product
+ * names are their own names. Order matters — Edge/Opera UAs also carry a
+ * Chrome token, Android UAs carry Linux. Falls back to the platform alone
+ * when the browser is unknown, and '(unknown)' when nothing matches, so a
+ * surprising UA stays visible instead of silently blanking the row. */
+export function summarizeUserAgent(ua: string): string {
+  const BROWSERS: readonly [RegExp, string][] = [
+    [/Edg\/(\d+)/, 'Edge'],
+    [/OPR\/(\d+)/, 'Opera'],
+    [/Firefox\/(\d+)/, 'Firefox'],
+    [/Chrome\/(\d+)/, 'Chrome'],
+    // Safari: "Version/18.0 Safari/605.1.15" (macOS) and, on iOS,
+    // "Version/18.0 Mobile/15E148 Safari/604.1" — anything may ride between
+    // (build tokens carry hex), but no other capital-S word intervenes.
+    [/Version\/(\d+)[^S]* Safari/, 'Safari'],
+  ];
+  const PLATFORMS: readonly [RegExp, string][] = [
+    [/iPhone|iPad/, 'iOS'],
+    [/Android/, 'Android'],
+    [/Windows NT/, 'Windows'],
+    [/Mac OS X/, 'macOS'],
+    [/Linux/, 'Linux'],
+  ];
+  const browser = BROWSERS.flatMap(([re, name]) => {
+    const match = re.exec(ua);
+    return match ? [`${name} ${match[1]}`] : [];
+  })[0];
+  const platform = PLATFORMS.flatMap(([re, name]) => (re.test(ua) ? [name] : []))[0];
+  return [browser, platform].filter(Boolean).join(' · ') || '(unknown)';
+}
+
 export interface DiagnosticsInput {
   error?: unknown;
   /** React componentStack from an error boundary; truncated hard — deep

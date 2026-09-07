@@ -260,17 +260,26 @@ export const messages = {
     en: 'Appearance theme and interface language.',
     zh: '外观主题与界面语言。',
   },
-  'settings.appearance': { en: 'Appearance', zh: '外观' },
-  'settings.appearanceDesc': {
-    en: 'The theme colors the whole interface — switch anytime, the choice is remembered.',
-    zh: '主题影响整个界面的配色,随时切换,自动记住选择。',
-  },
+  // Codex-style row labels (#138): one setting per row — title + description
+  // on the left, control on the right. Group titles head the row cards.
+  'settings.appearanceGroup': { en: 'Appearance & language', zh: '外观与语言' },
+  'settings.themeRow': { en: 'Theme', zh: '主题' },
+  'settings.themeRowDesc': { en: 'The color scheme of the whole interface.', zh: '整个界面的配色。' },
   'settings.themeMore': { en: 'More themes coming soon', zh: '更多主题将陆续开放' },
   'settings.language': { en: 'Language', zh: '语言' },
-  'settings.languageDesc': {
-    en: 'Interface language — switches instantly and is remembered.',
-    zh: '界面语言,即时切换并自动记住。',
+  'settings.languageRowDesc': { en: 'Display language of the interface.', zh: '界面的显示语言。' },
+  'settings.envGroup': { en: 'Environment', zh: '运行环境' },
+  'settings.versionRow': { en: 'Version', zh: '版本' },
+  'settings.hostRow': { en: 'Host', zh: '宿主' },
+  'settings.hostBrowser': { en: 'Browser', zh: '浏览器' },
+  'settings.hostDesktop': { en: 'Desktop app', zh: '桌面版' },
+  'settings.userAgentRow': { en: 'Browser & OS', zh: '浏览器与系统' },
+  'settings.reportGroup': { en: 'Diagnostics report', zh: '诊断报告' },
+  'settings.reportRowDesc': {
+    en: 'Environment and the recent console log, copied to the clipboard for a bug report.',
+    zh: '环境信息与最近控制台日志,复制到剪贴板,可附在问题反馈里。',
   },
+  'settings.devRowDesc': { en: 'Replay the scripted agent — no real connection.', zh: '回放剧本 agent,不连真实服务。' },
   'settings.locale.en': { en: 'English', zh: 'English' },
   'settings.locale.zh': { en: '中文', zh: '中文' },
   'settings.profiles': { en: 'Agent profiles', zh: 'Agent 配置' },
@@ -383,7 +392,6 @@ export const messages = {
     en: 'Open the #/demo scripted replay (no real agent); re-entering replays from the start',
     zh: '打开 #/demo 剧本回放(不连真实 agent);重新进入即从头重放',
   },
-  'settings.devDesc': { en: 'Internal tools, visible only in dev builds.', zh: '仅开发构建可见的内部工具。' },
 
   // ---- diagnostics (#105): crash fallback + settings diagnostics card ----
   'diag.crashTitle': { en: 'Panda hit an error', zh: 'Panda 遇到了错误' },
