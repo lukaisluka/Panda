@@ -9,7 +9,7 @@
 
 .nsd-hint {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--panda-size-chrome);
   line-height: 1.5;
   color: var(--color-muted);
 }
@@ -48,12 +48,12 @@
 }
 
 .nsd-agent-name {
-  font-size: 13px;
+  font-size: var(--panda-size-chrome);
   font-weight: 500;
 }
 
 .nsd-agent-meta {
-  font-size: 11.5px;
+  font-size: var(--panda-size-micro);
   color: var(--color-muted);
 }
 
@@ -72,7 +72,7 @@
 }
 
 .nsd-custom-title {
-  font-size: 12.5px;
+  font-size: var(--panda-size-chrome);
   font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--color-muted);
@@ -91,7 +91,7 @@
   background: none;
   color: var(--color-muted);
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--panda-size-chrome);
   font-weight: 600;
   letter-spacing: 0.04em;
   cursor: pointer;

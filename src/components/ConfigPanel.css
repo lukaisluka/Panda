@@ -15,7 +15,7 @@
 
 .config-panel-title {
   padding: 10px 14px 6px;
-  font-size: 11px;
+  font-size: var(--panda-size-micro);
   color: var(--color-faint);
 }
 
@@ -35,13 +35,13 @@
 }
 
 .config-panel-name {
-  font-size: 13px;
+  font-size: var(--panda-size-chrome);
   font-weight: 500;
   color: var(--color-fg);
 }
 
 .config-panel-desc {
-  font-size: 11px;
+  font-size: var(--panda-size-micro);
   color: var(--color-faint);
 }
 
@@ -52,7 +52,7 @@
   border-radius: 8px;
   background: var(--color-surface);
   color: var(--color-fg);
-  font-size: 12px;
+  font-size: var(--panda-size-chrome);
   cursor: pointer;
 }
 

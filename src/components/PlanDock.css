@@ -22,7 +22,7 @@
   border-radius: var(--panda-radius-md);
   color: var(--color-muted);
   padding: 5px 8px;
-  font-size: 13px;
+  font-size: var(--panda-size-chrome);
   transition: var(--panda-colors-transition);
 }
 
@@ -42,7 +42,7 @@
 
 .plan-dock-progress {
   margin-left: auto;
-  font-size: 12px;
+  font-size: var(--panda-size-micro);
   color: var(--color-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -73,7 +73,7 @@
   align-items: flex-start;
   gap: 8px;
   padding: 3px 4px;
-  font-size: 13px;
+  font-size: var(--panda-size-chrome);
   line-height: 1.45;
 }
 

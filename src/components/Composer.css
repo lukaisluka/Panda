@@ -4,7 +4,7 @@
   padding-bottom: 16px; /* pb-4 */
   /* Chrome tier (13px) inheritance base for the row's Astryx widgets; the
    * textarea opts back up to 14px explicitly (typed text is content). */
-  font-size: 13px;
+  font-size: var(--panda-size-chrome);
 }
 
 .composer-card {
@@ -96,7 +96,7 @@
 .composer-tile-error {
   margin-top: 4px; /* mt-1 */
   text-align: center;
-  font-size: 11px;
+  font-size: var(--panda-size-micro);
   line-height: 12px; /* leading-3 */
   color: var(--color-danger);
 }
@@ -134,7 +134,7 @@
   background: transparent;
   padding-block: 6px; /* py-1.5 */
   /* Typed text IS content: same 14px as the stream it lands in. */
-  font-size: 14px;
+  font-size: var(--panda-size-content);
   line-height: 1.55;
   outline: none;
 }
@@ -145,7 +145,7 @@
 .composer-hint {
   margin-top: 8px; /* mt-2 */
   text-align: center;
-  font-size: 11px;
+  font-size: var(--panda-size-micro);
 }
 .composer-hint--danger { color: var(--color-danger); }
 .composer-hint--faint { color: var(--color-faint); }
@@ -179,7 +179,7 @@
   border: none;
   text-align: left;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--panda-size-chrome);
   line-height: 1.4;
   color: var(--color-fg);
 }
@@ -205,6 +205,6 @@
 .composer-commands-hint {
   padding: 6px 14px;
   border-top: 1px solid var(--color-border);
-  font-size: 12px;
+  font-size: var(--panda-size-micro);
   color: var(--color-faint);
 }

@@ -39,13 +39,13 @@
 
 .auth-gate-title {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--panda-size-content);
   font-weight: 600;
 }
 
 .auth-gate-message {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--panda-size-chrome);
   color: var(--color-muted);
 }
 
@@ -64,6 +64,6 @@
 
 .auth-gate-none {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--panda-size-chrome);
   color: var(--color-muted);
 }

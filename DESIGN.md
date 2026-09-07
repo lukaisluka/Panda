@@ -8,8 +8,8 @@ Panda 的 UI 设计系统文档（single source of truth）。与 [CONTEXT.md](C
 
 ## 设计原则
 
-- **消息流是主角**：transcript 拥有最高信息密度（13px/1.55 终端式排版），
-  chrome（侧栏、状态栏、composer）保持安静、低对比。
+- **消息流是主角**：transcript 拥有最高信息密度（内容档字号，默认 14px/1.6
+  终端式排版），chrome（侧栏、状态栏、composer）保持安静、低对比。
 - **语义 token，永远语义 token**：代码里只允许出现语义颜色
   （`surface`、`text-secondary`…），不允许裸 hex。改品牌 = 换主题，不是逐处改色。
 - **Panda 别名是语义入口**：`src/index.css` 的 `:root` 把 Panda token 名
@@ -262,14 +262,30 @@ inter`、`@fontsource-variable/jetbrains-mono`），无 CDN 依赖。
 静态包的原因：variable 包的 `@font-face` family 带 ` Variable` 后缀，
 与主题栈字面名永远匹配不上。
 
-**字号三档体系**（同轮联调定案，层级 = 档位 × 灰度，不再用第二种正文
-字号）：
+**字号三档体系 + 代码档**（同轮联调定案，层级 = 档位 × 灰度，不再用第二种
+正文字号；#171 起三档收敛为变量、双旋钮可配）：
 
-| 档 | 尺寸 | 角色 |
+| 档 | 变量（默认） | 角色 |
 | --- | --- | --- |
-| 内容 | 14px | 消息流全量（含工具行/diff/权限卡，流根 `.stream-root` 钉继承基准）+ 输入框文字 |
-| chrome | 13px | 侧栏行/品牌、连接面板、顶栏标题 |
-| micro | 11px | 状态栏、分组标签、meta/版本、提示、错误小字 |
+| 内容 | `--panda-size-content`（14px） | 消息流全量（含工具行/diff/权限卡，流根 `.stream-root` 钉继承基准）+ 输入框文字 |
+| chrome | `--panda-size-chrome` = content − 1px（13px） | 侧栏行、连接面板、顶栏标题、控件标签 |
+| micro | `--panda-size-micro` = content − 3px（11px） | 状态栏、分组标签、meta/版本、提示、错误小字 |
+| 代码 | `--panda-size-code`（12px） | 代码块全家（fenced `pre` + 语言标签 + 裸 pre 兜底）、等宽 URL/diff hunk 头 |
+
+**用户可配（#171）**：设置页「外观与语言」卡提供**界面字号**（即 content
+档，12–18px，chrome/micro 随之派生）与**代码字号**（10–16px）两个步进
+旋钮，ZCode 式默认 14/12。`src/fontSize.ts` 持久化到 localStorage
+（`panda.fontSize.ui`/`panda.fontSize.code`）并把两变量内联写到 `<html>`
+（内联声明压过一切层）。Astryx 冻结阶梯 `--font-size-*` 全部 calc 化挂靠
+content 档——Astryx 组件随旋钮等比缩放，不重演"半跟随像 bug"的教训。
+
+**例外清单**（有意不进档位）：侧栏品牌字 18px（#155 与 28px 徽章配平的
+拍板值）；ErrorBoundary 崩溃页内联字号（渲染在层叠之外）。
+
+**归并记录（#171）**：原先散落的 12px 按角色分流——控件类（模式 pill、
+配置 select）归 chrome，mono 技术内容归代码档，提示/meta 归 micro；
+半像素档 11.5/12.5/13.5 分别并入 micro/chrome；AuthGate 标题 15px 归
+内容档、临时徽章 10px 归 micro。
 
 ## 已知的视觉变化（迁移期有意接受）
 

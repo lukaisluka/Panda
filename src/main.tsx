@@ -8,11 +8,18 @@ import { CrashProbe } from './dev/CrashProbe';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { installConsoleTap } from './diagnostics';
 import { loadThemeId, resolveTheme, subscribeTheme } from './theme';
+import { applyFontSize, loadFontSizePair } from './fontSize';
 import { I18nProvider } from './i18n/context';
 import { parseDevPage } from './routes';
 
 // Earliest possible (#105): the ring must catch startup errors too.
 installConsoleTap();
+
+// Font knobs pre-paint (#171): inline custom properties on <html> beat every
+// stylesheet layer, so the first frame already carries the stored sizes (no
+// 14→16 flash). Dev pages render without ThemeRoot — module scope is the only
+// spot that covers them too.
+applyFontSize(loadFontSizePair());
 
 // Desktop host boot (#125): the dynamic import keeps this module (and
 // @tauri-apps/api with it) out of the browser bundle — the chunk only loads
