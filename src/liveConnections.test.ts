@@ -266,6 +266,29 @@ describe('local activity stamping (#175)', () => {
       .toBe('2020-01-01T00:00:00Z');
   });
 
+  it('clicking a titled session keeps its stamp — a load-time title-only info must not erase it', async () => {
+    const stubs = installStubClients();
+    await connectedStub('agent-a', stubs, 's-a');
+    // The clicked session: known title + a stamp, exactly what a prior
+    // activity + session_info_update leave behind.
+    stubs[0]!.handlers.onSessions([
+      { sessionId: 's-a2', cwd: '/agent-a', title: '已命名', updatedAt: '2026-01-02T00:00:00Z' },
+    ]);
+    const before = usePanda.getState().connections['agent-a']!.sessions
+      .find((e) => e.sessionId === 's-a2')!.updatedAt;
+
+    // The click: full loadSessionInternal order, including the title-only
+    // session_info_update the test agent sends before its response resolves.
+    stubs[0]!.handlers.onSessionSwitchStage('s-a2', '/agent-a', 1);
+    stubs[0]!.handlers.onReplayStart();
+    stubs[0]!.handlers.onUpdate({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'history' }] });
+    stubs[0]!.handlers.onSessionInfo('s-a2', { title: '已命名', updatedAt: undefined });
+    stubs[0]!.handlers.onSessionSwitchCommit(1);
+
+    expect(usePanda.getState().connections['agent-a']!.sessions.find((e) => e.sessionId === 's-a2')!.updatedAt)
+      .toBe(before);
+  });
+
   it('a session/load replay through the wired handlers stamps nothing', async () => {
     const stubs = installStubClients();
     await connectedStub('agent-a', stubs, 's-a');

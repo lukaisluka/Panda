@@ -277,6 +277,19 @@ function upsertEntries(existing: SessionEntry[], incoming: SessionEntry[]): Sess
   return [...byId.values()];
 }
 
+/**
+ * Strips optional fields the caller left undefined. A sparse patch's absent
+ * field must not erase what is known — but a plain spread WOULD set it:
+ * `{...entry, ...{updatedAt: undefined}}` nulls the stamp. Every patch field
+ * reaching here as undefined (e.g. the client wrapping a `session_info_update`
+ * that carried only `title`) means "not reported", never "cleared".
+ */
+function definedFields<T extends object>(patch: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(patch).filter(([, value]) => value !== undefined),
+  ) as Partial<T>;
+}
+
 /** Immutable patch of one connection slot; unknown ids fail loudly, not silently. */
 function patchConnectionState(
   s: PandaState,
@@ -587,10 +600,13 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
         };
         return { sessions: upsertEntries(state.sessions, [merged]) };
       }),
+    // Sparse by contract: only the fields the patch actually carries are
+    // written (see definedFields) — an undefined updatedAt from a title-only
+    // session_info_update must keep the stamp, not wipe it.
     patchSession: (sessionId, patch) =>
       patchSlot((state) => ({
         sessions: state.sessions.map((entry) =>
-          entry.sessionId === sessionId ? { ...entry, ...patch } : entry,
+          entry.sessionId === sessionId ? { ...entry, ...definedFields(patch) } : entry,
         ),
       })),
     removeSession: (sessionId) => {
