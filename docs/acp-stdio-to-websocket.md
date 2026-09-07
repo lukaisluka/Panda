@@ -64,6 +64,12 @@ wss.on('connection', (socket) => {
   const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'inherit'] }); // stderr 透传
   log(`连接进入:${command}(pid ${child.pid})已启动`);
 
+  // 子进程死亡后在途帧的写入会异步触发 EPIPE;stdin 不挂 error handler
+  // 的话,unhandled 'error' event 会炸掉整个桥进程,连坐其它健康连接。
+  child.stdin.on('error', (err) => {
+    if (err.code !== 'EPIPE') log(`stdin 写入失败:${err}`);
+  });
+
   socket.on('message', (data, isBinary) => {
     if (!isBinary && child.stdin && !child.stdin.destroyed) {
       child.stdin.write(`${data.toString('utf8')}\n`); // 帧 → 行

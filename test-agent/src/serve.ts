@@ -76,7 +76,7 @@ function isJsonLine(text: string): boolean {
 }
 
 /** 一条 WebSocket 连接 = 一个 stdio agent 子进程。 */
-async function handleConnection(
+export async function handleConnection(
   socket: WebSocket,
   sandboxDir: string,
   stateDir: string,
@@ -94,6 +94,19 @@ async function handleConnection(
   children.add(child);
   child.once('exit', () => children.delete(child));
   log('INFO', `[pid ${pid}] 连接进入,agent 子进程已启动`);
+  if (child.stdin) {
+    // #11: 子进程死亡(crash/OOM/pkill)后仍在途的帧写入会异步触发 EPIPE。
+    // stdin 是 WriteStream,没有 error handler 时 EPIPE 变成 unhandled
+    // 'error' event,直接炸掉整个 serve 进程,连坐其它健康连接。子进程
+    // 死亡本身是已处理路径(exit watcher 收尾 socket),这里只需吞掉。
+    child.stdin.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EPIPE') {
+        log('WARNING', `[pid ${pid}] 子进程已退出,在途帧被 EPIPE 丢弃`);
+        return;
+      }
+      log('ERROR', `[pid ${pid}] agent stdin 写入失败: ${String(err)}`);
+    });
+  }
 
   let finished = false;
   socket.on('message', (data, isBinary) => {

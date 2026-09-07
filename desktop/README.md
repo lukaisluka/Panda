@@ -28,9 +28,12 @@ because the config is embedded via `generate_context!`.
 - `src-tauri/src/main.rs` — the process plane: three commands
   (`stdio_spawn` / `stdio_write` / `stdio_kill`) around a tokio `Child`.
   stdout/stderr stream back as base64 chunks over a Tauri `Channel`; exit
-  funnels into one `Exit` event. `kill_on_drop` plus disconnect-time kill
-  (SIGTERM → 3 s → SIGKILL; Windows terminates directly) are the orphan
-  guards.
+  funnels into one `Exit` event. Orphan guards (#7): the `RunEvent::Exit`
+  hook sweeps every tracked child (stdin EOF + SIGTERM → 3 s → SIGKILL) and
+  waits synchronously — tao ends its loop in `std::process::exit`, so
+  `kill_on_drop` alone never fires; a webview (re)load sweeps the same way
+  via `on_page_load`, because the reloaded JS state no longer owns the old
+  children. Windows terminates directly (no SIGTERM).
 - `src-tauri/tauri.conf.json` — window/bundle config. `frontendDist` is
   resolved **relative to `src-tauri`**, so it must point at `../../dist`
   (the repo-root build output), and `devUrl` pins `127.0.0.1:5173`.
