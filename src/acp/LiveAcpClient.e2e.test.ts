@@ -1,6 +1,6 @@
 /// <reference types="node" />
 
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -107,6 +107,24 @@ function findFreePort(): Promise<number> {
   });
 }
 
+/** afterAll 卫生清理:Windows 上 sqlite 句柄的释放可能滞后于 taskkill 几十
+ * 毫秒,rmSync 立刻重试可能 EPERM。有界重试后仍失败则 warn 留痕——套件
+ * 结论不应取决于临时目录卫生(目录在 tmp 下,由系统回收)。 */
+async function rmBestEffort(dir: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+      return;
+    } catch (err) {
+      if (attempt >= 5) {
+        console.warn(`[e2e] cleanup left ${dir} behind:`, err);
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  }
+}
+
 describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', () => {
   let agentProcess: ChildProcess | null = null;
   let serverLog = '';
@@ -202,16 +220,28 @@ describe.skipIf(!hasAgentDeps)('LiveAcpClient × deepagents 测试 agent(e2e)', 
   afterAll(async () => {
     acpClient?.disconnect();
     if (agentProcess?.pid) {
-      try {
-        process.kill(-agentProcess.pid, 'SIGTERM');
-        await new Promise((r) => setTimeout(r, 500));
-        if (agentProcess.exitCode === null) process.kill(-agentProcess.pid, 'SIGKILL');
-      } catch {
-        /* 进程组可能已退出 */
+      if (process.platform === 'win32') {
+        // Windows has no process groups: the previous `kill(-pid)` was a
+        // silent no-op (swallowed by the catch below), so serve stayed alive
+        // holding the sqlite state handles and rmSync failed EPERM. taskkill
+        // /T /F walks the child tree deterministically (#127).
+        try {
+          spawnSync('taskkill', ['/PID', String(agentProcess.pid), '/T', '/F'], { stdio: 'ignore' });
+        } catch {
+          /* 已退出 */
+        }
+      } else {
+        try {
+          process.kill(-agentProcess.pid, 'SIGTERM');
+          await new Promise((r) => setTimeout(r, 500));
+          if (agentProcess.exitCode === null) process.kill(-agentProcess.pid, 'SIGKILL');
+        } catch {
+          /* 进程组可能已退出 */
+        }
       }
     }
-    rmSync(sandboxDir, { recursive: true, force: true });
-    rmSync(stateDir, { recursive: true, force: true });
+    await rmBestEffort(sandboxDir);
+    await rmBestEffort(stateDir);
   });
 
   /** 未决权限请求:按事件流时序折叠(requested 置入、resolved 移除)——同一 id 被 agent 重问时重新挂起。 */
