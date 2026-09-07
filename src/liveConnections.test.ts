@@ -236,6 +236,64 @@ describe('opening sessions across connections (issue #21)', () => {
   });
 });
 
+describe('local activity stamping (#175)', () => {
+  it('a streamed reply stamps the session entry though the agent reported nothing', async () => {
+    const stubs = installStubClients();
+    await connectedStub('agent-a', stubs, 's-a');
+
+    stubs[0]!.handlers.onUpdate({
+      sessionUpdate: 'agent_message_chunk',
+      messageId: 'm',
+      content: { type: 'text', text: 'streaming' },
+    });
+
+    expect(usePanda.getState().connections['agent-a']!.sessions.find((e) => e.sessionId === 's-a')!.updatedAt)
+      .not.toBeNull();
+  });
+
+  it('session_info_update overwrites the local stamp — agent report wins on arrival', async () => {
+    const stubs = installStubClients();
+    await connectedStub('agent-a', stubs, 's-a');
+    stubs[0]!.handlers.onUpdate({
+      sessionUpdate: 'agent_message_chunk',
+      messageId: 'm',
+      content: { type: 'text', text: 'x' },
+    });
+
+    stubs[0]!.handlers.onSessionInfo('s-a', { updatedAt: '2020-01-01T00:00:00Z' });
+
+    expect(usePanda.getState().connections['agent-a']!.sessions.find((e) => e.sessionId === 's-a')!.updatedAt)
+      .toBe('2020-01-01T00:00:00Z');
+  });
+
+  it('a session/load replay through the wired handlers stamps nothing', async () => {
+    const stubs = installStubClients();
+    await connectedStub('agent-a', stubs, 's-a');
+    // A second session with an agent-reported time, as session/list would deliver.
+    stubs[0]!.handlers.onSessions([
+      { sessionId: 's-a2', cwd: '/agent-a', title: null, updatedAt: '2026-01-01T00:00:00Z' },
+    ]);
+    const before = usePanda.getState().connections['agent-a']!.lastActivityAt;
+
+    // The client's exact loadSessionInternal order (LiveAcpClient.ts).
+    stubs[0]!.handlers.onSessionSwitchStage('s-a2', '/agent-a', 1);
+    stubs[0]!.handlers.onReplayStart();
+    stubs[0]!.handlers.onUpdate({ sessionUpdate: 'user_message', content: [{ type: 'text', text: 'history' }] });
+    stubs[0]!.handlers.onUpdate({
+      sessionUpdate: 'agent_message_chunk',
+      messageId: 'm',
+      content: { type: 'text', text: 'replied back then' },
+    });
+    stubs[0]!.handlers.onSessionSwitchCommit(1);
+
+    const slot = usePanda.getState().connections['agent-a']!;
+    expect(slot.sessions.find((e) => e.sessionId === 's-a2')!.updatedAt).toBe('2026-01-01T00:00:00Z');
+    expect(slot.lastActivityAt).toBe(before);
+    // The replayed transcript itself did land.
+    expect(slot.docs['s-a2']!.turns).toHaveLength(1);
+  });
+});
+
 describe('offline agent seeding (phase 3)', () => {
   it('seeds disconnected slots from the endpoint memory; the first takes the foreground', () => {
     const storage = new MemoryStorage();

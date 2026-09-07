@@ -228,6 +228,16 @@
   color: color-mix(in oklab, var(--color-fg) 35%, transparent);
 }
 
+/* Last-activity label (#175): pushed to the row's end; it keeps its width
+   while the truncating title gives way. */
+.sidebar-session-time {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: var(--panda-size-chrome);
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
 .sidebar-session-delete {
   position: absolute;
   top: 50%;

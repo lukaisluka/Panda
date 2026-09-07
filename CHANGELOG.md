@@ -6,6 +6,25 @@ follow the releases published from this repository.
 
 ## [Unreleased]
 
+### Added
+
+- **Sidebar session last-activity times (#175)** — session rows show a coarse
+  relative label ("3 min ago"; absolute date beyond a week, exact time on
+  hover) for their last conversation activity.
+
+### Changed
+
+- **Local activity stamping (#175)** — conversation events (user input, agent
+  replies, tool calls) now stamp `sessions[].updatedAt` and the connection's
+  ordering key on the host, so agents that never report `updatedAt` still get
+  meaningful order. Suppressed during `session/load` replay (history is not
+  activity); agent reports (`session/list`, `session_info_update`) still
+  overwrite on arrival — last writer wins, no cross-clock comparison.
+- **Stable sidebar order (#175)** — the "foreground pinned first" rule is
+  removed from both the agent groups and the session rows: order now tracks
+  only last activity, so switching no longer jumps rows around; the current
+  agent/session is recognized by its highlight.
+
 ## [0.1.0] - 2026-09-07
 
 First publishable cut: a complete ACP v1 client — web app, live deployment,
