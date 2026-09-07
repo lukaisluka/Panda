@@ -151,9 +151,14 @@ function MainScreen() {
         ) : (
           <>
             {doc.plan && doc.plan.length > 0 && <PlanDock entries={doc.plan} />}
-            {liveActive && lifecycle.phase === 'auth-required' ? (
+            {/* The auth gate owns the main view for a login challenge AND for
+                the login flow's elicitation while the link stays up (bug
+                hunt #8): mid-connection re-login keeps the old session, and
+                its request-scoped OAuth card must be answerable. Without a
+                challenge the standing offer (#90) feeds the method list. */}
+            {liveActive && (lifecycle.phase === 'auth-required' || connection.authElicitation !== null) ? (
               <AuthGate
-                methods={connection.authMethods ?? []}
+                methods={connection.authMethods ?? connection.availableAuthMethods}
                 message={connection.error}
                 elicitation={connection.authElicitation}
                 onAuthenticate={live.authenticate}

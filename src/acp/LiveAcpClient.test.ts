@@ -2561,6 +2561,36 @@ describe('LiveAcpClient v1 authentication', () => {
     h.closeAll();
   });
 
+  it('mid-connection re-login: a request-scoped elicitation while a session lives is answerable, not auto-cancelled (bug hunt #8)', async () => {
+    const h = await setup({
+      authMethods: AUTH_METHODS,
+      // No authGate: connect establishes s-1 normally — credentials "expire"
+      // afterwards, and the user re-logins from the status-bar entry.
+      newSessionIds: ['s-1', 's-2'],
+      onAuthenticate: async (ctx) => {
+        await ctx.client.request(methods.client.elicitation.create, {
+          mode: 'url',
+          elicitationId: 'elicit-relogin',
+          url: 'https://example.test/relogin',
+          message: 'Re-authorize Panda',
+          requestId: 'req-2',
+        });
+      },
+    });
+    expect(h.connected).toHaveLength(1); // a live session exists
+
+    const authenticating = h.acpClient.authenticate('oauth-github');
+    await waitFor(() => h.authElicitations.some((e) => e !== null));
+    // The card rendered — the login is NOT aborted by an auto-cancel.
+    expect(h.authElicitations.at(-1)).toMatchObject({ mode: 'url', url: 'https://example.test/relogin' });
+    h.acpClient.resolveElicitation('elicit-relogin', { outcome: 'declined' });
+    await authenticating;
+    expect(h.agentState.authenticateRequests).toEqual(['oauth-github']);
+    expect(h.sessionIds.at(-1)).toBe('s-2'); // session re-established
+    expect(h.disconnected).toEqual([]); // the old session survived the flow
+    h.closeAll();
+  });
+
   it('authenticate with an unknown method id is refused loudly', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const h = await setup({ authMethods: AUTH_METHODS, authGate: true });
