@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Activity, ArrowLeft, Bot, Check, Copy, Pencil, Play, Plug, Plus, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Activity, ArrowLeft, Bot, Braces, Check, Copy, List, Pencil, Play, Plug, Plus, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { IconButton } from '@astryxdesign/core/IconButton';
 import { Selector } from '@astryxdesign/core/Selector';
+import { TextArea } from '@astryxdesign/core/TextArea';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import {
   loadProfiles,
@@ -20,6 +21,7 @@ import {
   subscribeMcpServers,
   type McpServerConfig,
 } from '../mcpServers';
+import { parseMcpConfigText, serializeMcpServers, type McpSkipReason, type McpTextFormat } from '../mcpText';
 import { desktopHost, summarizeUserAgent } from '../diagnostics';
 import { navigate } from '../routes';
 import { isThemeId, loadThemeId, saveThemeId, subscribeTheme, THEMES, EXPOSED_THEME_IDS } from '../theme';
@@ -392,35 +394,62 @@ function AgentsSection({ profiles }: { profiles: AgentProfile[] }) {
   );
 }
 
-/** The MCP 服务器 page (issue #71, #117, #140): the v1 execution surface —
- * configured servers ride every session/new · session/load to the agent.
- * Same group-head create action and in-place edit pattern as the Agent 配置
- * page. */
+/** The MCP 服务器 page (issue #71, #117, #140, #142): the v1 execution
+ * surface — configured servers ride every session/new · session/load to the
+ * agent. Two views on the same data: the per-row form list, and the whole
+ * config as editable JSON/YAML text (#142). Same in-place edit pattern as
+ * the Agent 配置 page. */
 function McpSection() {
   const { t } = useI18n();
   const [servers, setServers] = useState<McpServerConfig[]>(() => loadMcpServers());
   useEffect(() => subscribeMcpServers(setServers), []);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [textView, setTextView] = useState(false);
 
   return (
     <section className="settings-card">
       <div className="settings-group-head">
         <h2 className="settings-group-title">{t('settings.mcpGroup')}</h2>
-        {!creating && (
-          <Button
-            variant="secondary"
-            size="sm"
-            label={t('settings.addMcp')}
-            icon={<Plus size={12} />}
-            clickAction={() => {
-              setEditingId(null);
-              setCreating(true);
-            }}
-          />
-        )}
+        <div className="settings-group-actions">
+          {textView ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              label={t('settings.mcpTextBack')}
+              icon={<List size={12} />}
+              clickAction={() => setTextView(false)}
+            />
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                label={t('settings.mcpTextView')}
+                icon={<Braces size={12} />}
+                clickAction={() => {
+                  setCreating(false);
+                  setEditingId(null);
+                  setTextView(true);
+                }}
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                label={t('settings.addMcp')}
+                icon={<Plus size={12} />}
+                clickAction={() => {
+                  setEditingId(null);
+                  setCreating(true);
+                }}
+              />
+            </>
+          )}
+        </div>
       </div>
-      {creating ? (
+      {textView ? (
+        <McpTextEditor servers={servers} onDone={() => setTextView(false)} />
+      ) : creating ? (
         <McpForm
           onCancel={() => setCreating(false)}
           onSave={(server) => {
@@ -501,6 +530,129 @@ export function mcpServerSummary(server: McpServerConfig): string {
   return server.type === 'stdio'
     ? `stdio · ${server.command}${server.args.trim() ? ` ${server.args.trim()}` : ''}`
     : `${server.type} · ${server.url}`;
+}
+
+/** The MCP text view (#142): the whole config as one editable JSON/YAML
+ * document. Entering seeds the text from the current list; format switching
+ * and formatting round-trip through the parser (normalize → serialize), so
+ * the editor's canonical shape is Panda's own. Saving REPLACES the whole
+ * list — the button states the count; skip/dropped details stay visible
+ * instead of vanishing into a toast. Pasting dialects from other clients
+ * (Claude/Cursor/VS Code/…) parses tolerantly — see mcpText.ts. */
+function McpTextEditor({ servers, onDone }: {
+  servers: McpServerConfig[];
+  onDone(): void;
+}) {
+  const { t } = useI18n();
+  const [format, setFormat] = useState<McpTextFormat>('json');
+  const [text, setText] = useState(() => serializeMcpServers(servers, 'json').text);
+  // The last settled content: entering, a successful save, or an explicit
+  // settle after a save-with-warnings. Leaving with edits past this asks.
+  const baseline = useRef(text);
+  const parsed = useMemo(() => parseMcpConfigText(text), [text]);
+  const dirty = text !== baseline.current;
+
+  const reserialize = (target: McpTextFormat) => {
+    if (parsed.error !== null) return;
+    setText(serializeMcpServers(parsed.servers, target).text);
+    setFormat(target);
+  };
+
+  const leave = () => {
+    if (!dirty || window.confirm(t('settings.mcpDirtyConfirm'))) onDone();
+  };
+
+  const save = () => {
+    if (parsed.error !== null) return;
+    saveMcpServers(parsed.servers);
+    // With warnings (skipped/renamed/dropped) stay here and show the
+    // details; otherwise the edit is done.
+    if (parsed.skipped.length > 0 || parsed.renames.length > 0 || parsed.droppedFields.length > 0) {
+      baseline.current = text;
+      return;
+    }
+    onDone();
+  };
+
+  const skipReasonKey: Record<McpSkipReason, string> = {
+    'missing-name': t('settings.mcpSkipMissingName'),
+    'invalid-entry': t('settings.mcpSkipInvalid'),
+    'missing-command': t('settings.mcpSkipMissingCommand'),
+    'missing-url': t('settings.mcpSkipMissingUrl'),
+    'unsupported-type': t('settings.mcpSkipUnsupportedType'),
+  };
+
+  return (
+    <div className="settings-mcp-editor">
+      <div className="settings-mcp-toolbar">
+        <div className="settings-mcp-format" role="group" aria-label={t('settings.mcpFormatLabel')}>
+          {(['json', 'yaml'] as const).map((choice) => (
+            <button
+              key={choice}
+              type="button"
+              className={`settings-mcp-format-item ${format === choice ? 'settings-mcp-format-item--active' : ''}`}
+              aria-pressed={format === choice}
+              disabled={parsed.error !== null}
+              onClick={() => reserialize(choice)}
+            >
+              {choice.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          label={t('settings.mcpFormatBtn')}
+          isDisabled={parsed.error !== null}
+          clickAction={() => reserialize(format)}
+        />
+        <div className="settings-mcp-toolbar-actions">
+          <Button variant="ghost" size="sm" label={t('settings.cancel')} clickAction={leave} />
+          <Button
+            variant="primary"
+            size="sm"
+            label={t('settings.mcpSaveCount', { n: String(parsed.servers.length) })}
+            isDisabled={parsed.error !== null}
+            clickAction={save}
+          />
+        </div>
+      </div>
+      <TextArea
+        label={t('settings.mcpTextView')}
+        isLabelHidden
+        value={text}
+        onChange={(value) => setText(value)}
+        rows={14}
+        placeholder={'{\n  "mcpServers": {\n    "filesystem": { "command": "npx", "args": ["-y", "…"] }\n  }\n}'}
+        status={parsed.error !== null
+          ? { type: 'error', message: `${t('settings.mcpParseError')}: ${parsed.error}` }
+          : undefined}
+      />
+      {(parsed.skipped.length > 0 || parsed.droppedFields.length > 0 || parsed.hasPlaceholders || parsed.renames.length > 0) && (
+        <div className="settings-mcp-notes">
+          {parsed.skipped.length > 0 && (
+            <ul className="settings-mcp-skip-list">
+              {parsed.skipped.map((entry) => (
+                <li key={`${entry.name}:${entry.reason}`}>
+                  <span className="settings-mcp-skip-name">{entry.name}</span>
+                  <span>{skipReasonKey[entry.reason]}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {parsed.droppedFields.length > 0 && (
+            <p>{t('settings.mcpDroppedFields', { fields: parsed.droppedFields.join(', ') })}</p>
+          )}
+          {parsed.hasPlaceholders && <p>{t('settings.mcpPlaceholders')}</p>}
+          {parsed.renames.length > 0 && (
+            <p>{t('settings.mcpRenamed', {
+              names: parsed.renames.map((r) => `${r.from} → ${r.to}`).join(', '),
+            })}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Shape the MCP form edits. */
