@@ -1,7 +1,7 @@
 {
   "name": "panda",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Panda — a universal ACP (Agent Client Protocol) client with a meticulously crafted message stream",
   "license": "Apache-2.0",
   "type": "module",
