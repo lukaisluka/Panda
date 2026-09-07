@@ -111,6 +111,37 @@ WebSocket 完成握手、能力协商、模式切换、权限批准、真实文�
 检查。test-agent 未安装依赖(没有 `test-agent/node_modules`)时,该测试组自动
 跳过;也可设置 `PANDA_TEST_AGENT_E2E=skip` 显式跳过。
 
+## Claude Code 契约录制(#154)
+
+test-agent 与 Panda 客户端同源(同一 ACP SDK),无法证明第三方真实对端的兼容性。
+`claude-agent-acp`(`@agentclientprotocol/claude-agent-acp`)是 Claude Code 的官方
+ACP 适配器,Panda 用两层测试覆盖它:
+
+- **层 1(进 CI,免费)**:`src/acp/claudeCodeContract.test.ts` 回放
+  `fixtures/claude-code/` 里录制的真实报文——wire 解释、reducer 折叠、
+  `LiveAcpClient` 管线。适配器升级导致的协议漂移表现为 fixture diff + 测试变红。
+- **层 2(手动,花钱)**:`PANDA_CLAUDE_CODE_E2E=1 pnpm exec vitest run
+  src/acp/ClaudeCode.e2e.test.ts` 真连适配器跑真实模型回合,并捕获录制够不到的
+  权限请求形状。要求本机 `claude` 已登录,会消耗真实 token,不进 CI。
+
+fixture 的录制(一次性,重新录制会花真实 token 并产生 diff):
+
+```sh
+pnpm --filter panda-test-agent record:claude-code
+```
+
+前置条件:`claude` CLI 已安装并登录(脚本通过 `command -v claude` 定位,并设
+`CLAUDE_CODE_EXECUTABLE` 传给适配器——不指名则适配器自探测在沙箱/非交互环境会
+失败)。脚本以固定版本 `@agentclientprotocol/claude-agent-acp@0.75.1` 拉起适配器
+(版本钉死在 `scripts/record-claude-code.ts`,升级适配器时改这里并重录),在
+`/tmp` 新建一次性工程跑一个纯编辑回合,再依次录制 initialize / session/new /
+turn / session/list / session/load / session/delete 六阶段报文写入
+`fixtures/claude-code/`。
+
+录制脚本与层 2 e2e 共同探明的运行要点:适配器必须经 `zsh -lc 'exec npx -y …'`
+拉起(裸 `spawn('npx')` 会挂死在 npm exec 解析),且必须显式设置
+`CLAUDE_CODE_EXECUTABLE` 指向真实 claude CLI。
+
 ## 已知限制
 
 `session/list` 按固定小页(2 条)分页,`updated_at` 刻意保守(仅 prompt/resume/模式与

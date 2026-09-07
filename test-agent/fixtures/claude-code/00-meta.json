@@ -1,0 +1,6 @@
+{
+  "agentPackage": "@agentclientprotocol/claude-agent-acp@0.75.1",
+  "claudeCli": "2.1.247 (Claude Code)",
+  "recordedAt": "2026-09-07T06:21:55.459Z",
+  "note": "Recorded from a live adapter run; shapes are the contract, ids/paths/timestamps are per-run."
+}

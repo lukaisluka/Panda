@@ -36,6 +36,15 @@ process memory and its permission flow never resumes the graph. Runtime
 sandboxes and SQLite state belong under ignored `test-agent/sandbox*/` and
 `test-agent/.state*/`.
 
+Third-party compat is covered by the Claude Code contract tests (#154):
+layer 1 replays recorded real traffic from `@agentclientprotocol/claude-agent-acp`
+(`test-agent/fixtures/claude-code/` + `src/acp/claudeCodeContract.test.ts`,
+runs in CI); layer 2 is an opt-in live e2e (`PANDA_CLAUDE_CODE_E2E=1`,
+`src/acp/ClaudeCode.e2e.test.ts`, costs real tokens, never in CI). Re-record
+fixtures with `pnpm --filter panda-test-agent record:claude-code` (requires a
+logged-in `claude` CLI); the adapter is spawned via `zsh -lc 'exec npx -y …'`
+with `CLAUDE_CODE_EXECUTABLE` set explicitly.
+
 ### Desktop shell
 
 `desktop/` is a pnpm-workspace package (`panda-desktop`) hosting the same

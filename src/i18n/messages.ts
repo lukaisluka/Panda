@@ -370,8 +370,8 @@ export const messages = {
     zh: '仅 Panda 桌面版可用(在本机拉起进程)',
   },
   'settings.agentCommandPlaceholder': {
-    en: 'e.g. npx -y claude-code-acp',
-    zh: '如:npx -y claude-code-acp',
+    en: 'e.g. npx -y @agentclientprotocol/claude-agent-acp',
+    zh: '如:npx -y @agentclientprotocol/claude-agent-acp',
   },
   'settings.commandRequired': {
     en: 'stdio needs an executable command',

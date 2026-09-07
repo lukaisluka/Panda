@@ -1,0 +1,128 @@
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "sessions": [
+      {
+        "sessionId": "33613008-864b-4c90-887f-0a223663ad02",
+        "cwd": "/private/tmp/panda-cc-record",
+        "title": "Read greeting.txt, then append the character ! to the end of the file. Reply with one short sentence.",
+        "updatedAt": "2026-09-07T06:21:55.334Z"
+      },
+      {
+        "sessionId": "93d2d804-339f-41df-95cd-e2e4a4333bae",
+        "cwd": "/private/var/folders/mq/jt4vczq17l77zpyln8qv66y80000gn/T/panda-cc-e2e-FeGuBx",
+        "title": "Read greeting.txt, then append the character ! to the end of the file. Reply with just: done",
+        "updatedAt": "2026-09-07T06:20:20.028Z"
+      },
+      {
+        "sessionId": "2f6a53f9-ceeb-4a36-9d24-010a6a01f62b",
+        "cwd": "/private/tmp/panda-cc-record",
+        "title": "Append the character ! to the end of greeting.txt, then run the shell command `wc -c greeting.txt` to verify the size. Reply with one short sentence.",
+        "updatedAt": "2026-09-07T05:39:41.360Z"
+      },
+      {
+        "sessionId": "82e06c36-e125-44c6-8f5e-23f6d5ae938f",
+        "cwd": "/Users/luka/Projects/parallax",
+        "title": "superpowers 残留清理",
+        "updatedAt": "2026-09-04T00:45:55.794Z"
+      },
+      {
+        "sessionId": "9a4f68b2-70fc-408f-86c3-e625cf366908",
+        "cwd": "/Users/luka/Projects/parallax",
+        "title": "上下文窗口使用情况未显示",
+        "updatedAt": "2026-08-29T01:46:42.621Z"
+      },
+      {
+        "sessionId": "86c3214e-aad6-4b1a-abf4-85806f644e6b",
+        "cwd": "/Users/luka/Projects/parallax/.worktrees/remove-superpowers",
+        "title": "Review this change for security vulnerabilities. Changed files (you may Read these and any other file in the repo): - parallax/accounts/__init__.py - parallax/funding/__init__.py Unified diff (o…",
+        "updatedAt": "2026-08-29T01:34:59.895Z"
+      },
+      {
+        "sessionId": "96e08c87-9162-4a63-8d02-01c9e0c7c6dd",
+        "cwd": "/Users/luka/Projects/parallax",
+        "title": "怎么了",
+        "updatedAt": "2026-08-29T01:14:10.063Z"
+      },
+      {
+        "sessionId": "8c813376-1923-461a-ac26-84e2d35d53b8",
+        "cwd": "/Users/luka/Projects/parallax",
+        "title": "/plugin",
+        "updatedAt": "2026-08-29T01:13:36.777Z"
+      },
+      {
+        "sessionId": "4e0e5440-5c58-4b3d-b2ce-50dbd85ed604",
+        "cwd": "/Users/luka/Projects/parallax",
+        "title": "高价值功能Bug挖掘",
+        "updatedAt": "2026-08-29T01:07:34.787Z"
+      },
+      {
+        "sessionId": "0ed5a5b4-49a1-4739-ab18-d362ac1e576e",
+        "cwd": "/Users/luka/Projects/parallax",
+        "title": "UI/UX layout review",
+        "updatedAt": "2026-08-28T09:00:49.631Z"
+      },
+      {
+        "sessionId": "bed64c34-8783-4160-854e-c8d2ec3bd205",
+        "cwd": "/Users/luka/Projects/parallax",
+        "title": "Parallax PR #19 审查",
+        "updatedAt": "2026-08-28T05:20:55.998Z"
+      },
+      {
+        "sessionId": "59868578-7e74-4933-81e3-e4b460ece942",
+        "cwd": "/Users/luka/Projects/parallax",
+        "title": "PR #29–#37 堆叠链",
+        "updatedAt": "2026-08-28T05:20:10.964Z"
+      },
+      {
+        "sessionId": "3bbfc24d-2551-4940-9287-45b3c3008489",
+        "cwd": "/Users/luka/Projects/parallax",
+        "title": "Greeting",
+        "updatedAt": "2026-08-27T06:05:05.160Z"
+      },
+      {
+        "sessionId": "531c32c6-18e9-481f-9722-83414e31354f",
+        "cwd": "/Users/luka/Projects/parallax",
+        "title": "pr19 全方位 ultrareview",
+        "updatedAt": "2026-08-27T03:26:01.811Z"
+      },
+      {
+        "sessionId": "5068eaa2-46b0-4ed8-9be2-88708d329268",
+        "cwd": "/Users/luka/Projects/parallax",
+        "title": "Parallax PR #17",
+        "updatedAt": "2026-08-27T03:25:02.712Z"
+      },
+      {
+        "sessionId": "116be128-c2b9-4748-9f6e-e28be56ed842",
+        "cwd": "/Users/luka/Projects/parallax",
+        "title": "Review this change for security vulnerabilities. Changed files (you may Read these and any other file in the repo): - tests/test_engine_record.py Unified diff (only + lines are new): === DIFF: te…",
+        "updatedAt": "2026-08-27T03:22:27.761Z"
+      },
+      {
+        "sessionId": "86fd8f29-e972-4ffb-8c62-f7617719fcf2",
+        "cwd": "/Users/luka/Projects/parallax",
+        "title": "Parallax #18 审查",
+        "updatedAt": "2026-08-27T03:10:11.871Z"
+      },
+      {
+        "sessionId": "47feaaa7-5c73-485e-8c46-b89e525f2ba4",
+        "cwd": "/Users/luka/Projects/parallax/.claude/worktrees/pr20-followups",
+        "title": "Review this change for security vulnerabilities. Changed files (you may Read these and any other file in the repo): - config.example.toml - parallax/web/app.py - tests/test_web_app.py Unified…",
+        "updatedAt": "2026-08-27T03:07:03.945Z"
+      },
+      {
+        "sessionId": "2c300823-9bfc-44f1-a136-d08196364595",
+        "cwd": "/Users/luka/Projects/parallax/.claude/worktrees/fix-accounts-write-guard",
+        "title": "Review this change for security vulnerabilities. Changed files (you may Read these and any other file in the repo): - parallax/web/app.py - parallax/web/static/accounts.html - tests/test_accoun…",
+        "updatedAt": "2026-08-27T02:32:17.835Z"
+      },
+      {
+        "sessionId": "cb2dbd2f-73db-4606-8d1e-b708d221ca2e",
+        "cwd": "/Users/luka/Projects/parallax",
+        "title": "默认effort配置",
+        "updatedAt": "2026-08-27T02:12:46.269Z"
+      }
+    ]
+  }
+}
