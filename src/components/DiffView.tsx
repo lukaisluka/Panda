@@ -73,9 +73,17 @@ export function DiffView({ diff }: { diff: DiffPart }) {
     });
   };
   const stats = useMemo(() => diffStats(oldText, diff.newText), [oldText, diff.newText]);
-  const [lines, setLines] = useState<{ old: TokenSpan[][] | null; new: TokenSpan[][] | null } | null>(
-    null,
-  );
+  // Tokens are memoized per input (#10's secondary symptom): while a NEW
+  // diff's tokenize is in flight the stored lines belong to the PREVIOUS
+  // file — rendering them would paint old content inside the new row
+  // geometry for seconds. The state carries its input's key; a mismatch
+  // reads as null (plain text) until the fresh pass lands.
+  const highlightKey = `${diff.path}\u0000${oldText}\u0000${diff.newText}`;
+  const [highlighted, setHighlighted] = useState<{
+    key: string;
+    lines: { old: TokenSpan[][] | null; new: TokenSpan[][] | null } | null;
+  }>({ key: '', lines: null });
+  const lines = highlighted.key === highlightKey ? highlighted.lines : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -84,12 +92,12 @@ export function DiffView({ diff }: { diff: DiffPart }) {
         highlightLines(diff.path, oldText),
         highlightLines(diff.path, diff.newText),
       ]);
-      if (!cancelled) setLines({ old: oldLines, new: newLines });
+      if (!cancelled) setHighlighted({ key: highlightKey, lines: { old: oldLines, new: newLines } });
     })();
     return () => {
       cancelled = true;
     };
-  }, [diff.path, oldText, diff.newText]);
+  }, [highlightKey, diff.path, oldText, diff.newText]);
 
   return (
     <div className="diff-container">

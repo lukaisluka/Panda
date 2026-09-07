@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { highlightCode, highlightLines } from './highlighter';
+import { describe, expect, it, vi } from 'vitest';
+import { highlightCode, highlightLines, oversizedForHighlight } from './highlighter';
 
 describe('highlightCode', () => {
   it('highlights a fenced ts block into colored token lines', async () => {
@@ -38,5 +38,26 @@ describe('highlightCode', () => {
   it('returns null for unknown languages and empty code', async () => {
     expect(await highlightCode('nope-lang', 'x = 1')).toBeNull();
     expect(await highlightCode('ts', '')).toBeNull();
+  });
+});
+
+describe('oversized input degrade (#10)', () => {
+  it('flags inputs over the line or char threshold, keeps normal code in', () => {
+    expect(oversizedForHighlight('const x = 1;')).toBe(false);
+    expect(oversizedForHighlight(`${'x\n'.repeat(601)}`)).toBe(true); // 601 lines
+    expect(oversizedForHighlight(`${'x'.repeat(30_001)}`)).toBe(true); // one huge line
+  });
+
+  it('oversized code renders unhighlighted (null) with one warning per language', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const big = `const x${'= 1;'.repeat(100)};\n`.repeat(120); // well over both thresholds
+      expect(await highlightCode('ts', big)).toBeNull();
+      expect(await highlightCode('ts', `${big}// again`)).toBeNull(); // second hit stays silent
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]![0]).toContain('#10');
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
