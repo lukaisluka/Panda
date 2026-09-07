@@ -2,7 +2,7 @@
 
 For implementers of any ACP agent that should work well with Panda: which interfaces are entry requirements, which are strongly recommended, and what each omission costs.
 
-> 中文版(事实源):[acp-agent-requirements.md](acp-agent-requirements.md)。The Chinese version is the source of truth — update both together.
+> 中文版 (source of truth): [acp-agent-requirements.md](acp-agent-requirements.md) — update both together.
 
 - Protocol version: **ACP v1** (`protocolVersion: 1`, SDK `@agentclientprotocol/sdk` 1.4.0).
 - Code sources of truth (this document is their human-readable export; on conflict, code wins):

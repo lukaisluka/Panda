@@ -13,11 +13,10 @@
     <img src="branding/clean/series-retro-tea.png" alt="Tea break" width="88" />
     <img src="branding/clean/series-retro-sleep.png" alt="Idle" width="88" />
   </p>
+  <p><em>English · <a href="README.zh-CN.md">简体中文</a></em></p>
 </div>
 
 Panda speaks [ACP (Agent Client Protocol)](https://agentclientprotocol.com) — the standard that 40+ coding agents (Claude Code, Gemini CLI, Codex, Cursor, Goose, Copilot…) expose to editors. Panda is an independent, conversation-first client: not an IDE plugin, but a place where talking to an agent is the primary experience.
-
-📖 **中文使用指南**：[docs/user-guide.md](docs/user-guide.md) — 快速上手、连接 agent、界面指南、能力矩阵、故障排查与 FAQ。
 
 ## Get Panda
 
@@ -48,12 +47,12 @@ ACP is an event stream, but the UI needs a document. A pure reduction layer fold
 
 ## Documentation
 
-- [User guide (中文)](docs/user-guide.md) — 快速上手、连接 agent、界面指南、能力矩阵、故障排查与 FAQ
+- [User guide (Chinese)](docs/user-guide.md) — quick start, connecting agents, UI guide, capability matrix, troubleshooting & FAQ
 - [CHANGELOG](CHANGELOG.md)
-- [Architecture decision records](docs/adr/) — significant decisions, with context and rejected alternatives
+- [Architecture decision records](docs/adr/) (Chinese) — significant decisions, with context and rejected alternatives
 - [desktop/README.md](desktop/README.md) — desktop shell: development, acceptance harness, artifacts
-- [test-agent/README.md](test-agent/README.md) — the deterministic deepagents-based ACP agent used by integration tests
-- [ACP agent integration contract](docs/acp-agent-requirements.md)([English](docs/acp-agent-requirements.en.md))— 接入 Panda 的最低必须集、体验损失分级与超时预算,面向 agent 实现者
+- [test-agent/README.md](test-agent/README.md) (Chinese) — the deterministic deepagents-based ACP agent used by integration tests
+- [ACP agent integration contract](docs/acp-agent-requirements.md) ([English](docs/acp-agent-requirements.en.md)) — minimum required method set, UX-cost-ranked recommendation tiers, and timeout budgets for agent implementers
 
 ## Brand
 
