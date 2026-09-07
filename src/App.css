@@ -76,6 +76,13 @@
 .app-header-meta {
   display: none;
   flex-shrink: 0;
+  /* Endpoint form: mono URL that can run arbitrarily long (a direct
+   * connect with tokens in the path measured 144px past the shell) —
+   * clamp the same way the --desc variant does (#150 audit). */
+  max-width: 44ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--color-faint);

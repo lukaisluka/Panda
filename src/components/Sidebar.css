@@ -80,6 +80,14 @@
 }
 
 .sidebar-sessions {
+  /* The session list is the sidebar's only growing region: it must absorb
+   * the free space AND yield it (min-height: 0) so the footer block stays
+   * pinned in view — without the scroll, a tall group list (many agents ×
+   * remembered sessions) pushed Add agent / 设置 off-screen (#150 audit;
+   * same shape as .sidebar-settings-nav). */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding-inline: 12px; /* px-3 */
 }
 

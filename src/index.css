@@ -295,6 +295,12 @@ body {
    * line breaks. */
   font-size: 14px;
   line-height: 1.6;
+  /* Long unbreakable runs (auto-linked URLs, tokens pasted by the user)
+   * must wrap inside the column — measured overflowing the message
+   * scroller by ~960px without this (#150 audit). Same tool as
+   * ElicitationCard's oauth-URL rule. Code blocks keep their own
+   * horizontal scroll (white-space: pre ignores wrap opportunities). */
+  overflow-wrap: anywhere;
 }
 .md-body > :first-child { margin-top: 0; }
 .md-body > :last-child { margin-bottom: 0; }
