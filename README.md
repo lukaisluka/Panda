@@ -14,13 +14,14 @@
     <img src="branding/clean/series-retro-sleep.png" alt="Idle" width="88" />
   </p>
   <p><em>English · <a href="README.zh-CN.md">简体中文</a></em></p>
+  <p><img src="docs/assets/demo.gif" alt="Panda demo: a scripted agent session — streaming replies, tool-call cards, an edit diff behind an inline permission card, tests, and a usage summary" /></p>
 </div>
 
 Panda speaks [ACP (Agent Client Protocol)](https://agentclientprotocol.com) — the standard that 40+ coding agents (Claude Code, Gemini CLI, Codex, Cursor, Goose, Copilot…) expose to editors. Panda is an independent, conversation-first client: not an IDE plugin, but a place where talking to an agent is the primary experience.
 
 ## Get Panda
 
-- **Web (recommended)** — <https://lukaisluka.github.io/Panda/> runs in any modern browser, nothing to install. Point it at an ACP-over-WebSocket endpoint and the message stream is live; with no agent connected you get the built-in scripted demo.
+- **Web (recommended)** — <https://lukaisluka.github.io/Panda/> runs in any modern browser, nothing to install. Point it at an ACP-over-WebSocket endpoint and the message stream is live — or watch the built-in [scripted demo](https://lukaisluka.github.io/Panda/#/demo) first, no agent needed.
 - **Desktop (macOS / Windows) — beta** — grab a build from [GitHub Releases](https://github.com/lukaisluka/Panda/releases). The desktop shell works — same UI and protocol stack as the web version, plus direct stdio agents — but it has not been through organized release testing yet, so it ships as beta; day-to-day, prefer the web version:
   - macOS: `Panda_<ver>_aarch64.dmg`
   - Windows: `Panda_<ver>_x64-setup.exe` (installer), or `Panda_<ver>_x64-portable.zip` (no install; the app is the same either way — user data stays in the per-user data directory, it does not travel with the exe)
@@ -39,7 +40,7 @@ Panda speaks [ACP (Agent Client Protocol)](https://agentclientprotocol.com) — 
 - **Images both ways** — paste or pick images for capable agents; render images in user/agent messages, thoughts and tool results
 - **Long sessions** — a virtualized message list that follows streaming growth yet detaches only on genuine user scroll
 - **Direct stdio agents on desktop** — spawn a local ACP agent command and talk NDJSON over its pipes, managed lifecycle included
-- **Offline demo replay** — the same UI driven by a scripted agent; `?demo=long` streams an 80-turn session
+- **Scripted demo replay** — the same UI driven by a scripted agent, no backend needed: <https://lukaisluka.github.io/Panda/#/demo> (`?demo=long` streams an 80-turn session)
 
 ## How it works
 
@@ -61,6 +62,7 @@ The retro badge panda is the project's identity. Final artwork lives in `brandin
 
 - `src/assets/brand/` — app-ready exports: `panda-badge.png` (sidebar logo), `panda-sleep.png` (crash page); the rest are available for future empty/loading states
 - `public/favicon.png` + `public/apple-touch-icon.png` — web icons, declared in `index.html`
+- `public/og-image.png` — social-preview composite (og/twitter cards in `index.html`); the GitHub repo's *Social preview* under Settings uses the same artwork (manual upload)
 - `desktop/icon-source.png` — desktop icon source; regenerate `desktop/src-tauri/icons/` with `pnpm --dir desktop exec tauri icon icon-source.png`
 
 ## Development
@@ -69,7 +71,7 @@ Requires Node 24+, pnpm 11, and (for the desktop shell only) a Rust toolchain.
 
 ```sh
 pnpm install
-pnpm dev           # http://127.0.0.1:5173 — opens on the scripted demo
+pnpm dev           # http://127.0.0.1:5173 — #/demo runs the scripted replay
 pnpm typecheck     # tsc --noEmit
 pnpm test          # vitest — includes live-agent e2e when test-agent deps are installed
 pnpm build         # typecheck + vite build

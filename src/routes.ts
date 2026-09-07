@@ -1,7 +1,7 @@
 /**
  * Lightweight hash routing (IA refactor phase 1). Panda has exactly three
  * in-app views — the session screen (`#/`), the settings screen
- * (`#/settings`), and the dev-only demo replay (`#/demo`, phase 2: the hash
+ * (`#/settings`), and the demo replay (`#/demo`, phase 2: the hash
  * is what drives the demo/live session mode; leaving the route switches the
  * UI back to live without touching connections) — plus dev-only tree-level
  * pages that replace the whole render root (`#/astryx-smoke`); those are
@@ -17,12 +17,14 @@ export type AppRoute = 'main' | 'settings' | 'demo';
 
 export type DevPage = 'astryx-smoke' | 'crash';
 
-/** `''` · `'#'` · `'#/'` → main; `#/settings` → settings; `#/demo` (dev
- * builds only — production has no replay entry) → demo. */
+/** `''` · `'#'` · `'#/'` → main; `#/settings` → settings; `#/demo` → demo
+ * (the scripted replay — reachable in production by explicit URL so shared
+ * links can demo the app, but the app never opens on it and carries no
+ * in-UI entry outside dev settings). */
 export function parseHash(hash: string): AppRoute {
   const path = hash.replace(/^#\/?/, '').replace(/\/+$/, '');
   if (path === 'settings') return 'settings';
-  if (import.meta.env.DEV && path === 'demo') return 'demo';
+  if (path === 'demo') return 'demo';
   return 'main';
 }
 
