@@ -1,6 +1,7 @@
 import { Component, useState, type ReactNode } from 'react';
 import { buildDiagnostics, copyText } from '../diagnostics';
 import { t } from '../i18n';
+import pandaSleep from '../assets/brand/panda-sleep.png';
 
 /**
  * The last line of defense (#105): a render error anywhere below this
@@ -69,7 +70,12 @@ function CrashFallback({ error, componentStack }: { error: Error; componentStack
   const [copy, setCopy] = useState<CopyState>('idle');
   return (
     <div style={shell} role="alert">
-      <h1 style={{ fontSize: 20, margin: 0 }}>🐼 {t('diag.crashTitle')}</h1>
+      <img
+        src={pandaSleep}
+        alt=""
+        style={{ width: 120, height: 120, borderRadius: '50%' }}
+      />
+      <h1 style={{ fontSize: 20, margin: 0 }}>{t('diag.crashTitle')}</h1>
       <p style={{ margin: 0, maxWidth: 480 }}>{t('diag.crashDesc')}</p>
       <pre
         style={{
