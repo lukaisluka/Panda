@@ -324,6 +324,13 @@ export class LiveAcpClient {
   private elicitationWaiters = new Map<string, PendingElicitation>();
   /** Agent-managed login methods from initialize (-32000 recovery). */
   private authMethods: AcpAuthMethod[] = [];
+  /**
+   * True while an `authenticate` RPC is in flight: mid-connection credential
+   * expiry keeps a live session, and the request-scoped elicitation the
+   * agent sends during the login flow must be treated as auth-scoped (bug
+   * hunt #8) — auto-cancelling it aborts the login and tears the connection.
+   */
+  private authInFlight = false;
   /** Whether the agent advertised `auth.logout` — gates the logout method. */
   private agentSupportsLogout = false;
   /** session/close advertised (sessionCapabilities.close) — sent before teardown. */
@@ -615,6 +622,7 @@ export class LiveAcpClient {
       console.warn(`[panda/acp] authenticate ignored: unknown method id "${methodId}"`);
       return;
     }
+    this.authInFlight = true;
     try {
       await connection.agent.request(methods.agent.authenticate, { methodId });
       if (generation !== this.connectionGeneration) {
@@ -640,6 +648,8 @@ export class LiveAcpClient {
       }
       console.error('[panda/acp] authenticate failed', err);
       this.reportDisconnect(t('acp.loginFailed', { error: describeError(err) }));
+    } finally {
+      this.authInFlight = false;
     }
   }
 
@@ -1475,10 +1485,14 @@ export class LiveAcpClient {
     // The scope union: session-scoped carries sessionId, request-scoped
     // (pre-session) does not. A request-scoped elicitation while no session
     // lives is the auth phase (v1: OAuth url / API-key form) — it renders on
-    // the connection's auth card instead of a session document.
+    // the connection's auth card instead of a session document. Mid-
+    // connection credential expiry keeps a live session, but the login flow
+    // still issues request-scoped elicitations — `authenticate` in flight
+    // makes them auth-scoped too (bug hunt #8).
     const scopedSessionId =
       'sessionId' in params && typeof params.sessionId === 'string' ? params.sessionId : null;
-    const authScoped = scopedSessionId === null && this.sessionId === null;
+    const authScoped =
+      scopedSessionId === null && (this.sessionId === null || this.authInFlight);
     if (!authScoped && (this.sessionId === null || scopedSessionId !== this.sessionId)) {
       const scope = scopedSessionId ?? 'request-scoped (pre-session)';
       console.warn(
