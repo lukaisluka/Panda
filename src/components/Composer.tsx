@@ -7,6 +7,7 @@ import {
   fileToAttachment,
   type ImageAttachment,
 } from '../attachments';
+import { draftForKey, useComposerDrafts } from '../composerDrafts';
 import type {
   AcpAvailableCommand,
   AcpConfigOption,
@@ -25,7 +26,19 @@ import { ModePicker } from './ModePicker';
 import './Composer.css';
 import { useI18n } from '../i18n/context';
 
-export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onStop, modes, onSetMode, commands, configOptions, onSetConfigOption }: {
+/**
+ * True while a keydown belongs to an IME composition (bug hunt #2). Enter
+ * during composition confirms the candidate — Safari/WKWebView (the desktop
+ * shell) dispatches it BEFORE `compositionend`, Firefox after; both must be
+ * ignored, or the raw pinyin ("nihao") gets submitted and the composer is
+ * cleared mid-composition. keyCode 229 is the legacy marker some engines
+ * set on every composition keydown.
+ */
+export function isImeComposition(e: { isComposing?: boolean; keyCode?: number }): boolean {
+  return e.isComposing === true || e.keyCode === 229;
+}
+
+export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onStop, modes, onSetMode, commands, configOptions, onSetConfigOption, sessionKey }: {
   onSend: (content: AcpContentBlock[]) => void;
   disabled: boolean;
   hint?: string;
@@ -41,11 +54,22 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
   /** Agent-advertised session config options; null/[] hides the settings entry. */
   configOptions: AcpConfigOption[] | null;
   onSetConfigOption: (configId: string, value: string | boolean) => void;
+  /** Foreground session identity (bug hunt #15): text, attachments and
+   * errors live in the per-session draft store under this key, so drafts
+   * never cross sessions. */
+  sessionKey: string;
 }) {
   const { t } = useI18n();
-  const [value, setValue] = useState('');
-  const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
-  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const draft = useComposerDrafts((s) => draftForKey(s, sessionKey));
+  const { value, attachments, attachmentError } = draft;
+  const setDraft = (patch: Partial<{ value: string; attachments: ImageAttachment[]; attachmentError: string | null }>) =>
+    useComposerDrafts.getState().setDraft(sessionKey, patch);
+  // Function-form attachment update reads through the store (not the render
+  // closure) — addFiles resolves asynchronously, where `draft` may be stale.
+  const setAttachments = (update: (current: ImageAttachment[]) => ImageAttachment[]) => {
+    const current = useComposerDrafts.getState().drafts[sessionKey]?.attachments ?? [];
+    useComposerDrafts.getState().setDraft(sessionKey, { attachments: update(current) });
+  };
   const [commandIndex, setCommandIndex] = useState(0);
   const [commandsDismissed, setCommandsDismissed] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
@@ -62,31 +86,30 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
   const completeCommand = (command: AcpAvailableCommand) => {
     // The trailing space starts the argument; the panel closes itself
     // because the value no longer matches /^\/\S*$/.
-    setValue(commandCompletion(command));
+    setDraft({ value: commandCompletion(command) });
   };
 
   const submit = () => {
     if (!canSend) return;
     onSend(promptContent);
-    setValue('');
-    setAttachments([]);
-    setAttachmentError(null);
+    useComposerDrafts.getState().clearDraft(sessionKey);
   };
 
   const addFiles = async (files: File[]) => {
     if (!canAttachImages || files.length === 0) return;
-    setAttachmentError(null);
+    setDraft({ attachmentError: null });
     try {
       const added = await Promise.all(files.map(fileToAttachment));
       setAttachments((current) => [...current, ...added]);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error('[panda/composer] failed to read image attachment', err);
-      setAttachmentError(t('composer.readImageFailed', { message }));
+      setDraft({ attachmentError: t('composer.readImageFailed', { message }) });
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isImeComposition(e.nativeEvent)) return;
     if (commandItems) {
       const action = commandKeyAction(e);
       if (action) {
@@ -206,7 +229,7 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
               disabled={disabled}
               placeholder={hint ?? t('composer.placeholder')}
               onChange={(e) => {
-                setValue(e.target.value);
+                setDraft({ value: e.target.value });
                 setCommandIndex(0);
                 setCommandsDismissed(false);
               }}

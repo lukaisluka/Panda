@@ -45,6 +45,13 @@ describe('commandKeyAction (keyboard while the panel is open)', () => {
     expect(commandKeyAction({ key: 'Escape', shiftKey: false })).toEqual({ type: 'close' });
     expect(commandKeyAction({ key: 'a', shiftKey: false })).toBe(null);
   });
+
+  it('IME-composition keys take no panel action (bug hunt #2: Enter confirms the candidate)', () => {
+    expect(commandKeyAction({ key: 'Enter', shiftKey: false, isComposing: true })).toBe(null);
+    expect(commandKeyAction({ key: 'Tab', shiftKey: false, isComposing: true })).toBe(null);
+    expect(commandKeyAction({ key: 'ArrowDown', shiftKey: false, isComposing: true })).toBe(null);
+    expect(commandKeyAction({ key: 'Escape', shiftKey: false, isComposing: true })).toBe(null);
+  });
 });
 
 describe('wrapIndex', () => {
