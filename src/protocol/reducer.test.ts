@@ -160,6 +160,51 @@ describe('reducer content parts', () => {
     });
   });
 
+  it('two replayed prompts with different messageIds stay separate even with no turn separator between them (bug hunt #13)', () => {
+    // The middle turn produced only a plan (docked, never in flow) — the
+    // replay carries no agent block and no turn_notice to separate the two
+    // prompts. The messageId change is the only seam.
+    const doc = fold([
+      { sessionUpdate: 'user_message', messageId: 'm-1', content: [{ type: 'text', text: '第一个问题' }] },
+      { sessionUpdate: 'plan', entries: [{ content: '中间 plan', priority: 'medium', status: 'in_progress' }] },
+      { sessionUpdate: 'user_message', messageId: 'm-2', content: [{ type: 'text', text: '第二个问题' }] },
+    ]);
+
+    expect(doc.turns).toHaveLength(2);
+    expect(doc.turns[0]!.blocks).toEqual([
+      { kind: 'user_message', content: [{ type: 'text', text: '第一个问题' }], protocolMessageId: 'm-1' },
+    ]);
+    expect(doc.turns[1]!.blocks).toEqual([
+      { kind: 'user_message', content: [{ type: 'text', text: '第二个问题' }], protocolMessageId: 'm-2' },
+    ]);
+  });
+
+  it('same-messageId chunks keep merging into one multipart block', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', messageId: 'm-1', content: [IMAGE] },
+      { sessionUpdate: 'user_message', messageId: 'm-1', content: [{ type: 'text', text: '补一句' }] },
+    ]);
+    expect(doc.turns).toHaveLength(1);
+    expect(doc.turns[0]!.blocks[0]).toEqual({
+      kind: 'user_message',
+      content: [IMAGE, { type: 'text', text: '补一句' }],
+      protocolMessageId: 'm-1',
+    });
+  });
+
+  it('an id-carrying chunk after an id-less trailer does not fold into it', () => {
+    const doc = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: '无 id 的块' }] },
+      { sessionUpdate: 'user_message', messageId: 'm-9', content: [{ type: 'text', text: '有 id 的新消息' }] },
+    ]);
+    expect(doc.turns[0]!.blocks).toHaveLength(2);
+    expect(doc.turns[0]!.blocks[1]).toEqual({
+      kind: 'user_message',
+      content: [{ type: 'text', text: '有 id 的新消息' }],
+      protocolMessageId: 'm-9',
+    });
+  });
+
   it('streams thought chunks through the same parts model', () => {
     const doc = fold([
       {
@@ -808,6 +853,61 @@ describe('reducer elicitation lifecycle (form mode)', () => {
     ]);
     expect(doc.elicitations['elicit-1']).toMatchObject({ request: { title: '第一份' } });
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('elicit-1'));
+    warnSpy.mockRestore();
+  });
+
+  it('a settled id may be reused by a re-run flow: the new request is answerable again (bug hunt #4)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const settled = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      { sessionUpdate: 'elicitation_requested', request: request('elicit-1', '第一次') },
+      { sessionUpdate: 'elicitation_resolved', elicitationId: 'elicit-1', response: { outcome: 'declined' } },
+    ]);
+
+    const rerun = applyUpdate(settled, {
+      sessionUpdate: 'elicitation_requested',
+      request: request('elicit-1', '重试'),
+    });
+    expect(rerun.elicitations['elicit-1']).toMatchObject({ status: 'pending', request: { title: '重试' } });
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    // The reused record settles through the normal path — the RPC no longer hangs.
+    const settledAgain = applyUpdate(rerun, {
+      sessionUpdate: 'elicitation_resolved',
+      elicitationId: 'elicit-1',
+      response: { outcome: 'accepted', content: { tag: 'v2' } },
+    });
+    expect(settledAgain.elicitations['elicit-1']).toMatchObject({ status: 'resolved' });
+    warnSpy.mockRestore();
+  });
+
+  it('a cancelled record is equally reusable, but a live one still is not', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const cancelled = fold([
+      { sessionUpdate: 'elicitation_requested', request: request('elicit-9') },
+      { sessionUpdate: 'elicitation_resolved', elicitationId: 'elicit-9', response: { outcome: 'cancelled' } },
+    ]);
+    const rerun = applyUpdate(cancelled, {
+      sessionUpdate: 'elicitation_requested',
+      request: request('elicit-9', '重试'),
+    });
+    expect(rerun.elicitations['elicit-9']).toMatchObject({ status: 'pending' });
+
+    // An opened url elicitation is still live — reuse stays refused.
+    const opened = fold([
+      { sessionUpdate: 'user_message', content: [{ type: 'text', text: 'go' }] },
+      {
+        sessionUpdate: 'elicitation_requested',
+        request: { mode: 'url', id: 'gh-1', toolCallId: null, message: 'm', url: 'https://x' },
+      },
+      { sessionUpdate: 'elicitation_url_opened', elicitationId: 'gh-1' },
+    ]);
+    const collide = applyUpdate(opened, {
+      sessionUpdate: 'elicitation_requested',
+      request: { mode: 'url', id: 'gh-1', toolCallId: null, message: 'm2', url: 'https://y' },
+    });
+    expect(collide.elicitations['gh-1']).toMatchObject({ status: 'opened' });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('gh-1'));
     warnSpy.mockRestore();
   });
 });

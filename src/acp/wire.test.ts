@@ -32,6 +32,34 @@ describe('toAcpUpdates raw preservation', () => {
     ]);
   });
 
+  it('passes a user chunk messageId through — the reducer needs it to separate replayed prompts (bug hunt #13)', () => {
+    const withId = note({
+      sessionUpdate: 'user_message_chunk',
+      messageId: 'u-1',
+      content: { type: 'text', text: '第一个问题' },
+    } satisfies SessionUpdate);
+    expect(toAcpUpdates(withId)).toEqual([
+      {
+        sessionUpdate: 'user_message',
+        messageId: 'u-1',
+        content: [{ type: 'text', text: '第一个问题' }],
+        raw: withId,
+      },
+    ]);
+
+    const withoutId = note({
+      sessionUpdate: 'user_message_chunk',
+      content: { type: 'text', text: '无 id' },
+    } satisfies SessionUpdate);
+    expect(toAcpUpdates(withoutId)).toEqual([
+      {
+        sessionUpdate: 'user_message',
+        content: [{ type: 'text', text: '无 id' }],
+        raw: withoutId,
+      },
+    ]);
+  });
+
   it('turns a chunk whose only content block is unsupported into an unsupported event', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const audio = note({
