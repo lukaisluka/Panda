@@ -15,6 +15,7 @@ const draft = (patch: Partial<ProfileDraft> = {}): ProfileDraft => ({
   command: '',
   args: '',
   workspace: { kind: 'local-directory', path: '/tmp/project' },
+  mcpServerIds: [],
   ...patch,
 });
 

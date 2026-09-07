@@ -226,7 +226,7 @@ function saveDirectAsProfile(url: string, cwd: string | null): void {
   })();
   const name = window.prompt(t('side.profileNamePrompt'), defaultName)?.trim();
   if (!name) return; // cancelled or left blank
-  saveProfiles([...loadProfiles(), { id: newProfileId(), name, kind: 'websocket', url: trimmedUrl, workspace }]);
+  saveProfiles([...loadProfiles(), { id: newProfileId(), name, kind: 'websocket', url: trimmedUrl, workspace, mcpServerIds: [] }]);
 }
 
 /** Astryx StatusDot per lifecycle phase; 运行中 overlays a pulse. Phase →

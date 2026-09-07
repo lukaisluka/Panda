@@ -13,10 +13,12 @@
 import { isWorkspace, type Workspace } from './workspace';
 
 /** One saved connection preset. `name` is user-chosen — never the protocol's
- * agent-reported name (agentName at initialize; see CONTEXT.md). */
+ * agent-reported name (agentName at initialize; see CONTEXT.md).
+ * `mcpServerIds` is the profile's MCP whitelist (#148): only servers listed
+ * here ride this profile's sessions — an empty list carries none. */
 export type AgentProfile =
-  | { id: string; name: string; kind: 'websocket'; url: string; workspace: Workspace }
-  | { id: string; name: string; kind: 'stdio'; command: string; args: string; workspace: Workspace };
+  | { id: string; name: string; kind: 'websocket'; url: string; workspace: Workspace; mcpServerIds: string[] }
+  | { id: string; name: string; kind: 'stdio'; command: string; args: string; workspace: Workspace; mcpServerIds: string[] };
 
 /** The connection target a profile (or the custom-address form) reduces to —
  * the connection manager's currency (issue #121). Pure data: how a target is
@@ -110,6 +112,15 @@ function isProfile(value: unknown): value is AgentProfile {
   );
 }
 
+/** `mcpServerIds` read shape (#148): absent (pre-#148 entries) reads as an
+ * empty whitelist; non-string or empty entries are dropped loudly by the
+ * caller's schema — here they are just not ids. */
+function normalizeMcpServerIds(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((id): id is string => typeof id === 'string' && id.length > 0)
+    : [];
+}
+
 /**
  * Validates one stored entry and upgrades it to the current schema. Legacy
  * entries (pre-#121, no `kind`) are websocket profiles by construction —
@@ -120,17 +131,18 @@ function isProfile(value: unknown): value is AgentProfile {
 function normalizeProfile(value: unknown): AgentProfile | null {
   if (!isProfile(value)) return null;
   const entry = value as Record<string, unknown> & { id: string; name: string; workspace: Workspace };
+  const mcpServerIds = normalizeMcpServerIds(entry.mcpServerIds);
   if (entry.kind === undefined) {
     // Legacy shape: id/name/url/workspace. A missing/blank url was already
     // malformed before #121 — treat it the same as a fresh websocket entry
     // with no url: dropped, loudly, by the caller.
     return typeof entry.url === 'string' && entry.url.length > 0
-      ? { id: entry.id, name: entry.name, kind: 'websocket', url: entry.url, workspace: entry.workspace }
+      ? { id: entry.id, name: entry.name, kind: 'websocket', url: entry.url, workspace: entry.workspace, mcpServerIds }
       : null;
   }
   if (entry.kind === 'websocket') {
     return typeof entry.url === 'string' && entry.url.length > 0
-      ? { id: entry.id, name: entry.name, kind: 'websocket', url: entry.url, workspace: entry.workspace }
+      ? { id: entry.id, name: entry.name, kind: 'websocket', url: entry.url, workspace: entry.workspace, mcpServerIds }
       : null;
   }
   if (entry.kind === 'stdio') {
@@ -144,6 +156,7 @@ function normalizeProfile(value: unknown): AgentProfile | null {
           command: entry.command,
           args: typeof entry.args === 'string' ? entry.args : '',
           workspace: entry.workspace,
+          mcpServerIds,
         }
       : null;
   }
