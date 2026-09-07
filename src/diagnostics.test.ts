@@ -81,7 +81,14 @@ describe('buildDiagnostics', () => {
     url: 'https://lukaisluka.github.io/Panda/#/settings',
     locale: 'en',
     userAgent: 'test-agent',
+    host: 'browser' as const,
   };
+
+  it('reports the host environment (#125: browser vs desktop shell)', () => {
+    const report = buildDiagnostics({ env, entries: [] });
+    expect(report).toContain('- host: browser');
+    expect(buildDiagnostics({ env: { ...env, host: 'desktop' }, entries: [] })).toContain('- host: desktop');
+  });
 
   it('assembles environment + error + component stack + console sections', () => {
     const report = buildDiagnostics({

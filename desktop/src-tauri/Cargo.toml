@@ -1,0 +1,28 @@
+[package]
+name = "panda-desktop"
+version = "0.1.0"
+description = "Panda desktop shell — WebSocket + stdio ACP client host"
+license = "Apache-2.0"
+edition = "2021"
+
+# The shell is deliberately thin: the entire product lives in the webview
+# (the repo root's Vite build). Rust here is only the process plane the
+# browser cannot have — spawning stdio agents and streaming their pipes.
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["process", "io-util", "time", "sync", "macros", "rt"] }
+base64 = "0.22"
+
+[target.'cfg(unix)'.dependencies]
+# SIGTERM-based graceful teardown; Windows terminates via Child::kill.
+libc = "0.2"
+
+[profile.release]
+strip = true
+lto = true

@@ -12,3 +12,7 @@ test-agent/sandbox*/
 
 # synced by scripts/sync-material-icons.mjs (postinstall)
 public/material-icons/
+
+# Tauri desktop shell
+desktop/src-tauri/target/
+desktop/src-tauri/gen/

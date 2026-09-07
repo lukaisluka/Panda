@@ -1,0 +1,9 @@
+{
+  "name": "panda-desktop",
+  "private": true,
+  "description": "Tauri shell packaging for Panda — the Rust process plane lives in src-tauri/; the UI is the workspace root's Vite app.",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build"
+  }
+}

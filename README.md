@@ -51,10 +51,36 @@ session limitations are documented in [test-agent/README.md](test-agent/README.m
 
 Domain terminology lives in [CONTEXT.md](CONTEXT.md), significant decisions in [docs/adr/](docs/adr/).
 
+### Desktop shell (macOS)
+
+Panda also runs as a Tauri v2 desktop shell — the same web UI plus the one
+capability a browser cannot have: spawning stdio agents locally and streaming
+their pipes. Prerequisites: Rust toolchain (rustup), plus the workspace's
+Node/pnpm. Run it with:
+
+```sh
+pnpm desktop:dev    # vite + cargo run — opens the shell window on 127.0.0.1:5173
+pnpm desktop:build  # tauri build — bundles a .dmg (aarch64)
+```
+
+The shell's process plane is three Tauri commands (`stdio_spawn`/`stdio_write`
+/`stdio_kill`) in `desktop/src-tauri/src/main.rs`; the webview side boots via
+`src/desktop/boot.ts`, lazily imported by `main.tsx` only when
+`__TAURI_INTERNALS__` is present, so the browser bundle never carries it. For
+end-to-end verification inside the real WKWebView (which has no automation
+surface), point `devUrl` at `desktop-acceptance.html?agent=<abs test-agent
+path>` — it drives the production stdio path against a live test-agent and
+reports through the `panda.acceptance` localStorage key.
+
+Note the vite dev server is pinned to `127.0.0.1` with `strictPort`: the
+shell's `devUrl` pins port 5173, and on macOS Node resolves `localhost`
+IPv6-only while WKWebView looks IPv4-first — a drifting port or a `::1`-only
+listener leaves the shell window blank.
+
 ## Roadmap
 
-- **Done** — live ACP client, session lifecycle & recovery, image sending, diff polish, virtualized streams, saved agent profiles (one active connection, [ADR 0001](docs/adr/0001-single-active-connection.md)), [user guide](docs/user-guide.md), CI + [live deployment](https://lukaisluka.github.io/Panda/)
-- **Later** — desktop shell
+- **Done** — live ACP client, session lifecycle & recovery, image sending, diff polish, virtualized streams, saved agent profiles (one active connection, [ADR 0001](docs/adr/0001-single-active-connection.md)), [user guide](docs/user-guide.md), CI + [live deployment](https://lukaisluka.github.io/Panda/), stdio transport + macOS desktop shell
+- **Later** — Windows CI artifacts (installer + portable)
 
 Consciously out of scope: *terminal* tool content — in v1 that means the client executes commands on the agent's behalf, which a browser chat client doesn't declare; Panda skips such blocks with a warning.
 
