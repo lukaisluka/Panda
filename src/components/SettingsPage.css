@@ -50,6 +50,114 @@
   margin: 0;
 }
 
+.settings-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* --- MCP text view (#142): whole-config JSON/YAML editor --- */
+
+.settings-mcp-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-mcp-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-mcp-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+/* Format toggle: the swatch-chip language scaled down to a two-option pill. */
+.settings-mcp-format {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-full);
+  overflow: hidden;
+}
+
+.settings-mcp-format-item {
+  padding: 3px 10px;
+  border: none;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: var(--panda-colors-transition);
+}
+
+.settings-mcp-format-item + .settings-mcp-format-item {
+  border-inline-start: 1px solid var(--color-border);
+}
+
+.settings-mcp-format-item:not(:disabled):hover {
+  color: var(--color-fg);
+}
+
+.settings-mcp-format-item--active {
+  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+  color: var(--color-accent);
+}
+
+.settings-mcp-format-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Pin the editor's face to mono — config text, not prose. */
+.settings-mcp-editor textarea {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.settings-mcp-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--panda-radius-lg);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--color-muted);
+}
+
+.settings-mcp-notes p {
+  margin: 0;
+}
+
+.settings-mcp-skip-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-mcp-skip-list li {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-mcp-skip-name {
+  font-weight: 500;
+  color: var(--color-fg);
+}
+
 /* Group title: plain text head of a card whose content is SettingsRows —
  * the card icon chip is gone, the group title sets the rhythm. */
 .settings-group-title {

@@ -74,6 +74,9 @@ importers:
       vscode-material-icons:
         specifier: ^0.1.1
         version: 0.1.1
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
       zustand:
         specifier: ^5.0.15
         version: 5.0.15(@types/react@19.2.18)(react@19.2.8)

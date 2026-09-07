@@ -311,6 +311,33 @@ export const messages = {
   'settings.mcp': { en: 'MCP servers', zh: 'MCP 服务器' },
   'settings.mcpGroup': { en: 'Saved servers', zh: '已保存的服务器' },
   'settings.addMcp': { en: 'Add server', zh: '新增服务器' },
+  'settings.mcpTextView': { en: 'Text config', zh: '文本配置' },
+  'settings.mcpTextBack': { en: 'Back to list', zh: '返回列表' },
+  'settings.mcpFormatLabel': { en: 'Config format', zh: '配置格式' },
+  'settings.mcpFormatBtn': { en: 'Format', zh: '格式化' },
+  'settings.mcpSaveCount': { en: 'Save {n} server(s)', zh: '保存 {n} 条' },
+  'settings.mcpParseError': { en: 'Cannot parse', zh: '无法解析' },
+  'settings.mcpDirtyConfirm': {
+    en: 'Discard unsaved changes to the text config?',
+    zh: '放弃文本配置的未保存修改?',
+  },
+  'settings.mcpDroppedFields': {
+    en: 'Fields Panda does not store were dropped: {fields}',
+    zh: 'Panda 暂不存储的字段已丢弃:{fields}',
+  },
+  'settings.mcpPlaceholders': {
+    en: 'Some values contain ${{…}} placeholders — imported literally, replace them yourself if needed.',
+    zh: '部分值含 ${{…}} 占位符,已按字面导入,需要时请自行替换。',
+  },
+  'settings.mcpRenamed': { en: 'Duplicate names suffixed: {names}', zh: '重名已加序号后缀:{names}' },
+  'settings.mcpSkipMissingName': { en: 'entry has no name', zh: '条目缺少名称' },
+  'settings.mcpSkipInvalid': { en: 'entry is not a config object', zh: '条目不是配置对象' },
+  'settings.mcpSkipMissingCommand': { en: 'stdio needs a command', zh: 'stdio 缺少命令' },
+  'settings.mcpSkipMissingUrl': { en: 'remote needs a URL', zh: '远程类型缺少 URL' },
+  'settings.mcpSkipUnsupportedType': {
+    en: 'transport type Panda cannot host (stdio / http / sse only)',
+    zh: 'Panda 不支持该传输类型(仅 stdio / http / sse)',
+  },
   'settings.mcpDesc': {
     en: 'Configured tool servers ride every session/new · session/load to the agent, which connects and obtains their tools; stdio commands run on the agent’s host. Changes apply to the next session.',
     zh: '配置的工具服务会随每个新建/载入的会话下发给 agent,由 agent 侧连接并取得工具;stdio 命令在 agent 所在主机上执行。修改对下一个会话生效。',

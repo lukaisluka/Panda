@@ -106,8 +106,9 @@ export function newMcpServerId(): string {
 
 /** Splits the one-line args field into the wire's array. Whitespace-only
  * segments collapse away; no quoting semantics — an arg with spaces needs a
- * real array surface if that ever bites. */
-function splitArgs(line: string): string[] {
+ * real array surface if that ever bites. Exported for mcpText.ts, whose
+ * JSON/YAML surface uses the wire's array shape. */
+export function splitArgs(line: string): string[] {
   return line.trim().split(/\s+/).filter((segment) => segment.length > 0);
 }
 
