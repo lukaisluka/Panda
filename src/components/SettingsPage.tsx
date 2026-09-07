@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Activity, ArrowLeft, Bot, Braces, Check, Copy, Pencil, Play, Plug, Plus, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Activity, ArrowLeft, Bot, Check, Copy, Pencil, Play, Plug, Plus, SlidersHorizontal, Trash2, WandSparkles } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { IconButton } from '@astryxdesign/core/IconButton';
 import { Selector } from '@astryxdesign/core/Selector';
@@ -585,10 +585,12 @@ function McpTextEditor({ servers, onDone }: {
             </button>
           ))}
         </div>
-        <Button
+        <IconButton
           variant="ghost"
           size="sm"
+          icon={<WandSparkles size={12} />}
           label={t('settings.mcpFormatBtn')}
+          tooltip={t('settings.mcpFormatBtn')}
           isDisabled={parsed.error !== null}
           clickAction={() => reserialize(format)}
         />
@@ -604,7 +606,7 @@ function McpTextEditor({ servers, onDone }: {
         </div>
       </div>
       <TextArea
-        label={t('settings.mcpTextView')}
+        label={t('settings.mcpModeText')}
         isLabelHidden
         value={text}
         onChange={(value) => setText(value)}
@@ -695,15 +697,13 @@ function McpForm({ initial, onSave, onCancel, onTextConfig }: {
   return (
     <div className="settings-profile-form">
       {onTextConfig && (
-        <div className="settings-mcp-text-entry">
-          <span className="settings-mcp-text-entry-hint">{t('settings.mcpTextEntryHint')}</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            label={t('settings.mcpTextView')}
-            icon={<Braces size={12} />}
-            clickAction={onTextConfig}
-          />
+        <div className="settings-mcp-format" role="group" aria-label={t('settings.mcpModeLabel')}>
+          <button type="button" className="settings-mcp-format-item settings-mcp-format-item--active" aria-pressed="true">
+            {t('settings.mcpModeForm')}
+          </button>
+          <button type="button" className="settings-mcp-format-item" aria-pressed="false" onClick={onTextConfig}>
+            {t('settings.mcpModeText')}
+          </button>
         </div>
       )}
       <TextInput
