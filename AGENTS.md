@@ -35,3 +35,19 @@ only the default chat model is deterministic (scripted). The npm
 process memory and its permission flow never resumes the graph. Runtime
 sandboxes and SQLite state belong under ignored `test-agent/sandbox*/` and
 `test-agent/.state*/`.
+
+### Desktop shell
+
+`desktop/` is a pnpm-workspace package (`panda-desktop`) hosting the same
+Vite UI in a Tauri v2 shell; the Rust process plane (`stdio_spawn`/`stdio_write`
+/`stdio_kill`) is hand-rolled, NOT tauri-plugin-shell (ADR 0007). Commands:
+`pnpm desktop:dev` / `pnpm desktop:build`. The webview boots the stdio factory
+via `src/desktop/boot.ts`, lazily imported only when `__TAURI_INTERNALS__`
+exists — never import `@tauri-apps/api` outside that chunk. Shell acceptance
+is `desktop-acceptance.html` (dev-only vite page; point `devUrl` at it with
+`?agent=<test-agent path>`, report lands in localStorage `panda.acceptance`),
+because WKWebView has no automation surface. Two pins that must not drift:
+vite `server.host` stays `127.0.0.1` (Node binds `localhost` IPv6-only while
+WKWebView looks up IPv4 — blank window otherwise), and `strictPort` (devUrl
+pins 5173). CI artifacts (dmg / NSIS / portable zip, unsigned) build in
+`.github/workflows/desktop.yml`.

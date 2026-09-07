@@ -21,7 +21,7 @@ pnpm dev            # http://localhost:5173，自动进入脚本回放 demo
 
 ### 端点约定
 
-Panda 连接的端点必须满足：**WebSocket，一条 text 帧承载一条 JSON-RPC 消息**。这是官方 TypeScript SDK、ACP remote-transport 草案与主流 bridge 共同遵守的约定。
+Panda 连接的远程端点必须满足：**WebSocket，一条 text 帧承载一条 JSON-RPC 消息**。这是官方 TypeScript SDK、ACP remote-transport 草案与主流 bridge 共同遵守的约定。（桌面版还能直连本地 stdio agent，见「桌面版：直连 stdio agent」。）
 
 ### 用本仓库的 mock agent 起步
 
@@ -45,6 +45,23 @@ mock agent 声明了全部会话能力（list / load / resume / delete）和图�
 常见做法是用社区 bridge 把一个 stdio ACP agent 包成 WebSocket 端点，例如 [acpremote](https://github.com/vcoderun/acpkit)（`expose`）、[@flutur/acp-http-bridge](https://github.com/Alemusica/acp-http-bridge)、[acp-bridge](https://github.com/vezaynk/acp-bridge)。具体命令看各工具的 README——服务生命周期归你，Panda 只负责连。
 
 **工作目录（cwd）的含义**：它随 `session/new` 发给服务端，由**服务端**解释。对远程服务，这是远端机器上的路径，不是你本机的路径。
+
+### 桌面版：直连 stdio agent
+
+桌面壳（macOS dmg / Windows 安装包或免安装 zip）多一种连接类型：**stdio**——Panda 直接在你本机 spawn 一条命令，用 NDJSON 行协议对话，不需要任何 bridge。
+
+1. 设置 → Agent profiles → 新建，连接类型选 **stdio**
+2. 填命令与参数，例如一个本地 ACP agent 的启动命令：命令 `npx`，参数 `some-acp-agent --mode stdio`（参数按空格拆分，含空格的值暂不支持加引号转义）
+3. 工作目录填 agent 应以哪个本机目录为根
+4. 保存后在侧栏点击该 profile 连接
+
+注意：
+
+- **命令由你自备**——Panda 不捆绑任何运行时；桌面壳从图形环境启动，PATH 可能与你终端里的不同，找不到命令时请用**绝对路径**（如 `/Users/you/.nvm/versions/node/v24.x.x/bin/npx`）。
+- 断开连接会终止该子进程（SIGTERM → 3 秒 → SIGKILL）；退出 Panda 时所有 agent 子进程一并清理，不会留孤儿。
+- stdio 选项只在桌面版可选；浏览器版没有 spawn 能力，该选项禁用并说明原因。
+- 免安装版与安装版是**同一个应用**：数据（profile、会话记忆、localStorage）都在各自平台的用户数据目录（macOS `~/Library/WebKit/panda-desktop/`，Windows `%LOCALAPPDATA%/com.lukaisluka.panda/` 一带），不随 exe 走。
+- 产物未签名：Windows SmartScreen「未知发布者」与 macOS 首次运行 Gatekeeper 提示属预期，自行放行即可。
 
 ### 一次连接里发生了什么
 
