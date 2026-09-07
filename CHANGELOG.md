@@ -6,6 +6,8 @@ follow the releases published from this repository.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-07
+
 First publishable cut: a complete ACP v1 client — web app, live deployment,
 and a macOS/Windows desktop shell with stdio support.
 
@@ -59,4 +61,5 @@ and a macOS/Windows desktop shell with stdio support.
 - Desktop build: `frontendDist` resolved relative to `src-tauri`, so the
   previous `../dist` pointed inside `desktop/` and broke release bundling.
 
-[Unreleased]: https://github.com/lukaisluka/Panda/compare/HEAD
+[Unreleased]: https://github.com/lukaisluka/Panda/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/lukaisluka/Panda/releases/tag/v0.1.0
