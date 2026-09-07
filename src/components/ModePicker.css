@@ -14,7 +14,7 @@
   background: transparent;
   color: var(--color-muted);
   padding: 2px 10px;
-  font-size: 12px;
+  font-size: var(--panda-size-chrome);
   line-height: 18px;
   transition: var(--panda-colors-transition);
 }
@@ -85,12 +85,12 @@
 }
 
 .mode-picker-option-name {
-  font-size: 13px;
+  font-size: var(--panda-size-chrome);
   line-height: 18px;
 }
 
 .mode-picker-option-desc {
-  font-size: 12px;
+  font-size: var(--panda-size-micro);
   line-height: 16px;
   color: var(--color-faint);
 }

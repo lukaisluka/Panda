@@ -20,13 +20,13 @@
 .diff-header-path {
   margin-right: auto;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: var(--panda-size-content);
   color: var(--color-muted);
 }
 
 .diff-header-lines {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: var(--panda-size-content);
 }
 
 .diff-lines-add { color: var(--color-add); }
@@ -40,7 +40,7 @@
   width: 100%;
   border-collapse: collapse;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: var(--panda-size-content);
   line-height: 1.5;
 }
 
@@ -90,7 +90,7 @@
   background: color-mix(in oklab, var(--color-raised) 45%, transparent);
   color: var(--color-muted);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--panda-size-code);
   line-height: 1.5;
   cursor: pointer;
 }

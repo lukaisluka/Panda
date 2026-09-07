@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Activity, ArrowLeft, Bot, Check, Copy, Pencil, Play, Plug, Plus, SlidersHorizontal, Trash2, WandSparkles } from 'lucide-react';
+import { Activity, ArrowLeft, Bot, Check, Copy, Minus, Pencil, Play, Plug, Plus, SlidersHorizontal, Trash2, WandSparkles } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { useImperativeAlertDialog } from '@astryxdesign/core/AlertDialog';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
@@ -27,6 +27,7 @@ import { parseMcpConfigText, serializeMcpServers, type McpSkipReason, type McpTe
 import { desktopHost, summarizeUserAgent } from '../diagnostics';
 import { navigate } from '../routes';
 import { isThemeId, loadThemeId, saveThemeId, subscribeTheme, THEMES, EXPOSED_THEME_IDS } from '../theme';
+import { FONT_SIZE_BOUNDS, loadFontSizePair, saveFontSize, subscribeFontSize, type FontSizeKnob } from '../fontSize';
 import { workspaceDisplay } from '../workspace';
 import { LOCALES, saveLocale } from '../i18n';
 import { t } from '../i18n';
@@ -159,6 +160,12 @@ function GeneralSection() {
       <SettingsRow title={t('settings.language')} description={t('settings.languageRowDesc')}>
         <LanguageChips />
       </SettingsRow>
+      <SettingsRow title={t('settings.uiFontRow')} description={t('settings.uiFontRowDesc')}>
+        <FontSizeStepper knob="ui" />
+      </SettingsRow>
+      <SettingsRow title={t('settings.codeFontRow')} description={t('settings.codeFontRowDesc')}>
+        <FontSizeStepper knob="code" />
+      </SettingsRow>
     </section>
   );
 }
@@ -288,6 +295,40 @@ function LanguageChips() {
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/** Font-size stepper (#171): −/value/+ for one knob (ui scales the whole
+ * type scale, code covers the code-block family). Saving goes through
+ * saveFontSize — persist + apply to <html> + notify — and the subscription
+ * re-reads storage truth, same contract as the theme swatches. Buttons
+ * disable at the bounds so out-of-range clicks cannot happen. */
+function FontSizeStepper({ knob }: { knob: FontSizeKnob }) {
+  const { t } = useI18n();
+  const [sizes, setSizes] = useState(loadFontSizePair);
+  useEffect(() => subscribeFontSize(setSizes), []);
+  const [min, max] = FONT_SIZE_BOUNDS[knob];
+  const value = sizes[knob];
+  return (
+    <div className="settings-font-stepper">
+      <IconButton
+        variant="secondary"
+        size="sm"
+        label={t('settings.fontSmaller')}
+        icon={<Minus size={12} />}
+        isDisabled={value <= min}
+        clickAction={() => saveFontSize(knob, value - 1)}
+      />
+      <span className="settings-font-value">{value} px</span>
+      <IconButton
+        variant="secondary"
+        size="sm"
+        label={t('settings.fontLarger')}
+        icon={<Plus size={12} />}
+        isDisabled={value >= max}
+        clickAction={() => saveFontSize(knob, value + 1)}
+      />
     </div>
   );
 }

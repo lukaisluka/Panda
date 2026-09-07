@@ -17,7 +17,7 @@
   display: flex;
   align-items: center;
   gap: 8px; /* gap-2 */
-  font-size: 14px;
+  font-size: var(--panda-size-content);
   font-weight: 500;
   color: var(--color-accent);
 }
@@ -27,14 +27,14 @@
 
 .elicit-title {
   margin-top: 8px; /* mt-2 */
-  font-size: 14px;
+  font-size: var(--panda-size-content);
   font-weight: 500;
   color: color-mix(in oklab, var(--color-fg) 90%, transparent);
 }
 
 .elicit-desc {
   margin-top: 4px;
-  font-size: 14px;
+  font-size: var(--panda-size-content);
   color: var(--color-faint);
 }
 
@@ -49,7 +49,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 14px;
+  font-size: var(--panda-size-content);
 }
 
 .elicit-label {
@@ -82,7 +82,7 @@
 }
 
 .elicit-unsupported {
-  font-size: 13px;
+  font-size: var(--panda-size-chrome);
   color: var(--color-faint);
 }
 
@@ -107,20 +107,20 @@
 }
 
 .elicit-url-host {
-  font-size: 14px;
+  font-size: var(--panda-size-content);
   font-weight: 600;
   color: var(--color-accent);
 }
 
 .elicit-url {
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 12px;
+  font-size: var(--panda-size-code);
   color: var(--color-faint);
   overflow-wrap: anywhere; /* long oauth URLs must not blow the card wide */
 }
 
 .elicit-warn {
   margin-top: 8px; /* mt-2 */
-  font-size: 13px;
+  font-size: var(--panda-size-chrome);
   color: var(--color-warning, #b45309);
 }
