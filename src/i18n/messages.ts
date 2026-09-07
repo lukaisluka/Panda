@@ -312,7 +312,10 @@ export const messages = {
   'settings.mcpGroup': { en: 'Saved servers', zh: '已保存的服务器' },
   'settings.addMcp': { en: 'Add server', zh: '新增服务器' },
   'settings.mcpTextView': { en: 'Text config', zh: '文本配置' },
-  'settings.mcpTextBack': { en: 'Back to list', zh: '返回列表' },
+  'settings.mcpTextEntryHint': {
+    en: 'Or paste a whole JSON/YAML config',
+    zh: '或直接粘贴 JSON/YAML 整段配置',
+  },
   'settings.mcpFormatLabel': { en: 'Config format', zh: '配置格式' },
   'settings.mcpFormatBtn': { en: 'Format', zh: '格式化' },
   'settings.mcpSaveCount': { en: 'Save {n} server(s)', zh: '保存 {n} 条' },

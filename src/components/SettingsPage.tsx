@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Activity, ArrowLeft, Bot, Braces, Check, Copy, List, Pencil, Play, Plug, Plus, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Activity, ArrowLeft, Bot, Braces, Check, Copy, Pencil, Play, Plug, Plus, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { IconButton } from '@astryxdesign/core/IconButton';
 import { Selector } from '@astryxdesign/core/Selector';
@@ -394,11 +394,11 @@ function AgentsSection({ profiles }: { profiles: AgentProfile[] }) {
   );
 }
 
-/** The MCP 服务器 page (issue #71, #117, #140, #142): the v1 execution
+/** The MCP 服务器 page (issue #71, #117, #140, #142, #144): the v1 execution
  * surface — configured servers ride every session/new · session/load to the
- * agent. Two views on the same data: the per-row form list, and the whole
- * config as editable JSON/YAML text (#142). Same in-place edit pattern as
- * the Agent 配置 page. */
+ * agent. The group head only offers Add server; the JSON/YAML text view is
+ * an input mode of the create/edit form, not a list-level action (#144).
+ * Same in-place edit pattern as the Agent 配置 page. */
 function McpSection() {
   const { t } = useI18n();
   const [servers, setServers] = useState<McpServerConfig[]>(() => loadMcpServers());
@@ -406,52 +406,37 @@ function McpSection() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [textView, setTextView] = useState(false);
+  const enterTextView = () => {
+    setCreating(false);
+    setEditingId(null);
+    setTextView(true);
+  };
 
   return (
     <section className="settings-card">
       <div className="settings-group-head">
         <h2 className="settings-group-title">{t('settings.mcpGroup')}</h2>
-        <div className="settings-group-actions">
-          {textView ? (
+        {!creating && editingId === null && !textView && (
+          <div className="settings-group-actions">
             <Button
-              variant="ghost"
+              variant="secondary"
               size="sm"
-              label={t('settings.mcpTextBack')}
-              icon={<List size={12} />}
-              clickAction={() => setTextView(false)}
+              label={t('settings.addMcp')}
+              icon={<Plus size={12} />}
+              clickAction={() => {
+                setEditingId(null);
+                setCreating(true);
+              }}
             />
-          ) : (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                label={t('settings.mcpTextView')}
-                icon={<Braces size={12} />}
-                clickAction={() => {
-                  setCreating(false);
-                  setEditingId(null);
-                  setTextView(true);
-                }}
-              />
-              <Button
-                variant="secondary"
-                size="sm"
-                label={t('settings.addMcp')}
-                icon={<Plus size={12} />}
-                clickAction={() => {
-                  setEditingId(null);
-                  setCreating(true);
-                }}
-              />
-            </>
-          )}
-        </div>
+          </div>
+        )}
       </div>
       {textView ? (
         <McpTextEditor servers={servers} onDone={() => setTextView(false)} />
       ) : creating ? (
         <McpForm
           onCancel={() => setCreating(false)}
+          onTextConfig={enterTextView}
           onSave={(server) => {
             saveMcpServers([...loadMcpServers(), server]);
             setCreating(false);
@@ -471,6 +456,7 @@ function McpSection() {
                 key={server.id}
                 initial={server}
                 onCancel={() => setEditingId(null)}
+                onTextConfig={enterTextView}
                 onSave={(fields) => {
                   saveMcpServers(loadMcpServers().map((entry) => (entry.id === server.id ? fields : entry)));
                   setEditingId(null);
@@ -674,10 +660,11 @@ export function mcpDraftErrors(draft: McpDraft): Partial<Record<'name' | 'comman
   return errors;
 }
 
-function McpForm({ initial, onSave, onCancel }: {
+function McpForm({ initial, onSave, onCancel, onTextConfig }: {
   initial?: McpServerConfig;
   onSave(server: McpServerConfig): void;
   onCancel(): void;
+  onTextConfig?(): void;
 }) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<McpDraft>(() => ({
@@ -707,6 +694,18 @@ function McpForm({ initial, onSave, onCancel }: {
 
   return (
     <div className="settings-profile-form">
+      {onTextConfig && (
+        <div className="settings-mcp-text-entry">
+          <span className="settings-mcp-text-entry-hint">{t('settings.mcpTextEntryHint')}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            label={t('settings.mcpTextView')}
+            icon={<Braces size={12} />}
+            clickAction={onTextConfig}
+          />
+        </div>
+      )}
       <TextInput
         label={t('settings.serverName')}
         value={draft.name}
