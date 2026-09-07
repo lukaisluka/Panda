@@ -470,6 +470,54 @@ describe('per-endpoint session persistence (issue #21)', () => {
     expect(persisted.map((entry) => entry.sessionId).sort()).toEqual(['gone', 'live']);
   });
 
+  it('a fresh live stamp/title beats the stale persisted one — no frozen updatedAt (#9)', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      'panda.sessions:ws://x/acp',
+      JSON.stringify([
+        { sessionId: 's-1', cwd: '/x', title: '旧标题', updatedAt: '2026-09-04T10:00:00Z' },
+      ]),
+    );
+
+    persistSessionsSnapshot(
+      [{
+        url: 'ws://x/acp',
+        sessions: [{ sessionId: 's-1', cwd: '/x', title: '新标题', updatedAt: '2026-09-04T10:05:00Z' }],
+      }],
+      storage,
+    );
+
+    const persisted = JSON.parse(storage.entries.get('panda.sessions:ws://x/acp')!) as Array<{
+      title: string | null;
+      updatedAt: string | null;
+    }>;
+    expect(persisted).toEqual([
+      { sessionId: 's-1', cwd: '/x', title: '新标题', updatedAt: '2026-09-04T10:05:00Z' },
+    ]);
+  });
+
+  it('a null live field still falls back to the persisted value — the disk is the base layer, not the boss', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      'panda.sessions:ws://x/acp',
+      JSON.stringify([
+        { sessionId: 's-1', cwd: '/x', title: 'agent 报过的标题', updatedAt: '2026-09-04T10:00:00Z' },
+      ]),
+    );
+
+    // The live slot knows the session but has no title/stamp of its own.
+    persistSessionsSnapshot(
+      [{ url: 'ws://x/acp', sessions: [{ sessionId: 's-1', cwd: '/x', title: null, updatedAt: null }] }],
+      storage,
+    );
+
+    const persisted = JSON.parse(storage.entries.get('panda.sessions:ws://x/acp')!) as Array<{
+      title: string | null;
+      updatedAt: string | null;
+    }>;
+    expect(persisted[0]).toMatchObject({ title: 'agent 报过的标题', updatedAt: '2026-09-04T10:00:00Z' });
+  });
+
   it('caps the endpoint memory at the newest PERSIST_LIMIT entries', () => {
     const storage = new MemoryStorage();
     const many = Array.from({ length: 60 }, (_, i) => ({
