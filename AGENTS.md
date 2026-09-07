@@ -21,10 +21,11 @@ lazily by `/domain-modeling`. See `docs/agents/domain.md`.
 ### Bilingual docs
 
 Docs are organized by language: each file is single-language prose, and the
-only bilingual pairs are explicit mirrors. Two pairs exist — `README.md`
-(English) + `README.zh-CN.md` (Chinese), and the ACP contract pair (Chinese
-source of truth + English mirror, see "ACP agent contract"). When editing
-one side of a pair, update the other in the same change. Everything else is
+only bilingual pairs are explicit mirrors. Three pairs exist — `README.md`
+(English) + `README.zh-CN.md` (Chinese), the ACP contract pair, and the
+stdio→WebSocket bridge guide pair (both Chinese source of truth + English
+mirror; see "ACP agent contract" and "stdio→WebSocket bridge guide"). When
+editing one side of a pair, update the other in the same change. Everything else is
 single-language by audience: agent-facing docs (`AGENTS.md`, `docs/agents/*`,
 `desktop/README.md`, `CHANGELOG.md`) are English; human-facing docs
 (`CONTEXT.md`, `DESIGN.md`, `docs/user-guide.md`, `docs/adr/*`,
@@ -69,6 +70,17 @@ set, the four client-side handlers Panda answers (fs/terminal are deliberately
 `-32601`), the UX-cost-ranked recommendation tiers, and the timeout/timing
 budgets. The code SSOT is `src/acp/LiveAcpClient.ts` + `src/acp/wire.ts` —
 when those change, update both doc versions in sync.
+
+### stdio→WebSocket bridge guide
+
+`docs/acp-stdio-to-websocket.md` (Chinese, source of truth) and
+`docs/acp-stdio-to-websocket.en.md` (English mirror, updated in sync) export
+the bridge recipe for web users facing stdio-only agents: frame↔line mapping
+(no byte piping), the empty-subprotocol handshake, wss/TLS via reverse proxy,
+and the security red lines (localhost binding, tunnels, query-token auth).
+The reference implementation is `test-agent/src/serve.ts` and the client-side
+wire conventions live in `src/acp/browserWebSocketStream.ts` — when those
+change, update both doc versions in sync.
 
 ### Desktop shell
 

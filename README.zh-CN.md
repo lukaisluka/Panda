@@ -53,6 +53,7 @@ ACP 是事件流，而界面需要的是文档。一层纯归约把 `session/upd
 - [desktop/README.md](desktop/README.md)（英文）——桌面壳：开发、验收 harness、产物
 - [test-agent/README.md](test-agent/README.md)——集成测试用的确定性 deepagents ACP agent
 - [ACP agent 接入契约](docs/acp-agent-requirements.md)（[英文版](docs/acp-agent-requirements.en.md)）——接入 Panda 的最低必须集、体验损失分级与超时预算，面向 agent 实现者
+- [stdio agent 桥接 WebSocket](docs/acp-stdio-to-websocket.md)（[英文版](docs/acp-stdio-to-websocket.en.md)）——把 stdio agent 接到网页版的桥接配方：帧映射、wss/TLS 与安全红线，面向自托管用户
 
 ## 品牌
 

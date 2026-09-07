@@ -53,6 +53,7 @@ ACP is an event stream, but the UI needs a document. A pure reduction layer fold
 - [desktop/README.md](desktop/README.md) — desktop shell: development, acceptance harness, artifacts
 - [test-agent/README.md](test-agent/README.md) (Chinese) — the deterministic deepagents-based ACP agent used by integration tests
 - [ACP agent integration contract](docs/acp-agent-requirements.md) ([English](docs/acp-agent-requirements.en.md)) — minimum required method set, UX-cost-ranked recommendation tiers, and timeout budgets for agent implementers
+- [Bridging stdio agents to WebSocket](docs/acp-stdio-to-websocket.md) ([English](docs/acp-stdio-to-websocket.en.md)) — frame mapping, wss/TLS setup, and security rules for exposing stdio agents to the web app, for self-hosters
 
 ## Brand
 
