@@ -1,6 +1,6 @@
 # 有效能力三元合成，权限策略类型级禁止自动放行
 
-日期：2026-09-04 ｜ 关联：issue #22、`docs/panda-acp-architecture-conclusion.md` §5.3、[ACP v2 迁移指南](https://agentclientprotocol.com/protocol/v2/migration)
+日期：2026-09-04 ｜ 关联：issue #22、`docs/research/panda-acp-architecture-conclusion.md` §5.3、[ACP v2 迁移指南](https://agentclientprotocol.com/protocol/v2/migration)
 
 ## 背景
 

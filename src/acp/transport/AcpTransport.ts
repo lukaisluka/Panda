@@ -2,7 +2,7 @@ import type { Stream } from '@agentclientprotocol/sdk';
 
 /**
  * The named transport seam (issue #20), aligned with acp-components'
- * 4-member interface (docs/panda-acp-architecture-conclusion.md §5.2):
+ * 4-member interface (docs/research/panda-acp-architecture-conclusion.md §5.2):
  * `LiveAcpClient` consumes this interface, callers inject an instance —
  * nothing above this seam knows which transport carried the protocol.
  *

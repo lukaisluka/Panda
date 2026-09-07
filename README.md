@@ -2,95 +2,63 @@
 
 **A universal client for every ACP-compatible agent, built around a meticulously crafted message stream.**
 
-🌐 **Try it live**: <https://lukaisluka.github.io/Panda/> — deployed from `main` on every push. Point it at any ACP-over-WebSocket endpoint (see below) for live conversations; with no agent connected it's the empty starting screen.
-
 Panda speaks [ACP (Agent Client Protocol)](https://agentclientprotocol.com) — the standard that 40+ coding agents (Claude Code, Gemini CLI, Codex, Cursor, Goose, Copilot…) expose to editors. Panda is an independent, conversation-first client: not an IDE plugin, but a place where talking to an agent is the primary experience.
 
-Panda is a **pure protocol client**: it never installs, spawns, or manages agent processes. Connect it to an ACP service you already run, and the whole message stream is live. Panda negotiates ACP **v1** today, failing fast on version mismatch.
-
 📖 **中文使用指南**：[docs/user-guide.md](docs/user-guide.md) — 快速上手、连接 agent、界面指南、能力矩阵、故障排查与 FAQ。
+
+## Get Panda
+
+- **Web** — <https://lukaisluka.github.io/Panda/> runs in any modern browser, nothing to install. Point it at an ACP-over-WebSocket endpoint and the message stream is live; with no agent connected you get the built-in scripted demo.
+- **Desktop (macOS / Windows)** — grab a build from [GitHub Releases](https://github.com/lukaisluka/Panda/releases):
+  - macOS: `Panda_<ver>_aarch64.dmg`
+  - Windows: `Panda_<ver>_x64-setup.exe` (installer), or `Panda_<ver>_x64-portable.zip` (no install; the app is the same either way — user data stays in the per-user data directory, it does not travel with the exe)
+
+  The desktop shell additionally connects **stdio agents directly** — no bridge needed ([guide](docs/user-guide.md)). Windows needs WebView2 (preinstalled on Windows 11 and updated Windows 10; the installer downloads it when missing). Builds are **unsigned**: SmartScreen / first-run Gatekeeper prompts are expected.
+- **From source** — see [Development](#development).
 
 ## Features
 
 - **Live conversations** — streaming messages, tool-call cards, plans, usage and cost, rendered as they arrive
 - **Inline permission cards** — Allow / Reject answers the pending `session/request_permission` RPC; a stop button sends `session/cancel` and auto-cancels pending permissions per spec
 - **Sessions & history** — browse past sessions (`session/list`), switch by replaying history (`session/load`), live-updating titles
-- **Saved agent profiles** — name, endpoint and default working directory per browser; connect-time edits write back to the profile
+- **Saved agent profiles** — name, endpoint and default workspace per profile; connect-time edits write back
 - **Disconnect recovery** — an unexpected drop keeps the transcript and offers *reconnect & resume* (`session/resume`, `session/load` fallback), all capability-gated with visible fallbacks
 - **Polished diffs** — Shiki syntax highlighting plus word-level changed spans
 - **Images both ways** — paste or pick images for capable agents; render images in user/agent messages, thoughts and tool results
 - **Long sessions** — a virtualized message list that follows streaming growth yet detaches only on genuine user scroll
-- **Offline demo replay** — the same UI driven by a scripted agent; `?demo=long` streams an 80-turn session for scroll calibration
-
-## Quick start
-
-```sh
-pnpm install && pnpm dev            # http://localhost:5173 — opens on the scripted demo
-node scripts/mock-acp-server.mjs    # dev-only mock agent → ws://localhost:8765/acp
-pnpm --filter panda-test-agent serve   # real deepagents stack → :8766/acp
-```
-
-In the sidebar's ACP panel, point Panda at the mock endpoint, pick a working directory, and connect. Any service speaking ACP over WebSocket — one JSON-RPC message per text frame, the convention shared by the official TypeScript SDK and mainstream bridges — works the same way. To expose an agent you already run, community bridges such as [acpremote](https://github.com/vcoderun/acpkit), [@flutur/acp-http-bridge](https://github.com/Alemusica/acp-http-bridge) and [acp-bridge](https://github.com/vezaynk/acp-bridge) wrap stdio ACP agents in a WebSocket endpoint.
-
-Note: the working directory is sent in `session/new` and interpreted by the service — for a remote service that's a server-side path. The full walkthrough (UI tour, capability matrix, troubleshooting, FAQ) lives in the [user guide](docs/user-guide.md).
+- **Direct stdio agents on desktop** — spawn a local ACP agent command and talk NDJSON over its pipes, managed lifecycle included
+- **Offline demo replay** — the same UI driven by a scripted agent; `?demo=long` streams an 80-turn session
 
 ## How it works
 
-ACP is an event stream, but the UI needs a document. A pure reduction layer folds `session/update` notifications into a stable `SessionDocument`; React renders only that document, and protocol-version differences are absorbed below the components. Session drivers — the live WebSocket client and the scripted replay — feed the same store actions, so the offline demo exercises exactly the code paths a live connection uses.
+ACP is an event stream, but the UI needs a document. A pure reduction layer folds `session/update` notifications into a stable `SessionDocument`; React renders only that document, and protocol-version differences are absorbed below the components. Session drivers — the live client and the scripted replay — feed the same store actions, so the offline demo exercises exactly the code paths a live connection uses. In the browser Panda is a **pure protocol client** (it never spawns agent processes); the desktop shell adds exactly one host capability — the stdio process plane.
+
+## Documentation
+
+- [User guide (中文)](docs/user-guide.md) — 快速上手、连接 agent、界面指南、能力矩阵、故障排查与 FAQ
+- [CHANGELOG](CHANGELOG.md)
+- [Architecture decision records](docs/adr/) — significant decisions, with context and rejected alternatives
+- [desktop/README.md](desktop/README.md) — desktop shell: development, acceptance harness, artifacts
+- [test-agent/README.md](test-agent/README.md) — the deterministic deepagents-based ACP agent used by integration tests
 
 ## Development
 
-```sh
-pnpm typecheck    # tsc --noEmit
-pnpm test         # vitest — includes the deepagents WebSocket e2e when test-agent deps are installed
-pnpm build        # typecheck + vite build
-```
-
-The deterministic test agent, its OpenAI-compatible model switch, and known ACP
-session limitations are documented in [test-agent/README.md](test-agent/README.md).
-
-Domain terminology lives in [CONTEXT.md](CONTEXT.md), significant decisions in [docs/adr/](docs/adr/).
-
-### Desktop shell (macOS)
-
-Panda also runs as a Tauri v2 desktop shell — the same web UI plus the one
-capability a browser cannot have: spawning stdio agents locally and streaming
-their pipes. Prerequisites: Rust toolchain (rustup), plus the workspace's
-Node/pnpm. Run it with:
+Requires Node 24+, pnpm 11, and (for the desktop shell only) a Rust toolchain.
 
 ```sh
-pnpm desktop:dev    # vite + cargo run — opens the shell window on 127.0.0.1:5173
-pnpm desktop:build  # tauri build — bundles a .dmg (aarch64)
+pnpm install
+pnpm dev           # http://127.0.0.1:5173 — opens on the scripted demo
+pnpm typecheck     # tsc --noEmit
+pnpm test          # vitest — includes live-agent e2e when test-agent deps are installed
+pnpm build         # typecheck + vite build
 ```
 
-The shell's process plane is three Tauri commands (`stdio_spawn`/`stdio_write`
-/`stdio_kill`) in `desktop/src-tauri/src/main.rs`; the webview side boots via
-`src/desktop/boot.ts`, lazily imported by `main.tsx` only when
-`__TAURI_INTERNALS__` is present, so the browser bundle never carries it. For
-end-to-end verification inside the real WKWebView (which has no automation
-surface), point `devUrl` at `desktop-acceptance.html?agent=<abs test-agent
-path>` — it drives the production stdio path against a live test-agent and
-reports through the `panda.acceptance` localStorage key.
-
-Note the vite dev server is pinned to `127.0.0.1` with `strictPort`: the
-shell's `devUrl` pins port 5173, and on macOS Node resolves `localhost`
-IPv6-only while WKWebView looks IPv4-first — a drifting port or a `::1`-only
-listener leaves the shell window blank.
-
-Release artifacts build in [`.github/workflows/desktop.yml`](.github/workflows/desktop.yml)
-(manual dispatch, or automatically on `v*` tags): `Panda_<ver>_aarch64.dmg`,
-`Panda_<ver>_x64-setup.exe` (NSIS), `Panda_<ver>_x64-portable.zip` (the bare
-exe — same app, data stays in the per-user data directory, it does not travel
-with the exe). Windows needs WebView2 (preinstalled on Windows 11 and updated
-Windows 10; the installer downloads the bootstrapper when missing). Artifacts
-are unsigned: SmartScreen / first-run Gatekeeper prompts are expected.
+The repository is a pnpm workspace: the root package is the web app, `test-agent/` is a deterministic ACP agent for integration tests, and `desktop/` is the Tauri v2 shell (`pnpm desktop:dev` / `pnpm desktop:build` — see [desktop/README.md](desktop/README.md)). Domain terminology lives in [CONTEXT.md](CONTEXT.md); UI design contracts in [DESIGN.md](DESIGN.md).
 
 ## Roadmap
 
-- **Done** — live ACP client, session lifecycle & recovery, image sending, diff polish, virtualized streams, saved agent profiles (one active connection, [ADR 0001](docs/adr/0001-single-active-connection.md)), [user guide](docs/user-guide.md), CI + [live deployment](https://lukaisluka.github.io/Panda/), stdio transport + desktop shell with dual-platform CI artifacts (macOS dmg, Windows installer & portable zip — unsigned, [ADR 0007](docs/adr/0007-desktop-shell-and-stdio-transport.md))
-- **Later** — code signing / auto-update for desktop artifacts
-
-Consciously out of scope: *terminal* tool content — in v1 that means the client executes commands on the agent's behalf, which a browser chat client doesn't declare; Panda skips such blocks with a warning.
+- **Later** — code signing and auto-update for desktop artifacts; ACP v2
+- Consciously out of scope for v1: *terminal* tool content — executing commands on the agent's behalf is something a chat client doesn't declare; Panda skips such blocks with a warning
 
 ## License
 

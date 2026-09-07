@@ -40,14 +40,11 @@ sandboxes and SQLite state belong under ignored `test-agent/sandbox*/` and
 
 `desktop/` is a pnpm-workspace package (`panda-desktop`) hosting the same
 Vite UI in a Tauri v2 shell; the Rust process plane (`stdio_spawn`/`stdio_write`
-/`stdio_kill`) is hand-rolled, NOT tauri-plugin-shell (ADR 0007). Commands:
-`pnpm desktop:dev` / `pnpm desktop:build`. The webview boots the stdio factory
+/`stdio_kill`) is hand-rolled, NOT tauri-plugin-shell (ADR 0007). Development,
+the WKWebView acceptance harness, the vite host/port pins, and artifact/CI
+notes live in [desktop/README.md](desktop/README.md) — keep it the single
+source. Two rules that apply repo-wide: the webview boots the stdio factory
 via `src/desktop/boot.ts`, lazily imported only when `__TAURI_INTERNALS__`
-exists — never import `@tauri-apps/api` outside that chunk. Shell acceptance
-is `desktop-acceptance.html` (dev-only vite page; point `devUrl` at it with
-`?agent=<test-agent path>`, report lands in localStorage `panda.acceptance`),
-because WKWebView has no automation surface. Two pins that must not drift:
-vite `server.host` stays `127.0.0.1` (Node binds `localhost` IPv6-only while
-WKWebView looks up IPv4 — blank window otherwise), and `strictPort` (devUrl
-pins 5173). CI artifacts (dmg / NSIS / portable zip, unsigned) build in
-`.github/workflows/desktop.yml`.
+exists — never import `@tauri-apps/api` outside that chunk; and one-time
+research notes belong under `docs/research/` (archived, not maintained), not
+in `docs/` proper.
