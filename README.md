@@ -53,6 +53,7 @@ ACP is an event stream, but the UI needs a document. A pure reduction layer fold
 - [Architecture decision records](docs/adr/) — significant decisions, with context and rejected alternatives
 - [desktop/README.md](desktop/README.md) — desktop shell: development, acceptance harness, artifacts
 - [test-agent/README.md](test-agent/README.md) — the deterministic deepagents-based ACP agent used by integration tests
+- [ACP agent integration contract](docs/acp-agent-requirements.md)([English](docs/acp-agent-requirements.en.md))— 接入 Panda 的最低必须集、体验损失分级与超时预算,面向 agent 实现者
 
 ## Brand
 
