@@ -2,7 +2,7 @@
 
 取代 ADR 0001 中「多连接并行明确排除」的决定：Panda 将支持同时维持多条 Agent 配置的活跃连接，各自持有独立会话；UI 仍是单一前台会话，其余连接在后台接收通知。
 
-决策依据（2026-09 对 react-acp、acp-components 的源码核实，详见 `docs/panda-acp-architecture-conclusion.md`）：
+决策依据（2026-09 对 react-acp、acp-components 的源码核实，详见 `docs/research/panda-acp-architecture-conclusion.md`）：
 
 - Panda 的 `LiveAcpClient` 本就是**实例级**的——一条连接 + 自有 pendingPrompt / pendingPermission + connection identity 校验，且接受注入的 Stream。多连接 = 多实例，客户端类无需改造；真正的阻碍是 store 的全局单例（`doc` / `connection` / `sessions` 各一份；`permission` 单例在 #18 中已随权限集合并入 `doc`）。
 - acp-components 验证了该状态模型可行：`agents: Map`（多 agent 连接）+ 每会话独立 store + 全局 `activeSessionId`，`removeAgent` 时做孤儿会话清理。

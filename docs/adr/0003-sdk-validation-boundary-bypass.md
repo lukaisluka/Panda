@@ -1,6 +1,6 @@
 # 绕过 SDK 的 session/update 严格校验，保全未知协议数据
 
-日期：2026-09-02 ｜ 关联：issue #14、`docs/panda-acp-architecture-conclusion.md` §4.1（Unsupported ≠ Dropped）
+日期：2026-09-02 ｜ 关联：issue #14、`docs/research/panda-acp-architecture-conclusion.md` §4.1（Unsupported ≠ Dropped）
 
 ## 背景
 

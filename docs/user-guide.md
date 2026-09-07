@@ -1,21 +1,34 @@
 # Panda 使用指南
 
-Panda 是一个 ACP（Agent Client Protocol）通用客户端：连接任何说 ACP 的 agent 服务（Claude Code、Gemini CLI、Codex、Goose……经 bridge 暴露后），以对话为核心体验。Panda 是**纯协议客户端**——它从不安装、启动或管理 agent 进程，你连的必须是一个已在运行的服务。
+Panda 是一个 ACP（Agent Client Protocol）通用客户端：连接任何说 ACP 的 agent 服务（Claude Code、Gemini CLI、Codex、Goose……经 bridge 暴露后），以对话为核心体验。Panda 是**纯协议客户端**——它从不安装、启动或管理 agent 进程，你连的必须是一个已在运行的服务（桌面版的 stdio 直连是唯一例外：由本机命令当场拉起）。
 
 ## 1. 快速上手
 
+三种获取方式，按需取用：
+
+**网页版（零安装）**：打开 <https://lukaisluka.github.io/Panda/>，浏览器里直接用。除桌面版独有的 stdio 直连外功能全部一致，数据（Agent 配置、端点记忆的会话列表、语言偏好）存在浏览器 localStorage 里。
+
+**桌面版（macOS / Windows）**：从 [GitHub Releases](https://github.com/lukaisluka/Panda/releases) 下载——
+
+- macOS：`Panda_<版本>_aarch64.dmg`
+- Windows：`Panda_<版本>_x64-setup.exe`（安装版），或 `Panda_<版本>_x64-portable.zip`（免安装，解压即用；两者是同一个应用，用户数据都在系统用户目录，不随 exe 走）
+
+产物未签名：Windows SmartScreen「未知发布者」与 macOS 首次运行 Gatekeeper 提示属预期，自行放行即可。
+
+**从源码运行（开发 / 评估）**：
+
 ```sh
 pnpm install
-pnpm dev            # http://localhost:5173，自动进入脚本回放 demo
+pnpm dev            # http://127.0.0.1:5173
 ```
 
-打开页面就是 **demo 回放**：Panda 会自动播放一段脚本化的 agent 会话（重构 auth 校验的故事），不需要任何外部服务。回放和真实连接走的是完全相同的内部路径，所以它是了解界面行为的样板：
+无论哪种方式，首次打开都是 **demo 回放**：Panda 会自动播放一段脚本化的 agent 会话（重构 auth 校验的故事），不需要任何外部服务。回放和真实连接走的是完全相同的内部路径，所以它是了解界面行为的样板：
 
 - 发消息试试——回放驱动会给出脚本化的后续回应
 - 遇到权限卡片时点 Allow / Reject，观察 agent 的不同走向
 - 侧栏底部「回到 demo 回放」可随时重看
 
-想校准长会话下的滚动表现，用长场景回放：`http://localhost:5173/?demo=long`（80 轮会话）。
+想校准长会话下的滚动表现，用长场景回放：`?demo=long`（80 轮会话）。
 
 ## 2. 连接真实 agent
 
@@ -23,7 +36,9 @@ pnpm dev            # http://localhost:5173，自动进入脚本回放 demo
 
 Panda 连接的远程端点必须满足：**WebSocket，一条 text 帧承载一条 JSON-RPC 消息**。这是官方 TypeScript SDK、ACP remote-transport 草案与主流 bridge 共同遵守的约定。（桌面版还能直连本地 stdio agent，见「桌面版：直连 stdio agent」。）
 
-### 用本仓库的 mock agent 起步
+### 评估起步：本仓库的 mock agent（需从源码运行）
+
+在真实 agent 就绪之前，可以用仓库自带的 mock agent 演练全部客户端行为：
 
 ```sh
 node scripts/mock-acp-server.mjs          # ws://localhost:8765/acp

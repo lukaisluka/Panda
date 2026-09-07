@@ -1,5 +1,7 @@
 # Panda ACP 架构结论与实施建议（源码核实版）
 
+> **归档说明（2026-09-07）**：本文是 2026-09-03 的一次性选型调研，回答「assistant-ui / react-acp / acp-components 各借用什么」。其中已经落地并继续有效的结论沉淀在 [docs/adr/](../adr/)（0002 多连接模型、0003 校验边界、0004 能力与策略、0006 UI 投影层、0007 桌面壳与 stdio 传输等）；本文保留原文供查阅，不再随代码演进维护，与当前实现的出入以 ADR 与源码为准。
+
 > 目标：明确 Panda、assistant-ui、react-acp、acp-components 四者的边界，确定 Panda 应该复用什么、自己保留什么、优先重构什么，避免重复造轮子，同时保证 Panda 继续保持 ACP-first 的产品定位。
 >
 > **核实说明（2026-09-03）**：本文全部外部项目论断已对照源码逐条核实。核对版本：assistant-ui `97ec932`（2026-09-02 HEAD）、react-acp（hafbit）`339d455`（2026-08-11）、acp-components（zvzuola）`1708c20`（2026-08-05）；Panda 侧论断对照 `main@1d2d9d8`。与初稿不一致的结论以「核实修正」标注。
