@@ -540,9 +540,11 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
         // transition bumps activity and lights the unread signal when a
         // running turn settled while this connection was backgrounded
         // (which includes "no foreground at all"). A turn KILLED by a
-        // disconnect also lands idle here — the connection's error status
-        // signals attention anyway, and the extra unread flag clears on the
-        // same foregrounding. The activity bump is suppressed mid-switch: a
+        // disconnect also lands idle here — but that is not a completion:
+        // the live flag requires the connection to still be connected (#14),
+        // so a user-initiated disconnect never lights「未读完成」for the turn
+        // it killed (an unexpected drop already signals attention through
+        // connection.error). The activity bump is suppressed mid-switch: a
         // replayed status event is history, not activity.
         // Same narrowing shape as the old setStatus: the null check must
         // live in this function body for TS to carry it into the closure.
@@ -552,7 +554,8 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
           const patched = patchConnectionState(s, connectionId, (state) => {
             const prevStatus = state.docs[sessionId]?.status ?? 'idle';
             const completedInBackground =
-              s.activeConnectionId !== connectionId && prevStatus === 'running' && update.status === 'idle';
+              s.activeConnectionId !== connectionId && prevStatus === 'running' && update.status === 'idle'
+              && state.connection.status === 'connected';
             return {
               docs: { ...state.docs, [sessionId]: applyUpdate(state.docs[sessionId] ?? EMPTY_DOC, update) },
               ...(state.switching === null ? { lastActivityAt: Date.now() } : {}),

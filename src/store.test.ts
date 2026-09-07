@@ -584,6 +584,7 @@ describe('multi-connection foreground (issue #21)', () => {
     usePanda.getState().ensureConnection('a');
     usePanda.getState().ensureConnection('b');
     const b = connectionStorePort('b');
+    b.setConnection({ status: 'connected' });
     b.adoptSession('s-b', '/b');
     expect(usePanda.getState().activeConnectionId).toBe('b');
 
@@ -602,6 +603,7 @@ describe('multi-connection foreground (issue #21)', () => {
   it('a turn settling in the foreground never marks unread', () => {
     usePanda.getState().ensureConnection('live');
     const port = connectionStorePort('live');
+    port.setConnection({ status: 'connected' });
     port.adoptSession('s-1', '/a');
     port.update({ sessionUpdate: 'status_changed', status: 'running' });
     port.update({ sessionUpdate: 'status_changed', status: 'idle' });
@@ -613,6 +615,7 @@ describe('multi-connection foreground (issue #21)', () => {
     usePanda.getState().ensureConnection('fg');
     usePanda.getState().ensureConnection('bg');
     const bg = connectionStorePort('bg');
+    bg.setConnection({ status: 'connected' });
     bg.adoptSession('s-bg', '/bg');
     usePanda.getState().setActiveConnection('fg'); // bg is background
     usePanda.getState().closeConnection('fg'); // foreground removed — none left
@@ -621,6 +624,25 @@ describe('multi-connection foreground (issue #21)', () => {
     bg.update({ sessionUpdate: 'status_changed', status: 'running' });
     bg.update({ sessionUpdate: 'status_changed', status: 'idle' });
     expect(usePanda.getState().connections['bg']!.unreadCompletion).toBe(true);
+  });
+
+  it('a turn killed by a disconnect never marks unread (#14) — the user killed it, it did not complete', () => {
+    usePanda.getState().ensureConnection('a');
+    usePanda.getState().ensureConnection('b');
+    const b = connectionStorePort('b');
+    b.setConnection({ status: 'connected' });
+    b.adoptSession('s-b', '/b');
+    usePanda.getState().setActiveConnection('a'); // b is background
+
+    b.update({ sessionUpdate: 'status_changed', status: 'running' });
+    // The user disconnects mid-turn; send()'s finally still lands the turn
+    // idle AFTER the connection status settled to disconnected.
+    b.setConnection({ status: 'disconnected', sessionId: null });
+    b.update({ sessionUpdate: 'status_changed', status: 'idle' });
+
+    expect(usePanda.getState().connections['b']!.unreadCompletion).toBe(false);
+    // The killed turn's idle still reaches the document — status is honest.
+    expect(usePanda.getState().connections['b']!.docs['s-b']!.status).toBe('idle');
   });
 
   it('orderedConnectionIds: pure recency — switching the foreground moves nothing (#175)', () => {

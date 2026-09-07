@@ -138,13 +138,25 @@ export function persistSessionsSnapshot(
       updatedAt: entry.updatedAt ?? known?.updatedAt ?? null,
     });
   };
+  // The persisted list folds FIRST — it is the base layer (#9): entries only
+  // the storage remembers (a removed connection's sessions) survive, and
+  // every live value folds on top. The fold is incoming-wins with a null
+  // fallback, so folding the disk last — as this used to — let a stale
+  // persisted updatedAt/title overwrite the fresh live one, freezing every
+  // session's last-activity at its first-ever write and feeding the frozen
+  // value back into storage (a fixed point the pump could never escape).
+  const urls = new Set(
+    connections.flatMap((slot) => (slot.url ? [slot.url] : [])),
+  );
+  for (const url of urls) {
+    for (const entry of loadPersistedSessions(url, storage)) fold(url, entry);
+  }
   for (const slot of connections) {
     const url = slot.url;
     if (!url) continue;
     for (const entry of slot.sessions) fold(url, entry);
   }
   for (const [url, entries] of byUrl) {
-    for (const entry of loadPersistedSessions(url, storage)) fold(url, entry);
     const ordered = [...entries.values()].sort((a, b) =>
       (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''),
     );
