@@ -16,6 +16,7 @@ import {
 } from './store';
 import { useForegroundLifecycle, useSessionModes } from './projector/hooks';
 import { navigate, useHashRoute } from './routes';
+import { composerDraftKey, DEMO_DRAFT_KEY } from './composerDrafts';
 import { SettingsPage, SETTINGS_SECTIONS, type SettingsSectionId } from './components/SettingsPage';
 import { useReplaySession } from './useReplaySession';
 import { useLiveSession } from './useLiveSession';
@@ -50,6 +51,7 @@ function MainScreen() {
   const mode = usePanda((s) => s.mode);
   const doc = useActiveDoc();
   const connection = useActiveConnection();
+  const activeConnectionId = usePanda((s) => s.activeConnectionId);
   const sessions = useActiveSessions();
   // The foreground connection's effective capabilities (issue #22) — the
   // single decision point, never the raw agent declaration.
@@ -67,6 +69,11 @@ function MainScreen() {
   // The mode picker's view + write channel (protocol policy, not App's to derive).
   const sessionModes = useSessionModes(controller);
   const { t } = useI18n();
+  // Composer drafts are per-session (bug hunt #15): the key swaps with the
+  // foreground — a message composed for one agent is never sent to another.
+  const composerSessionKey = liveActive
+    ? composerDraftKey(activeConnectionId ?? 'none', connection.sessionId)
+    : DEMO_DRAFT_KEY;
 
   const activeSession = liveActive
     ? sessions.find((entry) => entry.sessionId === connection.sessionId)
@@ -169,6 +176,7 @@ function MainScreen() {
               commands={doc.availableCommands}
               configOptions={doc.configOptions}
               onSetConfigOption={controller.setConfigOption}
+              sessionKey={composerSessionKey}
             />
           </>
         )}

@@ -42,7 +42,14 @@ export type CommandKeyAction =
   | { type: 'close' }
   | null;
 
-export function commandKeyAction(e: { key: string; shiftKey: boolean }): CommandKeyAction {
+export function commandKeyAction(e: {
+  key: string;
+  shiftKey: boolean;
+  /** True while an IME composition is in progress — Enter then confirms the
+   * candidate, not the panel action (see Composer's isImeComposition). */
+  isComposing?: boolean;
+}): CommandKeyAction {
+  if (e.isComposing) return null;
   switch (e.key) {
     case 'ArrowDown':
       return { type: 'move', delta: 1 };

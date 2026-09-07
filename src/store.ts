@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { applyUpdate, emptySession } from './protocol/reducer';
+import { useComposerDrafts } from './composerDrafts';
 import type {
   AcpAuthMethod,
   AcpSessionUpdate,
@@ -654,6 +655,8 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
           ...(touchesSelection ? { selectionGeneration: s.selectionGeneration + 1 } : {}),
         };
       });
+      // Its composer draft (possibly holding base64 image data) goes with it.
+      useComposerDrafts.getState().clearSessionDrafts(sessionId);
     },
     invalidateSelections: () => {
       // Observable by design (issue #19): this fires on close/disconnect and
