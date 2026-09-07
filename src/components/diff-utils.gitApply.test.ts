@@ -29,7 +29,10 @@ describe('unifiedPatch — git apply end-to-end (#6)', () => {
     for (const { path, old, next } of cases) {
       writeFileSync(join(dir, 'patch.diff'), unifiedPatch(path, old, next));
       execFileSync('git', ['-C', join(dir, 'repo'), 'apply', '../patch.diff'], { stdio: 'pipe' });
-      expect(readFileSync(join(dir, 'repo', path), 'utf8')).toBe(next);
+      // GitHub's Windows runners default to core.autocrlf=true: git apply
+      // writes the patched worktree with CRLF endings. That translation is
+      // git's, not the patch's — compare after normalizing it away.
+      expect(readFileSync(join(dir, 'repo', path), 'utf8').replace(/\r\n/g, '\n')).toBe(next);
     }
   });
 });
