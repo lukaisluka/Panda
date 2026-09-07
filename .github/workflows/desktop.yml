@@ -28,15 +28,15 @@ jobs:
           - os: windows-latest # NSIS setup.exe + portable exe zip
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # 与 ci.yml 同一约束:仓库无 packageManager 字段,须显式指定版本
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11
 
       # e2e 依赖 node:sqlite 无 flag 可用,固着 Node 24(与本地开发一致)
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
@@ -83,7 +83,7 @@ jobs:
           Compress-Archive -Path "desktop/src-tauri/target/release/panda-desktop.exe" -DestinationPath "$dir/Panda_${ver}_x64-portable.zip"
           "ARTIFACTS=$dir" >> $env:GITHUB_ENV
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: panda-desktop-${{ runner.os }}
           path: ${{ env.ARTIFACTS }}/*
@@ -91,6 +91,6 @@ jobs:
 
       - name: Attach release assets (tag builds)
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: ${{ env.ARTIFACTS }}/*
