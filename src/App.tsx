@@ -69,9 +69,14 @@ function MainScreen() {
   // The mode picker's view + write channel (protocol policy, not App's to derive).
   const sessionModes = useSessionModes(controller);
   const { t } = useI18n();
-  // Composer drafts are per-session (bug hunt #15): the key swaps with the
-  // foreground — a message composed for one agent is never sent to another.
-  const composerSessionKey = liveActive
+  // Foreground session identity (bug hunts #15/#17): swaps with the
+  // foreground — different connection, or a different session on it. The
+  // composer keys its draft store by it (a message composed for one agent is
+  // never sent to another), and the message stream is REMOUNTED on it (key):
+  // flat-item keys (`turn-1-0`…) are identical across sessions, so without
+  // the remount one session's expanded cards and scroll-follow mode would
+  // leak into the next.
+  const foregroundSessionKey = liveActive
     ? composerDraftKey(activeConnectionId ?? 'none', connection.sessionId)
     : DEMO_DRAFT_KEY;
 
@@ -156,7 +161,7 @@ function MainScreen() {
                 onOpenElicitationUrl={controller.openElicitationUrl}
               />
             ) : (
-              <MessageStream onResolvePermission={controller.resolvePermission} onResolveElicitation={controller.resolveElicitation} onOpenElicitationUrl={controller.openElicitationUrl} />
+              <MessageStream key={foregroundSessionKey} onResolvePermission={controller.resolvePermission} onResolveElicitation={controller.resolveElicitation} onOpenElicitationUrl={controller.openElicitationUrl} />
             )}
             <StatusBar
               doc={doc}
@@ -176,7 +181,7 @@ function MainScreen() {
               commands={doc.availableCommands}
               configOptions={doc.configOptions}
               onSetConfigOption={controller.setConfigOption}
-              sessionKey={composerSessionKey}
+              sessionKey={foregroundSessionKey}
             />
           </>
         )}

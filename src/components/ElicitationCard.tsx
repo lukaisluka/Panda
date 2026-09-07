@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { CircleCheckBig, FormInput } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { Selector } from '@astryxdesign/core/Selector';
@@ -9,6 +8,7 @@ import type {
   ElicitationResponse,
 } from '../protocol/types';
 import type { AttachedElicitation } from '../projector/messageStream';
+import { draftValuesFor, useElicitationDrafts } from '../elicitationDrafts';
 import './ElicitationCard.css';
 import { useI18n } from '../i18n/context';
 
@@ -36,9 +36,17 @@ function PendingElicitationCard({ request, onResolve }: {
   onResolve: (id: string, response: ElicitationResponse) => void;
 }) {
   const { t } = useI18n();
-  const [values, setValues] = useState<Record<string, string | number | boolean | string[]>>({});
+  // Half-filled values live in the per-elicitation draft store (bug hunt
+  // #16): the virtualized stream unmounts rows scrolled out of view and the
+  // foreground session may switch away and back — local state would silently
+  // wipe the form while its RPC still hangs.
+  const values = useElicitationDrafts((s) => draftValuesFor(s, request.id));
   const set = (key: string, value: string | number | boolean | string[]) =>
-    setValues((current) => ({ ...current, [key]: value }));
+    useElicitationDrafts.getState().setField(request.id, key, value);
+  const settle = (response: ElicitationResponse) => {
+    useElicitationDrafts.getState().clearDraft(request.id);
+    onResolve(request.id, response);
+  };
 
   const numberError = request.fields.find((field) => {
     if (field.type !== 'number' && field.type !== 'integer') return false;
@@ -80,7 +88,7 @@ function PendingElicitationCard({ request, onResolve }: {
         content[field.key] = value;
       }
     }
-    onResolve(request.id, { outcome: 'accepted', content });
+    settle({ outcome: 'accepted', content });
   };
 
   return (
@@ -97,7 +105,7 @@ function PendingElicitationCard({ request, onResolve }: {
         ))}
       </div>
       <div className="elicit-actions">
-        <Button size="sm" variant="secondary" label={t('elicit.reject')} clickAction={() => onResolve(request.id, { outcome: 'declined' })} />
+        <Button size="sm" variant="secondary" label={t('elicit.reject')} clickAction={() => settle({ outcome: 'declined' })} />
         <Button size="sm" variant="primary" label={t('elicit.submit')} isDisabled={!canSubmit} clickAction={submit} />
       </div>
     </div>
