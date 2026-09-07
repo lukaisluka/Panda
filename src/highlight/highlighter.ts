@@ -85,6 +85,21 @@ const loadedLangs = new Set<string>();
 const cache = new Map<string, TokenSpan[][]>();
 const CACHE_LIMIT = 64;
 
+/**
+ * 大输入降级阈值(#10):tokenize 在主线程同步执行,3000 行 TS 实测冷
+ * 2613ms——整个 app 无响应。超过任一阈值不再 tokenize,纯文本渲染
+ * (信息无损,只丢颜色)。600 行/30K 字符把最坏冷冻结压在 ~0.5s 内,
+ * 常见代码块(fence/整文件 diff 的绝大多数)远低于此不受影响。
+ */
+const MAX_LINES = 600;
+const MAX_CHARS = 30_000;
+const warnedOversized = new Set<string>();
+
+/** True when the code is too big to tokenize on the main thread (#10). */
+export function oversizedForHighlight(code: string): boolean {
+  return code.split('\n').length > MAX_LINES || code.length > MAX_CHARS;
+}
+
 function getHighlighter(): Promise<HighlighterCore> {
   highlighterPromise ??= (async () => {
     const [{ createHighlighterCore }, { createJavaScriptRegexEngine }] = await Promise.all([
@@ -122,6 +137,20 @@ export async function highlightCode(fenceLang: string, code: string): Promise<To
 async function highlightWithLang(lang: string, code: string): Promise<TokenSpan[][] | null> {
   const importLang = LANG_IMPORTS[lang];
   if (!importLang || code === '') return null;
+
+  // #10: an unbounded synchronous tokenize freezes the UI for seconds —
+  // oversized input degrades to plain text. The warning fires once per
+  // language: every occurrence would spam streaming re-renders, once keeps
+  // the degradation diagnosable.
+  if (oversizedForHighlight(code)) {
+    if (!warnedOversized.has(lang)) {
+      warnedOversized.add(lang);
+      console.warn(
+        `[panda/highlight] ${lang} input over the degrade threshold (${code.split('\n').length} lines / ${code.length} chars) — rendering unhighlighted (#10)`,
+      );
+    }
+    return null;
+  }
 
   const cacheKey = `${lang}\u0000${code}`;
   const cached = cache.get(cacheKey);

@@ -185,6 +185,78 @@ describe('unifiedPatch', () => {
     const patch = unifiedPatch('same.txt', 'a\nb', 'a\nb');
     expect(patch).toBe(['--- a/same.txt', '+++ b/same.txt', ''].join('\n'));
   });
+
+  it('both sides missing the trailing newline mark del AND add EOF lines (#6)', () => {
+    // `git diff --no-index` of 'a\nb' vs 'a\nB' produces exactly this shape.
+    const patch = unifiedPatch('a.txt', 'a\nb', 'a\nB');
+    expect(patch).toBe(
+      [
+        '--- a/a.txt',
+        '+++ b/a.txt',
+        '@@ -1,2 +1,2 @@',
+        ' a',
+        '-b',
+        '\\ No newline at end of file',
+        '+B',
+        '\\ No newline at end of file',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('old side missing the newline marks only the del line — the new add line ends cleanly (#6)', () => {
+    const patch = unifiedPatch('a.txt', 'x\ny', 'x\ny\n');
+    expect(patch).toBe(
+      [
+        '--- a/a.txt',
+        '+++ b/a.txt',
+        '@@ -1,2 +1,2 @@',
+        ' x',
+        '-y',
+        '\\ No newline at end of file',
+        '+y',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('a no-newline EOF line followed by appends marks the old del and the new last add (#6)', () => {
+    // 'a\nb' → 'a\nb\nc': b stops being the new side's last line, so only the
+    // trailing c (now the EOF line without a newline) carries the new mark.
+    const patch = unifiedPatch('a.txt', 'a\nb', 'a\nb\nc');
+    expect(patch).toBe(
+      [
+        '--- a/a.txt',
+        '+++ b/a.txt',
+        '@@ -1,2 +1,3 @@',
+        ' a',
+        '-b',
+        '\\ No newline at end of file',
+        '+b',
+        '+c',
+        '\\ No newline at end of file',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('a context EOF line missing its newline on both sides carries ONE mark (#6)', () => {
+    // Change at the top, unchanged no-newline tail: git marks the ctx line once.
+    const patch = unifiedPatch('a.txt', 'a\nb\nc', 'A\nb\nc');
+    expect(patch).toBe(
+      [
+        '--- a/a.txt',
+        '+++ b/a.txt',
+        '@@ -1,3 +1,3 @@',
+        '-a',
+        '+A',
+        ' b',
+        ' c',
+        '\\ No newline at end of file',
+        '',
+      ].join('\n'),
+    );
+  });
 });
 
 describe('foldRows', () => {

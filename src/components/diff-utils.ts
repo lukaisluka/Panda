@@ -94,10 +94,24 @@ export function foldRows(rows: DiffRow[], threshold = 15, context = 3): RowSegme
  * (间隔 ≤ 2×context 行 ctx)合入同一 hunk,可直接 `git apply`。行数据
  * 复用 computeRows,两侧行号不会漂。空文本的行号起点是 0(新文件
  * `-0,0`),与 git 行为一致。
+ *
+ * 无尾换行文件(#6):git 在 EOF 行缺尾换行时要求内容行后跟一行
+ * `\ No newline at end of file`,否则 `git apply` 拒收整个补丁。旧侧
+ * 尾行无换行标记跟在 del/ctx 行后,新侧跟在 add/ctx 行后;ctx 行两
+ * 侧同缺时(同一行内容)只标一次——与 git 产出一致。diffLines 把行
+ * 尾换行剥掉了,所以「是否尾行无换行」从原始文本重新判定。
  */
 export function unifiedPatch(path: string, oldText: string, newText: string, context = 3): string {
   const rows = computeRows(oldText, newText);
   const hunks: DiffRow[][] = [];
+
+  const lastLineNo = (text: string): number | null =>
+    text === '' ? null : text.endsWith('\n') ? text.split('\n').length - 1 : text.split('\n').length;
+  const oldLast = lastLineNo(oldText);
+  const newLast = lastLineNo(newText);
+  const oldNoNewline = oldText !== '' && !oldText.endsWith('\n');
+  const newNoNewline = newText !== '' && !newText.endsWith('\n');
+  const NO_NEWLINE = '\\ No newline at end of file';
 
   let i = 0;
   while (i < rows.length) {
@@ -135,6 +149,9 @@ export function unifiedPatch(path: string, oldText: string, newText: string, con
     lines.push(`@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`);
     for (const row of hunk) {
       lines.push((row.type === 'add' ? '+' : row.type === 'del' ? '-' : ' ') + row.text);
+      const marksOldSide = oldNoNewline && (row.type === 'del' || row.type === 'ctx') && row.oldNo === oldLast;
+      const marksNewSide = newNoNewline && (row.type === 'add' || row.type === 'ctx') && row.newNo === newLast;
+      if (marksOldSide || marksNewSide) lines.push(NO_NEWLINE);
     }
   }
   return lines.join('\n') + '\n';
