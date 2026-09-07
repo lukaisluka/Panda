@@ -45,6 +45,16 @@ fixtures with `pnpm --filter panda-test-agent record:claude-code` (requires a
 logged-in `claude` CLI); the adapter is spawned via `zsh -lc 'exec npx -y …'`
 with `CLAUDE_CODE_EXECUTABLE` set explicitly.
 
+### ACP agent contract
+
+`docs/acp-agent-requirements.md` (Chinese, source of truth) and
+`docs/acp-agent-requirements.en.md` (English mirror, updated in sync) export
+the protocol contract for third-party agent implementers: the minimum method
+set, the four client-side handlers Panda answers (fs/terminal are deliberately
+`-32601`), the UX-cost-ranked recommendation tiers, and the timeout/timing
+budgets. The code SSOT is `src/acp/LiveAcpClient.ts` + `src/acp/wire.ts` —
+when those change, update both doc versions in sync.
+
 ### Desktop shell
 
 `desktop/` is a pnpm-workspace package (`panda-desktop`) hosting the same
