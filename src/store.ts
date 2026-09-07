@@ -82,9 +82,11 @@ export type SessionEntry = {
   /**
    * ISO 8601 last-activity timestamp. Two writers, no precedence: the agent
    * (`session/list`, `session_info_update`) and the host (a local stamp on
-   * every live conversation event, so agents that never report still sort).
-   * Last writer wins by arrival — the two clocks are not comparable, and each
-   * write reflects "activity just happened" at its own clock.
+   * every live conversation event, plus the creation moment when a session
+   * first enters the sidebar — so a brand-new conversation sorts first
+   * instead of sinking to the untimed bottom). Last writer wins by arrival —
+   * the two clocks are not comparable, and each write reflects "activity
+   * just happened" at its own clock.
    */
   updatedAt: string | null;
 };
@@ -288,6 +290,18 @@ function definedFields<T extends object>(patch: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(patch).filter(([, value]) => value !== undefined),
   ) as Partial<T>;
+}
+
+/**
+ * The host's local stamp, truncated to whole seconds. The persistence pump
+ * diffs a serialized snapshot by value, so millisecond-precision stamps would
+ * rewrite localStorage on every streamed chunk — truncated, chunks within
+ * one second collapse into a single write.
+ */
+function localStampNow(): string {
+  const now = new Date();
+  now.setMilliseconds(0);
+  return now.toISOString();
 }
 
 /** Immutable patch of one connection slot; unknown ids fail loudly, not silently. */
@@ -495,12 +509,18 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
             docs: { ...state.docs, [sessionId]: state.docs[sessionId] ?? emptySession() },
             connection: { ...state.connection, sessionId },
             lastActivityAt: Date.now(),
+            // First time this session enters the sidebar (session/new, or a
+            // resume of a session the list never showed): stamp the
+            // first-seen moment — a fresh conversation would otherwise carry
+            // no time at all and sink to the untimed bottom. A known entry
+            // keeps its value, so adopting (resuming) an old session never
+            // bumps it.
             sessions: upsertEntries(state.sessions, [
               {
                 sessionId,
                 cwd,
                 title: known?.title ?? null,
-                updatedAt: known?.updatedAt ?? null,
+                updatedAt: known?.updatedAt ?? localStampNow(),
               },
             ]),
           };
@@ -554,13 +574,7 @@ export function connectionStorePort(connectionId: string): ConnectionStorePort {
       // Same narrowing shape as the status branch above.
       const sessionId = currentSessionId;
       if (sessionId === null) return;
-      // Whole-second granularity is deliberate: the persistence pump diffs a
-      // serialized snapshot by value, so millisecond-precision stamps would
-      // rewrite localStorage on every streamed chunk — truncated, chunks
-      // within one second collapse into a single write.
-      const now = new Date();
-      now.setMilliseconds(0);
-      const stampedAt = now.toISOString();
+      const stampedAt = localStampNow();
       patchSlot((state) => ({
         docs: { ...state.docs, [sessionId]: applyUpdate(state.docs[sessionId] ?? EMPTY_DOC, update) },
         ...(state.switching === null
