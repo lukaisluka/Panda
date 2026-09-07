@@ -83,3 +83,16 @@
 @media (min-width: 768px) {
   .app-header-meta { display: block; }
 }
+
+/* Settings-route variant (#140): the section description reads as prose, not
+ * an endpoint — regular face, quiet color, clamped so long descriptions
+ * (diagnostics) never crowd the title out of the bar. */
+.app-header-meta--desc {
+  max-width: 44ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--color-muted);
+}

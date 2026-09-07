@@ -47,8 +47,6 @@ export const SETTINGS_SECTIONS = [
 
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id'];
 
-const [generalSection, agentsSection, mcpSection, diagnosticsSection] = SETTINGS_SECTIONS;
-
 /** Settings-route sidebar nav (#115/#117): lists the sections; selection is
  * lifted state (MainScreen owns it, so it survives route flips), clicking
  * switches the main column's page. Rendered by the Sidebar in place of the
@@ -98,34 +96,13 @@ export function SettingsSideNav({ activeId, onSelect, onNavigate, onBack }: {
   );
 }
 
-/** One section's page header — the shared skeleton that makes a short page
- * read as a designed page instead of a lonely card: icon + title + one-line
- * description (+ the section's primary action, right-aligned). */
-function SectionHeader({ section, actions }: {
-  section: (typeof SETTINGS_SECTIONS)[number];
-  actions?: ReactNode;
-}) {
-  const { t } = useI18n();
-  const Icon = section.icon;
-  return (
-    <header className="settings-section-head">
-      <span className="settings-section-head-icon" aria-hidden>
-        <Icon size={17} />
-      </span>
-      <div className="settings-section-head-text">
-        <h1 className="settings-section-head-title">{t(section.titleKey)}</h1>
-        <p className="settings-section-head-desc">{t(section.descKey)}</p>
-      </div>
-      {actions && <div className="settings-section-head-actions">{actions}</div>}
-    </header>
-  );
-}
-
 /**
  * Settings content (`#/settings`, #111): renders INSIDE MainScreen's main
  * column — the sidebar/header chrome stays, this replaces only the session
  * stream. One section page at a time (#117); the keyed body abandons
- * in-flight forms on switch and replays the entrance fade.
+ * in-flight forms on switch and replays the entrance fade. The page-level
+ * header is gone (#140): the top bar carries the section's title and
+ * description; the cards below start immediately.
  */
 export function SettingsPage({ section }: { section: SettingsSectionId }) {
   const { t } = useI18n();
@@ -135,10 +112,10 @@ export function SettingsPage({ section }: { section: SettingsSectionId }) {
   return (
     <div className="settings-page">
       <div className="settings-body" key={section}>
-        {section === 'general' && <GeneralSection section={generalSection} />}
-        {section === 'agents' && <AgentsSection section={agentsSection} profiles={profiles} />}
-        {section === 'mcp' && <McpSection section={mcpSection} />}
-        {section === 'diagnostics' && <DiagnosticsSection section={diagnosticsSection} />}
+        {section === 'general' && <GeneralSection />}
+        {section === 'agents' && <AgentsSection profiles={profiles} />}
+        {section === 'mcp' && <McpSection />}
+        {section === 'diagnostics' && <DiagnosticsSection />}
         <p className="settings-colophon">{t('settings.colophon')}</p>
       </div>
     </div>
@@ -166,21 +143,18 @@ function SettingsRow({ title, description, children }: {
 
 /** 通用: theme + language — one card, one row each; the row titles carry
  * what the old per-card descriptions explained. */
-function GeneralSection({ section }: { section: (typeof SETTINGS_SECTIONS)[number] }) {
+function GeneralSection() {
   const { t } = useI18n();
   return (
-    <>
-      <SectionHeader section={section} />
-      <section className="settings-card">
-        <h2 className="settings-group-title">{t('settings.appearanceGroup')}</h2>
-        <SettingsRow title={t('settings.themeRow')} description={t('settings.themeRowDesc')}>
-          <ThemeSwatches />
-        </SettingsRow>
-        <SettingsRow title={t('settings.language')} description={t('settings.languageRowDesc')}>
-          <LanguageChips />
-        </SettingsRow>
-      </section>
-    </>
+    <section className="settings-card">
+      <h2 className="settings-group-title">{t('settings.appearanceGroup')}</h2>
+      <SettingsRow title={t('settings.themeRow')} description={t('settings.themeRowDesc')}>
+        <ThemeSwatches />
+      </SettingsRow>
+      <SettingsRow title={t('settings.language')} description={t('settings.languageRowDesc')}>
+        <LanguageChips />
+      </SettingsRow>
+    </section>
   );
 }
 
@@ -188,12 +162,11 @@ function GeneralSection({ section }: { section: (typeof SETTINGS_SECTIONS)[numbe
  * content in production builds (version/host/locale/UA are already known to
  * the client), and the copy action sits on its own row instead of floating
  * alone in the page header. Dev tools ride below (dev-build-only). */
-function DiagnosticsSection({ section }: { section: (typeof SETTINGS_SECTIONS)[number] }) {
+function DiagnosticsSection() {
   const { t, locale } = useI18n();
   const [copy, setCopy] = useState<'idle' | 'ok' | 'fail'>('idle');
   return (
     <>
-      <SectionHeader section={section} />
       <section className="settings-card">
         <h2 className="settings-group-title">{t('settings.envGroup')}</h2>
         <SettingsRow title={t('settings.versionRow')}>
@@ -314,22 +287,20 @@ function LanguageChips() {
   );
 }
 
-/** The Agent 配置 page (#117): the create action and description live in the
- * page header; the card carries only content — the avatar-row list (a row
- * swaps for the edit form in place). */
-function AgentsSection({ section, profiles }: {
-  section: (typeof SETTINGS_SECTIONS)[number];
-  profiles: AgentProfile[];
-}) {
+/** The Agent 配置 page (#117, #140): the top bar carries the section title;
+ * the card's group head carries the create action (Codex puts page actions
+ * on the group head, right-aligned) — hidden while creating. The card's body
+ * is the avatar-row list (a row swaps for the edit form in place). */
+function AgentsSection({ profiles }: { profiles: AgentProfile[] }) {
   const { t } = useI18n();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   return (
-    <>
-      <SectionHeader
-        section={section}
-        actions={creating ? undefined : (
+    <section className="settings-card">
+      <div className="settings-group-head">
+        <h2 className="settings-group-title">{t('settings.profilesGroup')}</h2>
+        {!creating && (
           <Button
             variant="secondary"
             size="sm"
@@ -341,9 +312,8 @@ function AgentsSection({ section, profiles }: {
             }}
           />
         )}
-      />
-      <section className="settings-card">
-        {creating ? (
+      </div>
+      {creating ? (
         <ProfileForm
           onCancel={() => setCreating(false)}
           onSave={(profile) => {
@@ -418,15 +388,15 @@ function AgentsSection({ section, profiles }: {
           )}
         </div>
       )}
-      </section>
-    </>
+    </section>
   );
 }
 
-/** The MCP 服务器 page (issue #71, #117): the v1 execution surface —
+/** The MCP 服务器 page (issue #71, #117, #140): the v1 execution surface —
  * configured servers ride every session/new · session/load to the agent.
- * Same header/page split and in-place edit pattern as the Agent 配置 page. */
-function McpSection({ section }: { section: (typeof SETTINGS_SECTIONS)[number] }) {
+ * Same group-head create action and in-place edit pattern as the Agent 配置
+ * page. */
+function McpSection() {
   const { t } = useI18n();
   const [servers, setServers] = useState<McpServerConfig[]>(() => loadMcpServers());
   useEffect(() => subscribeMcpServers(setServers), []);
@@ -434,10 +404,10 @@ function McpSection({ section }: { section: (typeof SETTINGS_SECTIONS)[number] }
   const [creating, setCreating] = useState(false);
 
   return (
-    <>
-      <SectionHeader
-        section={section}
-        actions={creating ? undefined : (
+    <section className="settings-card">
+      <div className="settings-group-head">
+        <h2 className="settings-group-title">{t('settings.mcpGroup')}</h2>
+        {!creating && (
           <Button
             variant="secondary"
             size="sm"
@@ -449,9 +419,8 @@ function McpSection({ section }: { section: (typeof SETTINGS_SECTIONS)[number] }
             }}
           />
         )}
-      />
-      <section className="settings-card">
-        {creating ? (
+      </div>
+      {creating ? (
         <McpForm
           onCancel={() => setCreating(false)}
           onSave={(server) => {
@@ -523,8 +492,7 @@ function McpSection({ section }: { section: (typeof SETTINGS_SECTIONS)[number] }
           )}
         </div>
       )}
-      </section>
-    </>
+    </section>
   );
 }
 

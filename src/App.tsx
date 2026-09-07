@@ -16,7 +16,7 @@ import {
 } from './store';
 import { useForegroundLifecycle, useSessionModes } from './projector/hooks';
 import { navigate, useHashRoute } from './routes';
-import { SettingsPage, type SettingsSectionId } from './components/SettingsPage';
+import { SettingsPage, SETTINGS_SECTIONS, type SettingsSectionId } from './components/SettingsPage';
 import { useReplaySession } from './useReplaySession';
 import { useLiveSession } from './useLiveSession';
 import type { ForegroundSessionController } from './session-controller';
@@ -70,13 +70,18 @@ function MainScreen() {
   const activeSession = liveActive
     ? sessions.find((entry) => entry.sessionId === connection.sessionId)
     : undefined;
+  // On the settings route the header carries the ACTIVE SECTION's title and
+  // description (#140): the page-level header inside the column is gone, so
+  // the top bar is where "which settings page am I on" answers itself. The
+  // back arrow stays — it is one of the settings route's three exits.
+  const settingsSectionMeta = SETTINGS_SECTIONS.find((entry) => entry.id === settingsSection);
   const headerTitle = onSettings
-    ? t('settings.title')
+    ? t(settingsSectionMeta?.titleKey ?? 'settings.title')
     : !liveActive
       ? t('app.demoHeaderTitle')
       : (activeSession?.title ?? connection.agentName ?? t('app.liveSessionTitle'));
   const headerMeta = onSettings
-    ? null
+    ? (settingsSectionMeta ? t(settingsSectionMeta.descKey) : null)
     : liveActive
       ? (connection.url ?? 'acp')
       : 'acp://claude-code · demo replay';
@@ -121,7 +126,11 @@ function MainScreen() {
             )}
             <span className="truncate app-header-title">{headerTitle}</span>
           </div>
-          {headerMeta !== null && <span className="app-header-meta">{headerMeta}</span>}
+          {headerMeta !== null && (
+            <span className={`app-header-meta ${onSettings ? 'app-header-meta--desc' : ''}`}>
+              {headerMeta}
+            </span>
+          )}
         </header>
         {onSettings ? (
           <SettingsPage section={settingsSection} />

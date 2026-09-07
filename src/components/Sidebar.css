@@ -341,12 +341,14 @@
 
 /* 「返回会话」(#119): the settings sidebar's own exit, above the section
  * list — same row language as the items, so it reads as part of the
- * settings column, not chrome bolted on. */
+ * settings column, not chrome bolted on. The arrow aligns with the
+ * 「Settings」 label's text edge below (#140: margin-left 8px + padding 12px
+ * = the head's 20px), and the row sits clearly apart from the label. */
 .sidebar-settings-back {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 8px 12px 4px; /* the list's inline padding, plus air below the brand */
+  margin: 8px 8px 18px;
   border-radius: var(--panda-radius-lg);
   padding: 8px 12px; /* matches .sidebar-settings-item */
   text-align: left;
