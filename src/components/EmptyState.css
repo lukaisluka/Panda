@@ -1,0 +1,122 @@
+/* First-run onboarding (#200): a quiet card centered in the main column.
+ * Stream-first hierarchy — content-size title, muted lead, chrome-size
+ * steps; the demo CTA is the only accent-bearing control. */
+
+.empty-state {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+.empty-state-card {
+  display: flex;
+  width: 100%;
+  max-width: 560px;
+  flex-direction: column;
+  gap: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--panda-radius-lg);
+  padding: var(--space-5);
+}
+
+.empty-state-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2_5);
+}
+
+.empty-state-title {
+  margin: 0;
+  font-size: var(--panda-size-content);
+  font-weight: 600;
+  color: var(--color-fg);
+}
+
+.empty-state-lead {
+  margin: 0;
+  font-size: var(--panda-size-content);
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+
+.empty-state-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2_5);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4);
+}
+
+.empty-state-heading {
+  margin: 0;
+  font-size: var(--panda-size-chrome);
+  font-weight: 600;
+  color: var(--color-fg);
+}
+
+.empty-state-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.empty-state-step-kicker {
+  margin: 0;
+  font-size: var(--panda-size-micro);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-faint);
+}
+
+.empty-state-step-body {
+  margin: 0;
+  font-size: var(--panda-size-chrome);
+  line-height: 1.6;
+  color: var(--color-muted);
+}
+
+.empty-state-step-body a {
+  color: var(--color-accent);
+}
+
+.empty-state-step-body a:hover {
+  text-decoration: underline;
+}
+
+.empty-state-more {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+}
+
+.empty-state-more-toggle {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--space-1);
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: var(--panda-size-micro);
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.empty-state-more-toggle:hover {
+  text-decoration: underline;
+}
+
+.empty-state-chevron {
+  transition: transform 150ms var(--panda-ease);
+}
+
+.empty-state-chevron--open {
+  transform: rotate(180deg);
+}

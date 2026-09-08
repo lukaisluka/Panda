@@ -18,9 +18,9 @@ export type AppRoute = 'main' | 'settings' | 'demo';
 export type DevPage = 'astryx-smoke' | 'crash';
 
 /** `''` · `'#'` · `'#/'` → main; `#/settings` → settings; `#/demo` → demo
- * (the scripted replay — reachable in production by explicit URL so shared
- * links can demo the app, but the app never opens on it and carries no
- * in-UI entry outside dev settings). */
+ * (the scripted replay — reachable in production by explicit URL and via
+ * the first-run empty state's entry (#200); the app never opens on it by
+ * itself). */
 export function parseHash(hash: string): AppRoute {
   const path = hash.replace(/^#\/?/, '').replace(/\/+$/, '');
   if (path === 'settings') return 'settings';
