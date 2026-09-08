@@ -113,8 +113,13 @@ export type ForegroundLifecycle = {
   docStatus: SessionStatus;
   /** Foreground busy: mid-turn or a switch in flight. */
   busy: boolean;
-  /** The composer is closed to input. */
+  /** The composer is closed: sending and popovers are refused (turn
+   * running, link down, switch in flight). */
   composerDisabled: boolean;
+  /** The text field itself is closed. While a permission waits on a
+   * healthy link the field stays writable for drafting the next message —
+   * only sending is held back by composerDisabled (#216). */
+  composerInputLocked: boolean;
   /** Stop is offered while a turn runs on a healthy live link. */
   canStop: boolean;
   /** The status line under the composer. */
@@ -123,7 +128,7 @@ export type ForegroundLifecycle = {
 
 function hintFor(mode: SessionMode, phase: ConnectionPhase, error: string | null, docStatus: SessionStatus): string | undefined {
   if (mode !== 'live') {
-    if (docStatus === 'requires_action') return t('lifecycle.awaitingApproval');
+    if (docStatus === 'requires_action') return t('lifecycle.awaitingApprovalHint');
     if (docStatus === 'running') return t('lifecycle.working');
     return undefined;
   }
@@ -141,6 +146,10 @@ function hintFor(mode: SessionMode, phase: ConnectionPhase, error: string | null
     case 'connected-degraded':
       return error ?? undefined;
     case 'connected':
+      // Awaiting-approval is a pause, not work (#216): the composer hint
+      // must point at the stream where the permission card waits, in both
+      // live and demo — "working" here contradicted the status bar.
+      if (docStatus === 'requires_action') return t('lifecycle.awaitingApprovalHint');
       if (docStatus !== 'idle') return t('lifecycle.working');
       return undefined;
   }
@@ -154,12 +163,14 @@ export function foregroundLifecycle({
 }: ForegroundLifecycleInput): ForegroundLifecycle {
   const phase = connectionPhase(connection.status, connection.error, switching);
   const busy = docStatus !== 'idle' || switching;
+  const composerDisabled = mode === 'live' ? !isLinkUp(phase) || busy : busy;
   return {
     phase,
     error: connection.error,
     docStatus,
     busy,
-    composerDisabled: mode === 'live' ? !isLinkUp(phase) || busy : busy,
+    composerDisabled,
+    composerInputLocked: composerDisabled && !(docStatus === 'requires_action' && (mode !== 'live' || isLinkUp(phase))),
     canStop: mode === 'live' && isLinkUp(phase) && docStatus === 'running',
     hint: hintFor(mode, phase, connection.error, docStatus),
   };

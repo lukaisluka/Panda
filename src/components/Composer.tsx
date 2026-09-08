@@ -38,9 +38,14 @@ export function isImeComposition(e: { isComposing?: boolean; keyCode?: number })
   return e.isComposing === true || e.keyCode === 229;
 }
 
-export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onStop, modes, onSetMode, commands, configOptions, onSetConfigOption, sessionKey }: {
+export function Composer({ onSend, disabled, inputLocked, hint, canAttachImages, canStop, onStop, modes, onSetMode, commands, configOptions, onSetConfigOption, sessionKey }: {
   onSend: (content: AcpContentBlock[]) => void;
+  /** Sends and popovers are closed (turn running, link down, switching). */
   disabled: boolean;
+  /** The text field itself is closed — everything but awaiting-approval
+   * (#216): while a permission waits the composer stays writable so the
+   * next message can be drafted, sending is still held back by disabled. */
+  inputLocked: boolean;
   hint?: string;
   canAttachImages: boolean;
   /** True while a live turn runs — the send button becomes a stop button. */
@@ -77,10 +82,10 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
   const promptContent = buildPromptContent(attachments, value);
   const canSend = promptContent.length > 0 && !disabled;
   const stopping = canStop === true && onStop !== undefined;
-  const attachmentDisabled = disabled || !canAttachImages;
+  const attachmentDisabled = inputLocked || !canAttachImages;
   // Panel visibility derives from the text (open only while typing the
   // command name); Escape suppresses it until the input changes again.
-  const commandItems = commandsDismissed || disabled ? null : matchCommands(commands, value);
+  const commandItems = commandsDismissed || inputLocked ? null : matchCommands(commands, value);
   const hasConfigOptions = configOptions !== null && configOptions.length > 0;
 
   const completeCommand = (command: AcpAvailableCommand) => {
@@ -226,7 +231,7 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
             <textarea
               rows={1}
               value={value}
-              disabled={disabled}
+              disabled={inputLocked}
               placeholder={hint ?? t('composer.placeholder')}
               onChange={(e) => {
                 setDraft({ value: e.target.value });
