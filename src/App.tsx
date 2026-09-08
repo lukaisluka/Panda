@@ -188,7 +188,12 @@ function MainScreen() {
               disabled={lifecycle.composerDisabled}
               inputLocked={lifecycle.composerInputLocked}
               hint={lifecycle.hint}
-              canAttachImages={!liveActive || effectiveCaps.image.available}
+              // Undefined until the live link is up and capabilities are
+              // negotiated (#214): no agent, no capability claims either way.
+              canAttachImages={
+                !liveActive ||
+                (connection.status === 'connected' ? effectiveCaps.image.available : undefined)
+              }
               canStop={lifecycle.canStop}
               onStop={live.cancel}
               modes={sessionModes.modes}
