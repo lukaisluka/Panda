@@ -40,6 +40,48 @@ export const messages = {
   'status.working': { en: 'Working…', zh: 'Working…' },
   'status.ready': { en: 'Ready', zh: 'Ready' },
 
+  // ---- EmptyState (first-run onboarding, #200) ----
+  'empty.title': { en: 'Connect your agent', zh: '把你的 agent 连上来' },
+  'empty.lead': {
+    en: 'Panda is a pure protocol client: implement ACP in your agent and this message stream is its UI. Watch the scripted demo first, or connect your own agent below.',
+    zh: 'Panda 是纯协议客户端:你的 agent 说 ACP,这条消息流就是它的界面。可以先看一段 demo,或按下面两步连上你自己的 agent。',
+  },
+  'empty.watchDemo': { en: 'Watch a demo', zh: '看一段 demo' },
+  'empty.connectHeading': { en: 'Connect your own agent', zh: '连你自己的 agent' },
+  'empty.desktopKicker': { en: 'Desktop · direct stdio', zh: '桌面版 · stdio 直连' },
+  'empty.desktopBody': {
+    en: 'Settings → Agent profiles → New (stdio), then fill in your agent’s start command. Ten-minute walkthrough from scratch:',
+    zh: '设置 → Agent profiles → 新建(stdio),填入你 agent 的启动命令。从零接入的十分钟走读:',
+  },
+  'empty.quickstartLink': { en: 'Agent quickstart', zh: '接入快速上手' },
+  'empty.quickstartUrl': {
+    en: 'https://github.com/lukaisluka/Panda/blob/main/docs/agent-quickstart.en.md',
+    zh: 'https://github.com/lukaisluka/Panda/blob/main/docs/agent-quickstart.md',
+  },
+  'empty.webKicker': { en: 'Web · WebSocket endpoint', zh: '网页版 · WebSocket 端点' },
+  'empty.webBody': {
+    en: 'Point the web app at any ACP-over-WebSocket endpoint. Recipe for bridging a stdio agent to WebSocket:',
+    zh: '网页版连接任一 ACP-over-WebSocket 端点。把 stdio agent 桥接为 WebSocket 的配方:',
+  },
+  'empty.bridgeLink': { en: 'Bridge guide', zh: '桥接指南' },
+  'empty.bridgeUrl': {
+    en: 'https://github.com/lukaisluka/Panda/blob/main/docs/acp-stdio-to-websocket.en.md',
+    zh: 'https://github.com/lukaisluka/Panda/blob/main/docs/acp-stdio-to-websocket.md',
+  },
+  'empty.existingToggle': {
+    en: 'Using an existing agent? (Claude Code, Gemini CLI, …)',
+    zh: '用现成 agent?(Claude Code、Gemini CLI 等)',
+  },
+  'empty.existingBody': {
+    en: '40+ mainstream coding agents speak ACP or can be exposed through a bridge; Claude Code is pinned by real-traffic contract tests. Connection paths:',
+    zh: '40+ 主流 coding agent 说 ACP 或可经 bridge 暴露;Claude Code 由真实流量契约测试钉死。连接路径见',
+  },
+  'empty.userGuideLink': { en: 'User guide', zh: '使用指南' },
+  'empty.userGuideUrl': {
+    en: 'https://github.com/lukaisluka/Panda/blob/main/docs/user-guide.md',
+    zh: 'https://github.com/lukaisluka/Panda/blob/main/docs/user-guide.md',
+  },
+
   // ---- Composer ----
   'composer.placeholder': { en: 'Message Panda…', zh: '给 Panda 发消息…' },
   'composer.commands': { en: 'Slash commands', zh: '斜杠命令' },

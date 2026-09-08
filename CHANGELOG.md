@@ -6,6 +6,14 @@ follow the releases published from this repository.
 
 ## [Unreleased]
 
+### Added
+
+- **First-run onboarding (#200)** — with no foreground live session the
+  main column shows the three ways in: the scripted demo (an in-UI
+  `#/demo` entry), connecting your own agent (desktop stdio + quickstart
+  link; web WebSocket + bridge guide), and a collapsed path for
+  existing-agent users. Per-locale doc links target the matching mirror.
+
 ## [0.1.1] - 2026-09-07
 
 Bug-hunt hardening (18 confirmed fixes from #182/#183) plus the MCP config

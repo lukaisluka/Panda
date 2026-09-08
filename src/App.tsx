@@ -3,6 +3,7 @@ import { ArrowLeft, Menu } from 'lucide-react';
 import { IconButton } from '@astryxdesign/core/IconButton';
 import { Sidebar } from './components/Sidebar';
 import { MessageStream } from './components/MessageStream';
+import { EmptyState } from './components/EmptyState';
 import { AuthGate } from './components/AuthGate';
 import { StatusBar } from './components/StatusBar';
 import { Composer } from './components/Composer';
@@ -31,7 +32,8 @@ import { useI18n } from './i18n/context';
  * header, mobile drawer — never unmounts across routes. */
 export default function App() {
   const route = useHashRoute();
-  // Phase 2: the hash owns the session mode — `#/demo` (dev builds only)
+  // Phase 2: the hash owns the session mode — `#/demo` (production-
+  // reachable since #196; the first-run empty state is its in-UI entry)
   // switches the UI to the scripted replay and auto-plays it; every other
   // route renders live connections. Mode changes never touch connections
   // (issue #21): the replay is a display layer over the same store.
@@ -165,6 +167,13 @@ function MainScreen() {
                 onResolveElicitation={controller.resolveElicitation}
                 onOpenElicitationUrl={controller.openElicitationUrl}
               />
+            ) : liveActive && connection.sessionId === null ? (
+              // First-run onboarding (#200): no foreground live session → the
+              // three ways in (demo / connect your own agent / existing
+              // agents). A connection still opening its first session
+              // (connecting, session/new in flight) passes through here
+              // briefly — the status bar narrates that phase.
+              <EmptyState />
             ) : (
               <MessageStream key={foregroundSessionKey} onResolvePermission={controller.resolvePermission} onResolveElicitation={controller.resolveElicitation} onOpenElicitationUrl={controller.openElicitationUrl} />
             )}
