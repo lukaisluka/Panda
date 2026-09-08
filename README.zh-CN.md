@@ -32,7 +32,7 @@
 
 就这些。此后每多一点能力,界面就多亮一块:推 `tool_call` 得到带 diff 的工具卡,发 `session/request_permission` 得到审批卡,发 `plan` 得到计划坞,推 `usage_update` 得到用量条……不做的能力可见降级,绝不挡接入。
 
-完整的接入门槛、按体验损失排序的推荐项与超时预算,见 [ACP agent 接入契约](docs/acp-agent-requirements.md)(中英双语);全量参考实现见 [test-agent/](test-agent/README.md)。连接自己的 agent:桌面版 stdio 直连最顺([使用指南](docs/user-guide.md));网页版走 WebSocket([桥接指南](docs/acp-stdio-to-websocket.md))。
+十分钟从零写一个这样的 agent 并接上 Panda,见[接入快速上手](docs/agent-quickstart.md);完整的接入门槛、按体验损失排序的推荐项与超时预算,见 [ACP agent 接入契约](docs/acp-agent-requirements.md)(两文均中英双语);全量参考实现见 [test-agent/](test-agent/README.md)。连接自己的 agent:桌面版 stdio 直连最顺([使用指南](docs/user-guide.md));网页版走 WebSocket([桥接指南](docs/acp-stdio-to-websocket.md))。
 
 ## 获取 Panda
 
@@ -77,6 +77,7 @@ ACP 是事件流,而界面需要的是文档。一层纯归约把 `session/updat
 ## 文档
 
 - [ACP agent 接入契约](docs/acp-agent-requirements.md)([英文版](docs/acp-agent-requirements.en.md))——接入 Panda 的最低必须集、体验损失分级与超时预算,面向 agent 实现者
+- [接入快速上手](docs/agent-quickstart.md)([英文版](docs/agent-quickstart.en.md))——从零写最小 ACP agent 并接上 Panda 的十分钟教程,面向 agent 开发者
 - [使用指南](docs/user-guide.md)——快速上手、连接 agent、界面指南、能力矩阵、故障排查与 FAQ
 - [stdio agent 桥接 WebSocket](docs/acp-stdio-to-websocket.md)([英文版](docs/acp-stdio-to-websocket.en.md))——把 stdio agent 接到网页版的桥接配方:帧映射、wss/TLS 与安全红线,面向自托管用户
 - [CHANGELOG](CHANGELOG.md)(英文)
