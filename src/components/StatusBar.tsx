@@ -4,6 +4,7 @@ import { StatusDot } from '@astryxdesign/core/StatusDot';
 import type { SessionDocument } from '../protocol/types';
 import type { ConnectionInfo, SessionMode } from '../store';
 import { useForegroundLifecycle } from '../projector/hooks';
+import { isLinkUp } from '../projector/connectionLifecycle';
 import { ContentColumn } from './ContentColumn';
 import './StatusBar.css';
 import { useI18n } from '../i18n/context';
@@ -113,24 +114,32 @@ export function StatusBar({ doc, connection, mode, onAuthenticate }: {
             </span>
           )}
 
-          <span className="statusbar-session">
-            {lifecycle.docStatus === 'running' ? (
-              <>
-                <Spinner size="sm" />
-                <span className="statusbar-muted">Working…</span>
-              </>
-            ) : lifecycle.docStatus === 'requires_action' ? (
-              <>
-                <ShieldAlert size={13} className="statusbar-warn-icon" />
-                <span className="statusbar-warn-text">{t('status.awaitingApproval')}</span>
-              </>
-            ) : (
-              <>
-                <CircleDot size={13} className="statusbar-accent-icon" />
-                <span className="statusbar-faint">Ready</span>
-              </>
-            )}
-          </span>
+          {/* #211: the turn status only speaks when it can act — a turn in
+           * flight, or a live link that can start one. At rest on a broken or
+           * absent live link, "Ready" contradicted the failure text to its
+           * left. Demo is exempt: its pseudo-connection is intentionally
+           * always 'disconnected' (#59 pointer divergence), so mode is the
+           * gate, not the phase. */}
+          {(mode === 'demo' || lifecycle.docStatus !== 'idle' || isLinkUp(lifecycle.phase)) && (
+            <span className="statusbar-session">
+              {lifecycle.docStatus === 'running' ? (
+                <>
+                  <Spinner size="sm" />
+                  <span className="statusbar-muted">{t('status.working')}</span>
+                </>
+              ) : lifecycle.docStatus === 'requires_action' ? (
+                <>
+                  <ShieldAlert size={13} className="statusbar-warn-icon" />
+                  <span className="statusbar-warn-text">{t('status.awaitingApproval')}</span>
+                </>
+              ) : (
+                <>
+                  <CircleDot size={13} className="statusbar-accent-icon" />
+                  <span className="statusbar-faint">{t('status.ready')}</span>
+                </>
+              )}
+            </span>
+          )}
         </div>
 
         {usage.size > 0 && (
