@@ -29,6 +29,7 @@ import type {
 } from '../protocol/types';
 import { CodeBlock, markdownComponents } from './CodeBlock';
 import { useI18n } from '../i18n/context';
+import type { MessageKey } from '../i18n/messages';
 import { ClampBox } from './ClampBox';
 import { DiffView } from './DiffView';
 import { FileTypeIcon, splitFilePath } from './FileTypeIcon';
@@ -56,12 +57,14 @@ const KIND_ICON: Record<AcpToolKind, LucideIcon> = {
 /** File-operating kinds get the ZCode-style row: kind icon + verb + file-type
  * icon + basename + parent dir + diff stats. The kind's verb is display-only
  * (from the protocol enum — stable, unlike titles); the original title
- * (verb + full path + notes) degrades to a hover tooltip on the basename. */
-const FILE_VERB: Partial<Record<AcpToolKind, string>> = {
-  read: 'Read',
-  edit: 'Edit',
-  delete: 'Delete',
-  move: 'Move',
+ * (verb + full path + notes) degrades to a hover tooltip on the basename.
+ * Values are dictionary keys — the verb is chrome, translated like the rest
+ * of the card (#213). */
+const FILE_VERB: Partial<Record<AcpToolKind, MessageKey>> = {
+  read: 'tool.verb.read',
+  edit: 'tool.verb.edit',
+  delete: 'tool.verb.delete',
+  move: 'tool.verb.move',
 };
 
 /** pending 的双语义:附着 pending 权限时是真在等用户批准;否则只是排队
@@ -115,11 +118,14 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
   const Icon = KIND_ICON[call.kind] ?? Wrench;
   const path = call.locations[0]?.path;
   const line = call.locations[0]?.line;
-  // Progressive → settled verb once the call ends ("Editing x" → "Edit x");
-  // think calls show the fixed kind label instead (Thinking/Thought) —
-  // protocol title is untouched in both cases, this is display-only.
-  const displayTitle = settledToolTitle(call.title, call.status, call.kind);
   const live = call.status === 'pending' || call.status === 'in_progress';
+  // Progressive → settled verb once the call ends ("Editing x" → "Edit x") —
+  // protocol title is untouched, this is display-only. Think calls show the
+  // fixed kind label instead, which is chrome and comes from the dictionary
+  // (their titles are agent placeholders).
+  const displayTitle = call.kind === 'think'
+    ? (live ? t('tool.thinking') : t('tool.thought'))
+    : settledToolTitle(call.title, call.status);
   // Live think rows stream their tail beside the label: the latest text of
   // the call's (replace-style) content, one line, cut from the left so the
   // newest reasoning always stays visible — the full text needs expanding.
@@ -128,8 +134,8 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
       ? [...call.content].reverse().find((c): c is { type: 'content'; content: { type: 'text'; text: string } } => c.type === 'content' && c.content.type === 'text')?.content.text ?? ''
       : null;
   // File row data (null for non-file kinds or calls without a location).
-  const fileVerb = path ? FILE_VERB[call.kind] : undefined;
-  const fileRow = path && fileVerb ? { path, line, verb: fileVerb, ...splitFilePath(path) } : null;
+  const fileVerbKey = path ? FILE_VERB[call.kind] : undefined;
+  const fileRow = path && fileVerbKey ? { path, line, verb: t(fileVerbKey), ...splitFilePath(path) } : null;
   // read/search 的文本结果按原文(代码块)渲染,见 details 区注释。
   const rawTextKind = call.kind === 'read' || call.kind === 'search';
   const diffPart = call.content.find((c): c is Extract<typeof c, { type: 'diff' }> => c.type === 'diff');
@@ -204,7 +210,7 @@ export function ToolCallCard({ call, permission, onResolvePermission, prevIsTool
             // 折叠;投影缺席时它是唯一结果,保持默认展开(#84)
             <details className="tool-input-details" open={call.content.length === 0}>
               <summary className="tool-input-summary">
-                Output
+                {t('tool.output')}
               </summary>
               <ClampBox>
                 <pre className="tool-input-pre">
@@ -283,7 +289,7 @@ function InputSection({ call }: { call: ToolCallState }) {
   if (view.kind === 'raw') {
     return (
       <details className="tool-input-details">
-        <summary className="tool-input-summary">Input</summary>
+        <summary className="tool-input-summary">{t('tool.input')}</summary>
         <ClampBox>
           <pre className="tool-input-pre">{rawJson}</pre>
         </ClampBox>

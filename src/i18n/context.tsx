@@ -10,6 +10,8 @@
  * of truth, same as theme.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { InternationalizationProvider } from '@astryxdesign/core/i18n';
+import zhCN from '@astryxdesign/core/locales/zh-CN.json';
 import {
   loadLocale,
   saveLocale,
@@ -29,6 +31,10 @@ export type I18nValue = {
 };
 
 const I18nContext = createContext<I18nValue | null>(null);
+
+/** Astryx's BCP 47 tag per Panda locale. zh maps to the shipped zh-CN
+ * catalog (missing keys resolve back to en inside astryx). */
+const ASTRYX_LOCALE: Record<Locale, string> = { en: 'en', zh: 'zh-CN' };
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(loadLocale);
@@ -51,7 +57,18 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     [locale, setLocale],
   );
 
-  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+  return (
+    <I18nContext.Provider value={value}>
+      {/* Astryx components' built-in copy (alert-dialog buttons, dialog
+       * close labels, screen-reader names…) follows the same locale as
+       * Panda's dictionary — without this bridge they render from the
+       * bundled en catalog forever (#213). Inside this provider, a locale
+       * switch propagates to both dictionaries at once. */}
+      <InternationalizationProvider locale={ASTRYX_LOCALE[locale]} messages={{ 'zh-CN': zhCN }}>
+        {children}
+      </InternationalizationProvider>
+    </I18nContext.Provider>
+  );
 }
 
 export function useI18n(): I18nValue {

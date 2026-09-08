@@ -5,10 +5,11 @@
  * src/a.ts"). Panda rewrites at the display layer only; the protocol title
  * stays untouched in the document.
  *
- * think calls are the exception: their titles are placeholders, so the row
- * shows a fixed kind label ("Thinking…" → "Thought"). Not every verb has a
- * distinct progressive form ("Read x" reads the same both ways) — unmapped
- * titles pass through unchanged on purpose.
+ * think calls never reach this function: their titles are placeholders, so
+ * ToolCallCard renders the fixed kind label straight from the dictionary
+ * (tool.thinking/tool.thought). Not every verb has a distinct progressive
+ * form ("Read x" reads the same both ways) — unmapped titles pass through
+ * unchanged on purpose.
  */
 
 /** Progressive → settled verb, first word of the title, case-preserving. */
@@ -47,16 +48,7 @@ function matchCase(source: string, replacement: string): string {
 export function settledToolTitle(
   title: string,
   status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled',
-  kind?: string,
 ): string {
-  if (kind === 'think') {
-    // Think titles are placeholders (deepagents sends "思考", sometimes
-    // nothing) — the row reads as the fixed kind label, like the reference
-    // client: "Thinking" while live (the streaming tail renders beside it
-    // in ToolCallCard), "Thought" once settled. The actual reasoning text
-    // lives in the expanded content, not the title.
-    return status === 'completed' || status === 'failed' ? 'Thought' : 'Thinking';
-  }
   if (!title) return title;
   if (status !== 'completed' && status !== 'failed') return title;
   const stripped = stripEllipsis(title);

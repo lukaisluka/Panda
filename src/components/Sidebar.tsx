@@ -122,7 +122,7 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose, settingsSection
         <>
           <div className="sidebar-sessions-head">
             <span className="sidebar-label">
-              Sessions
+              {t('side.sessions')}
             </span>
             <IconButton
               variant="ghost"

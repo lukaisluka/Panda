@@ -180,6 +180,14 @@ export const messages = {
   'tool.waitingApproval': { en: 'Waiting for approval…', zh: '等待批准后执行…' },
   'tool.waitingOutput': { en: 'Waiting for output…', zh: '等待输出…' },
   'tool.rawJson': { en: 'Raw JSON', zh: '原始 JSON' },
+  'tool.thinking': { en: 'Thinking', zh: '思考中' },
+  'tool.thought': { en: 'Thought', zh: '思考' },
+  'tool.verb.read': { en: 'Read', zh: '读取' },
+  'tool.verb.edit': { en: 'Edit', zh: '编辑' },
+  'tool.verb.delete': { en: 'Delete', zh: '删除' },
+  'tool.verb.move': { en: 'Move', zh: '移动' },
+  'tool.input': { en: 'Input', zh: '输入' },
+  'tool.output': { en: 'Output', zh: '输出' },
   'diff.copyPatch': { en: 'Copy patch', zh: '复制补丁' },
   'diff.fold': { en: '⋯ {n} unchanged lines', zh: '⋯ {n} 行未变更' },
 
@@ -237,6 +245,7 @@ export const messages = {
   },
 
   // ---- Sidebar ----
+  'side.sessions': { en: 'Sessions', zh: '会话' },
   'side.newSession': { en: 'New session', zh: '新建会话' },
   'side.newSessionTooltip': {
     en: 'Pick an agent to start a new session (or use a custom address for a temporary direct connection)',

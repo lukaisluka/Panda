@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import type { Block } from '../protocol/types';
 import { markdownComponents } from './CodeBlock';
 import { MessageImage } from './MessageImage';
+import { useI18n } from '../i18n/context';
 import './disclosure.css';
 
 type ThoughtBlockModel = Extract<Block, { kind: 'thought' }>;
@@ -16,6 +17,7 @@ type ThoughtBlockModel = Extract<Block, { kind: 'thought' }>;
  * flips exactly then). The full reasoning text needs expanding.
  */
 export function ThoughtBlock({ block, streaming }: { block: ThoughtBlockModel; streaming: boolean }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   // Parts merge consecutive text chunks (reducer appendPart), so the last
   // text part IS the full stream text — the preview shows its tail.
@@ -26,7 +28,7 @@ export function ThoughtBlock({ block, streaming }: { block: ThoughtBlockModel; s
     <div className="disclosure">
       <button onClick={() => setOpen((o) => !o)} className="disclosure-toggle">
         <Brain size={16} className="disclosure-icon" />
-        <span className="disclosure-label">{streaming ? 'Thinking' : 'Thought'}</span>
+        <span className="disclosure-label">{streaming ? t('tool.thinking') : t('tool.thought')}</span>
         {tail !== null && (
           <span className="tool-think-preview" dir="rtl">{tail}</span>
         )}
