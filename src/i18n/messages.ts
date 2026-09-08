@@ -37,8 +37,8 @@ export const messages = {
   'status.authenticate': { en: 'Authenticate', zh: '认证' },
   'status.authenticateVia': { en: 'Authenticate via “{name}”', zh: '通过「{name}」认证' },
   'status.awaitingApproval': { en: 'Awaiting your approval', zh: '等待你的批准' },
-  'status.working': { en: 'Working…', zh: 'Working…' },
-  'status.ready': { en: 'Ready', zh: 'Ready' },
+  'status.working': { en: 'Working…', zh: '工作中…' },
+  'status.ready': { en: 'Ready', zh: '就绪' },
 
   // ---- EmptyState (first-run onboarding, #200) ----
   'empty.title': { en: 'Connect your agent', zh: '把你的 agent 连上来' },
