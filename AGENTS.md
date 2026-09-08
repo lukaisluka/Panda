@@ -27,8 +27,9 @@ Types: `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `chore`, `ci`,
 audit trail back to the tracker (squash-merge appends the PR number
 automatically). Only the subject line is constrained; body and footer stay
 free-form. Not retroactive: history predating this section is left as-is.
-Enforcement is by convention (this file), not tooling — no commitlint/husky;
-a CI PR-title lint may follow later (#225).
+Enforcement: PR titles are linted in CI (`.github/workflows/pr-title.yml`,
+hand-rolled regex — keep its type/scope sets in sync with this section);
+commit subjects on branches stay convention-only, no commitlint/husky.
 
 ### Domain docs
 
