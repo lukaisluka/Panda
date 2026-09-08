@@ -24,7 +24,14 @@ import { ElicitationUrlCard } from './ElicitationUrlCard';
 import { UnsupportedBlock } from './UnsupportedBlock';
 import { TurnNotice } from './TurnNotice';
 import { useMessageStreamItems } from '../projector/hooks';
-import { JANITOR_GAP_PX, scrollIntent, stickDecision, userScrollWindowEnd } from './scrollPolicy';
+import {
+  INTERACTIVE_CONTROL_SELECTOR,
+  JANITOR_GAP_PX,
+  isUserScrollInput,
+  scrollIntent,
+  stickDecision,
+  userScrollWindowEnd,
+} from './scrollPolicy';
 import type { AttachedPermission, BlockFlatItem, FlatItem } from '../projector/messageStream';
 import './MessageStream.css';
 import { useI18n } from '../i18n/context';
@@ -80,6 +87,21 @@ export function MessageStream({ onResolvePermission, onResolveElicitation, onOpe
     userScrollUntil.current = userScrollWindowEnd(performance.now());
   }, []);
 
+  // #210: pointerdown/keydown on an interactive control is an activation,
+  // not scroll intent — marking it unpinned the stream right as an approved
+  // card collapsed, so the next permission card could settle out of view.
+  // Wheel/touchmove carry no target ambiguity and stay unconditional.
+  const markUserScrollFromInput = useCallback(
+    (input: { kind: 'pointerdown' | 'keydown'; key?: string; target: EventTarget | null }) => {
+      const targetInteractive =
+        input.target instanceof Element && !!input.target.closest(INTERACTIVE_CONTROL_SELECTOR);
+      if (isUserScrollInput({ kind: input.kind, key: input.key, targetInteractive })) {
+        markUserScroll();
+      }
+    },
+    [markUserScroll],
+  );
+
   const handleScroll = useCallback(() => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -106,8 +128,12 @@ export function MessageStream({ onResolvePermission, onResolveElicitation, onOpe
             }}
             onWheel={markUserScroll}
             onTouchMove={markUserScroll}
-            onKeyDown={markUserScroll}
-            onPointerDown={markUserScroll}
+            onKeyDown={(event) =>
+              markUserScrollFromInput({ kind: 'keydown', key: event.key, target: event.target })
+            }
+            onPointerDown={(event) =>
+              markUserScrollFromInput({ kind: 'pointerdown', target: event.target })
+            }
             ref={(el) => {
               scrollerRef.current = el;
               if (typeof ref === 'function') ref(el);
@@ -118,7 +144,7 @@ export function MessageStream({ onResolvePermission, onResolveElicitation, onOpe
       },
     );
     return { Scroller, Header: StreamHeader, Footer: StreamFooter };
-  }, [handleScroll, markUserScroll]);
+  }, [handleScroll, markUserScroll, markUserScrollFromInput]);
 
   // Stick to the bottom on every content change (new items AND last-item
   // growth) while pinned, rate-limited so burst replays don't churn the

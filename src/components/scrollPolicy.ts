@@ -65,3 +65,65 @@ export function stickDecision(now: number, lastStickAt: number, trailingSchedule
 export function userScrollWindowEnd(now: number): number {
   return now + USER_SCROLL_WINDOW_MS;
 }
+
+/**
+ * Interactive controls (#210): pointerdown/keydown landing on one of these
+ * is an activation — approve/deny, form fill, link click — never scroll
+ * intent. Marking it used to open the user-scroll window as the resolved
+ * card collapsed; Virtuoso's height-recalc scroll then read as an upward
+ * user scroll, the stream unpinned, and the next permission card could
+ * settle out of view. DOM lookup (closest) lives in MessageStream; this
+ * selector is the SSOT for what counts as interactive.
+ */
+export const INTERACTIVE_CONTROL_SELECTOR = [
+  'button',
+  'a',
+  'input',
+  'textarea',
+  'select',
+  'summary',
+  'label',
+  '[contenteditable]:not([contenteditable="false"])',
+  '[role="button"]',
+  '[role="link"]',
+  '[role="checkbox"]',
+  '[role="radio"]',
+  '[role="switch"]',
+  '[role="slider"]',
+  '[role="menuitem"]',
+  '[role="menuitemcheckbox"]',
+  '[role="menuitemradio"]',
+  '[role="option"]',
+  '[role="tab"]',
+  '[role="combobox"]',
+  '[role="textbox"]',
+  '[role="spinbutton"]',
+  '[role="searchbox"]',
+  '[role="scrollbar"]',
+  '[role="treeitem"]',
+].join(', ');
+
+/** The structural facts an input event contributes to its intent verdict.
+ * `targetInteractive` is the component-side closest() lookup against
+ * {@link INTERACTIVE_CONTROL_SELECTOR}. */
+export type UserScrollInput = {
+  kind: 'pointerdown' | 'keydown';
+  /** event.key, for keydown. */
+  key?: string;
+  targetInteractive: boolean;
+};
+
+/** Keys that activate the focused interactive control instead of scrolling
+ * it: Space is ' ' in event.key. */
+export function isActivationKey(key: string): boolean {
+  return key === 'Enter' || key === ' ';
+}
+
+/** True when this input should open the user-scroll window (#210). A
+ * pointerdown on an interactive control is always an activation. For
+ * keydown only the activation keys are excused: arrows/PageDown on a
+ * focused button still scroll the stream and stay scroll intent. */
+export function isUserScrollInput(input: UserScrollInput): boolean {
+  if (input.kind === 'pointerdown') return !input.targetInteractive;
+  return !(input.targetInteractive && isActivationKey(input.key ?? ''));
+}
