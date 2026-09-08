@@ -459,9 +459,32 @@ export type ConnectionStorePort = {
  * through these helpers so the two pointers cannot drift.
  */
 
-/** The anchored session of `connectionId` — what its UI pointer would show. */
-export const foregroundSessionId = (s: PandaState, connectionId: string): string | null =>
-  s.connections[connectionId]?.connection.sessionId ?? null;
+/**
+ * What foregrounding `connectionId` points the UI at: the anchored session
+ * when one is settled; with no anchor (a clean disconnect nulled it — #218)
+ * the retained document the user is already reading stays, else the
+ * connection's most recently active retained document opens read-only; null
+ * (onboarding) only when nothing is retained (#240).
+ */
+export const foregroundSessionId = (s: PandaState, connectionId: string): string | null => {
+  const slot = s.connections[connectionId];
+  const anchored = slot?.connection.sessionId ?? null;
+  if (anchored !== null) return anchored;
+  if (!slot) return null;
+  // Foregrounding the connection already in view must not change the channel:
+  // keep the retained document the user is reading.
+  if (
+    s.activeConnectionId === connectionId &&
+    s.activeSessionId !== null &&
+    slot.docs[s.activeSessionId] !== undefined
+  ) {
+    return s.activeSessionId;
+  }
+  const newestRetained = orderedSessions(slot.sessions).find(
+    (entry) => slot.docs[entry.sessionId] !== undefined,
+  );
+  return newestRetained?.sessionId ?? null;
+};
 
 /**
  * Whether a session move on `connectionId` carries the UI pointer too: only

@@ -580,6 +580,72 @@ describe('multi-connection foreground (issue #21)', () => {
     warnSpy.mockRestore();
   });
 
+  // #240: foregrounding an offline slot must not kick the user back to
+  // onboarding — the retained documents it already keeps readable (#218) are
+  // what its header points at.
+  it('#240 foregrounding the offline connection being viewed keeps the retained document on screen', () => {
+    usePanda.getState().ensureConnection('a');
+    const port = connectionStorePort('a');
+    port.adoptSession('s-a1', '/a');
+    port.adoptSession('s-a2', '/a');
+    port.patchSession('s-a1', { updatedAt: '2026-01-01T00:00:00Z' });
+    port.patchSession('s-a2', { updatedAt: '2026-01-02T00:00:00Z' });
+    // A clean disconnect nulls the anchor; offline browsing landed on the
+    // OLDER retained document.
+    port.setConnection({ status: 'disconnected', sessionId: null });
+    usePanda.getState().setActiveConnection('a', 's-a1');
+
+    usePanda.getState().setActiveConnection('a'); // the header click
+
+    // Not reset to onboarding, and not yanked to the newer document either —
+    // foregrounding the connection already in view changes nothing.
+    expect(usePanda.getState().activeSessionId).toBe('s-a1');
+  });
+
+  it('#240 foregrounding a different offline connection opens its most recently active retained document', () => {
+    usePanda.getState().ensureConnection('a');
+    connectionStorePort('a').adoptSession('s-a', '/a');
+    usePanda.getState().ensureConnection('b');
+    const portB = connectionStorePort('b');
+    portB.adoptSession('s-b1', '/b');
+    portB.adoptSession('s-b2', '/b');
+    portB.patchSession('s-b1', { updatedAt: '2026-01-01T00:00:00Z' });
+    portB.patchSession('s-b2', { updatedAt: '2026-01-02T00:00:00Z' });
+    portB.setConnection({ status: 'disconnected', sessionId: null }); // offline, anchor null
+
+    usePanda.getState().setActiveConnection('b'); // the header click on b's group
+
+    const state = usePanda.getState();
+    expect(state.activeConnectionId).toBe('b');
+    expect(state.activeSessionId).toBe('s-b2'); // newest retained, read-only
+  });
+
+  it('#240 an offline connection with nothing retained still resolves to onboarding', () => {
+    usePanda.getState().ensureConnection('seeded');
+    connectionStorePort('seeded').mergeSessions([
+      { sessionId: 's-x', cwd: '/x', title: null, updatedAt: null },
+    ]); // remembered list only — no local document
+
+    usePanda.getState().setActiveConnection('seeded');
+
+    expect(usePanda.getState().activeConnectionId).toBe('seeded');
+    expect(usePanda.getState().activeSessionId).toBeNull();
+  });
+
+  it('#240 an anchored foreground still mirrors the anchor — retained recency does not compete', () => {
+    usePanda.getState().ensureConnection('a');
+    const port = connectionStorePort('a');
+    port.adoptSession('s-a1', '/a');
+    port.adoptSession('s-a2', '/a');
+    port.patchSession('s-a1', { updatedAt: '2026-01-01T00:00:00Z' });
+    port.patchSession('s-a2', { updatedAt: '2026-01-02T00:00:00Z' });
+    port.adoptSession('s-a1', '/a'); // re-adopt: the anchor moves back to the OLDER session
+
+    usePanda.getState().setActiveConnection('a');
+
+    expect(usePanda.getState().activeSessionId).toBe('s-a1'); // the anchor, not s-a2
+  });
+
   it('a turn settling in the background marks unread; foregrounding clears it', () => {
     usePanda.getState().ensureConnection('a');
     usePanda.getState().ensureConnection('b');
