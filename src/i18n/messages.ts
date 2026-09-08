@@ -251,6 +251,11 @@ export const messages = {
 
   // ---- Sidebar ----
   'side.sessions': { en: 'Sessions', zh: '会话' },
+  'side.demoReplay': { en: 'Demo replay', zh: '演示回放' },
+  'side.liveInBackground': {
+    en: 'Live sessions · running in background',
+    zh: 'Live 会话 · 后台运行中',
+  },
   'side.newSession': { en: 'New session', zh: '新建会话' },
   'side.newSessionTooltip': {
     en: 'Pick an agent to start a new session (or use a custom address for a temporary direct connection)',

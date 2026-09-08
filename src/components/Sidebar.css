@@ -98,16 +98,35 @@
   padding-inline: 12px; /* px-3 */
 }
 
+/* The demo-mode banner (#219): section-label typography boxed in a dashed
+ * outline — a mode indicator, deliberately NOT the session-row grammar
+ * (raised card + chrome-size fg text) it used to share, which made the
+ * banner read as a session row of the first live group below. */
 .sidebar-demo-chip {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 4px; /* mb-1 */
+  border: 1px dashed var(--color-border);
   border-radius: var(--panda-radius-lg);
-  background: var(--color-raised);
-  padding: 10px 12px; /* px-3 py-2.5 */
-  font-size: var(--panda-size-chrome);
-  color: color-mix(in oklab, var(--color-fg) 90%, transparent);
+  padding: 6px 12px; /* px-3 py-1.5 */
+  font-size: var(--panda-size-micro);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em; /* tracking-wider */
+  color: var(--color-muted);
+}
+
+/* The demo mode's marker for the live groups below the banner (#219):
+ * same label grammar as the "Sessions" head, so the live list reads as
+ * its own section running in the background. */
+.sidebar-live-label {
+  margin: 10px 0 4px;
+  font-size: var(--panda-size-micro);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em; /* tracking-wider */
+  color: var(--color-muted);
 }
 
 .sidebar-group-list {

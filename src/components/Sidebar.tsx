@@ -134,11 +134,20 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose, settingsSection
             />
           </div>
           <div className="sidebar-sessions">
+            {/* Demo mode (#219): the banner self-describes — the story title
+                here read as a session row of the group below it. The live
+                groups keep rendering underneath (demo is a display layer,
+                issue #21), labeled as background so the two domains can't
+                read as one mixed list; no label without live state, so the
+                fresh-visitor #/demo path stays clean. */}
             {!liveMode && (
               <div className="sidebar-demo-chip">
                 <MessagesSquare size={13} className="sidebar-icon-faint" />
-                <span className="truncate">{t('app.demoHeaderTitle')}</span>
+                <span className="truncate">{t('side.demoReplay')}</span>
               </div>
+            )}
+            {!liveMode && orderedIds.length > 0 && (
+              <div className="sidebar-live-label">{t('side.liveInBackground')}</div>
             )}
             <div className="sidebar-group-list">
               {orderedIds.map((connectionId) => (

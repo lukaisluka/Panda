@@ -320,9 +320,9 @@ function patchConnectionState(
 }
 
 export const usePanda = create<PandaState>((set) => ({
-  // Live by default (IA refactor phase 2): the demo replay is a dev-only
-  // route (#/demo) whose hash drives the mode — the app opens on the real
-  // session screen, never on a scripted one.
+  // Live by default (IA refactor phase 2): the demo replay is a hash-driven
+  // display mode (#/demo, production-reachable since #196/#197) — the app
+  // opens on the real session screen, never on a scripted one.
   mode: 'live',
   connections: {},
   activeConnectionId: null,
