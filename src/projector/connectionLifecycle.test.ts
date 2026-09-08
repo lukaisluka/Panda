@@ -103,7 +103,9 @@ function foreground(overrides: Partial<ForegroundLifecycleInput>): ForegroundLif
 
 describe('foregroundLifecycle (demo replay)', () => {
   it('asks for approval while a permission is pending', () => {
-    expect(foregroundLifecycle(foreground({ mode: 'demo', docStatus: 'requires_action' })).hint).toBe('Awaiting approval…');
+    expect(foregroundLifecycle(foreground({ mode: 'demo', docStatus: 'requires_action' })).hint).toBe(
+      'Awaiting your approval — respond in the message stream',
+    );
   });
 
   it('announces work while the turn runs', () => {
@@ -145,13 +147,30 @@ describe('foregroundLifecycle (live connection)', () => {
     );
   });
 
-  it('announces work for both running and awaiting-approval turns', () => {
+  it('announces work for running turns, but awaiting-approval points at the stream (#216)', () => {
     expect(foregroundLifecycle(foreground({ docStatus: 'running' })).hint).toBe('Panda is working…');
-    expect(foregroundLifecycle(foreground({ docStatus: 'requires_action' })).hint).toBe('Panda is working…');
+    expect(foregroundLifecycle(foreground({ docStatus: 'requires_action' })).hint).toBe(
+      'Awaiting your approval — respond in the message stream',
+    );
   });
 
   it('stays empty when connected and idle', () => {
     expect(foregroundLifecycle(foreground({})).hint).toBeUndefined();
+  });
+
+  it('keeps the field writable only while a permission awaits on a healthy link (#216)', () => {
+    // Awaiting approval: send held back, drafting allowed.
+    const awaiting = foregroundLifecycle(foreground({ docStatus: 'requires_action' }));
+    expect(awaiting.composerDisabled).toBe(true);
+    expect(awaiting.composerInputLocked).toBe(false);
+    // Running / switching / broken link: field locked together with send.
+    expect(foregroundLifecycle(foreground({ docStatus: 'running' })).composerInputLocked).toBe(true);
+    expect(foregroundLifecycle(foreground({ switching: true })).composerInputLocked).toBe(true);
+    expect(
+      foregroundLifecycle(foreground({ docStatus: 'requires_action', connection: { status: 'disconnected', error: null } })).composerInputLocked,
+    ).toBe(true);
+    // Demo replays draft the same way while their permission waits.
+    expect(foregroundLifecycle(foreground({ mode: 'demo', docStatus: 'requires_action' })).composerInputLocked).toBe(false);
   });
 
   it('gates the composer on the link, the turn and in-flight switches', () => {

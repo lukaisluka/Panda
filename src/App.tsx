@@ -186,6 +186,7 @@ function MainScreen() {
             <Composer
               onSend={controller.send}
               disabled={lifecycle.composerDisabled}
+              inputLocked={lifecycle.composerInputLocked}
               hint={lifecycle.hint}
               canAttachImages={!liveActive || effectiveCaps.image.available}
               canStop={lifecycle.canStop}

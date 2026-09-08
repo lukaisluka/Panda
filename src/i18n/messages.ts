@@ -534,6 +534,13 @@ export const messages = {
 
   // ---- lifecycle projection (busy line / hints) ----
   'lifecycle.awaitingApproval': { en: 'Awaiting approval…', zh: '等待批准中…' },
+  // Composer placeholder while a permission/elicitation waits (#216): the
+  // input stays writable for drafting, so the copy must say where the real
+  // action is instead of claiming work is in progress.
+  'lifecycle.awaitingApprovalHint': {
+    en: 'Awaiting your approval — respond in the message stream',
+    zh: '等待你的批准 — 在消息流中处理',
+  },
   'lifecycle.working': { en: 'Panda is working…', zh: 'Panda 正在工作…' },
   'lifecycle.connecting': { en: 'Connecting…', zh: '连接中…' },
   'lifecycle.connectFailed': {
