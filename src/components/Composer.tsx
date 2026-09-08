@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowUp, Paperclip, SlidersHorizontal, Square, X } from 'lucide-react';
 import { IconButton } from '@astryxdesign/core/IconButton';
 import {
@@ -21,6 +21,7 @@ import {
   wrapIndex,
 } from '../commands';
 import { ConfigPanelCard } from './ConfigPanel';
+import { usePopoverDismiss } from './usePopoverDismiss';
 import { ContentColumn } from './ContentColumn';
 import { ModePicker } from './ModePicker';
 import './Composer.css';
@@ -73,6 +74,18 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
   const [commandIndex, setCommandIndex] = useState(0);
   const [commandsDismissed, setCommandsDismissed] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
+  // #215: the settings card is a popover anchored like the mode menu —
+  // Escape / outside pointerdown close it via the shared dismiss hook.
+  const closeConfig = useCallback(() => setConfigOpen(false), []);
+  const configAnchorRef = usePopoverDismiss(configOpen, closeConfig);
+  // #215: an open panel whose controls just went disabled (turn running,
+  // link down) is dead UI hanging over the stream — collapse it; and a
+  // session switch re-targets the whole composer, so the panel can't stay
+  // open across it.
+  useEffect(() => {
+    if (configOpen && disabled) closeConfig();
+  }, [configOpen, disabled, closeConfig]);
+  useEffect(closeConfig, [sessionKey]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptContent = buildPromptContent(attachments, value);
   const canSend = promptContent.length > 0 && !disabled;
@@ -257,7 +270,7 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
               />
               {modes && <ModePicker modes={modes} onSetMode={onSetMode} />}
               {hasConfigOptions && (
-                <div className="composer-config-anchor">
+                <div className="composer-config-anchor" ref={configAnchorRef}>
                   {configOpen && (
                     <ConfigPanelCard options={configOptions} disabled={disabled} onSetOption={onSetConfigOption} />
                   )}
