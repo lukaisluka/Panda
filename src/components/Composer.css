@@ -155,7 +155,8 @@
   font-size: var(--panda-size-micro);
 }
 .composer-hint--danger { color: var(--color-danger); }
-.composer-hint--faint { color: var(--color-faint); }
+/* 键盘/能力提示是信息性文字,muted 承 AA(#212) */
+.composer-hint--muted { color: var(--color-muted); }
 
 /* -- slash-command autocomplete (agent-advertised commands) --------------- */
 /* Floats above the composer card; the card is its positioning context. */

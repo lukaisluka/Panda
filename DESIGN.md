@@ -74,8 +74,8 @@ chocolate 一个**（`src/theme.ts` 的 `EXPOSED_THEME_IDS`），其余六个保
 | `--color-surface` | `--color-background-surface` | 卡片/浮层表面 |
 | `--color-raised` | `--color-background-muted` | 比表面低一度的底（代码块头、表头） |
 | `--color-fg` | `--color-text-primary` | 主文本 |
-| `--color-muted` | `--color-text-secondary` | 次级文本（**故意覆盖桥的同名映射**，桥把它指到背景 token；我们的 text-muted 一直是文本语义） |
-| `--color-faint` | `--color-text-disabled` | 极弱文本（placeholder、marker、meta） |
+| `--color-muted` | `color-mix(text-secondary, text-primary 35%)` | 信息性次级文本（**故意覆盖桥的同名映射**，桥把它指到背景 token；我们的 text-muted 一直是文本语义）。AA 硬约束（#212）：chocolate 亮色下裸 `text-secondary` 实测仅 3.06:1，掺深 35% 到 primary 后亮 4.78 / 暗 10.36 |
+| `--color-faint` | `--color-text-disabled` | 极弱文本（**装饰层**：placeholder、marker、纯装饰 meta；亮色实测 2.12:1，**不承诺 AA**——信息性文字一律用 muted 及更深档，#212 起状态栏/空态引导/分组标签/composer 提示已全部换档） |
 | `--color-warn` | `--color-warning` | 警告 |
 | `--color-danger` | `--color-error` | 危险/错误 |
 | `--color-add` | `--color-success` | 成功/新增 |

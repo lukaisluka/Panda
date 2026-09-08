@@ -296,9 +296,9 @@ export function Composer({ onSend, disabled, hint, canAttachImages, canStop, onS
         {attachmentError ? (
           <p className="composer-hint composer-hint--danger">{attachmentError}</p>
         ) : !canAttachImages ? (
-          <p className="composer-hint composer-hint--faint">{t('composer.attachUnavailable')}</p>
+          <p className="composer-hint composer-hint--muted">{t('composer.attachUnavailable')}</p>
         ) : (
-          <p className="composer-hint composer-hint--faint">{t('composer.hintImages')}</p>
+          <p className="composer-hint composer-hint--muted">{t('composer.hintImages')}</p>
         )}
     </ContentColumn>
   );

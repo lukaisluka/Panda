@@ -41,7 +41,12 @@
   --color-surface: var(--color-background-surface);
   --color-raised: var(--color-background-muted);
   --color-fg: var(--color-text-primary);
-  --color-muted: var(--color-text-secondary);
+  /* 信息性次级文本的 AA 硬约束(#212):chocolate 亮色下主题自带的
+   * text-secondary 实测仅 3.06:1,不掺深到 primary 一档就到不了 4.5:1。
+   * 派生而非写死,主题切换时随两端 token 缩放;实测(chocolate):
+   * 亮 4.78 / 暗 10.36。faint 是装饰层(marker/meta/placeholder),
+   * 不承诺 AA——信息性文字一律用本档或更深的档位。 */
+  --color-muted: color-mix(in oklab, var(--color-text-secondary), var(--color-text-primary) 35%);
   --color-faint: var(--color-text-disabled);
   --color-warn: var(--color-warning);
   --color-danger: var(--color-error);
