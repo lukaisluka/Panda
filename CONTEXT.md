@@ -1,6 +1,6 @@
 # Panda
 
-Panda 是一个 ACP（Agent Client Protocol）通用客户端：连接任意兼容 ACP 的 agent 服务，以消息流为核心体验。Panda 是纯协议客户端——从不拉起 agent 进程，只连接已在运行的服务。
+Panda 是给 agent 开发者的现成客户端：用户在自研 agent 侧实现 ACP（Agent Client Protocol），Panda 就是它的界面，以消息流为核心体验。Panda 是纯协议客户端——从不拉起 agent 进程，只连接已在运行的服务（定位决策见 ADR 0008）。
 
 ## Language
 
