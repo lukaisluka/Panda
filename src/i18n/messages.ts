@@ -551,7 +551,11 @@ export const messages = {
   'lifecycle.switching': { en: 'Switching session…', zh: '切换会话中…' },
 
   // ---- live connection driver ----
-  'live.switchFailed': { en: 'Session switch failed: {reason}', zh: '切换会话失败: {reason}' },
+  'live.switchFailedTitled': {
+    en: 'Switching to “{title}” failed: {reason}',
+    zh: '切换到「{title}」失败:{reason}',
+  },
+  'live.retrySwitch': { en: 'Retry', zh: '重试' },
   'live.notice.unknownConnection': { en: 'That connection no longer exists.', zh: '该连接已不存在。' },
   'settings.notice.saveFailed': {
     en: 'Could not save the agent configuration (storage rejected the write).',
@@ -560,7 +564,18 @@ export const messages = {
 
   // ---- ACP client errors (surface via connection.error) ----
   'acp.timeout': { en: '{method} timed out after {s}s', zh: '{method} 超过 {s}s 未应答' },
-  'acp.disconnected': { en: 'The connection to the server was closed', zh: '与服务器的连接已断开' },
+  // #217: a pre-handshake close is a connect failure — code 1006 collapses
+  // refused/unreachable/rejected, so the copy points at the usual causes
+  // (agent not running / wrong path) instead of "the server closed".
+  'acp.disconnected': { en: 'Connection lost — reconnect from the sidebar', zh: '连接已断开——可从侧栏重连' },
+  'acp.connectRefused': {
+    en: 'Could not connect — make sure the agent is running at this address and the path points at its ACP endpoint',
+    zh: '无法连接——请确认 agent 已在该地址启动、且路径指向它的 ACP 端点',
+  },
+  'acp.connectClosedEarly': {
+    en: 'The connection closed before the session could be established',
+    zh: '会话尚未建立,连接即被关闭',
+  },
   'acp.protocolMismatch': {
     en: 'the agent negotiated protocol v{agent}, but Panda currently supports only v{ours}',
     zh: 'agent 协商了协议 v{agent},Panda 目前只支持 v{ours}',

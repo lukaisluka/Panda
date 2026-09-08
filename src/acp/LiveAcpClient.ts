@@ -271,6 +271,18 @@ function toAuthMethods(list: AuthMethod[] | null | undefined): AcpAuthMethod[] {
   return methods;
 }
 
+/**
+ * A pending request killed by the socket's own death rejects with the raw
+ * error `Event` (browsers) — the same death the closed handler observes from
+ * the stream side. Recognizing it lets the connect catch route pre-handshake
+ * failures into the shared attribution instead of racing it with a
+ * "[object Event]" message (#217).
+ */
+function isSocketDeathRejection(err: unknown): boolean {
+  if (typeof Event !== 'undefined' && err instanceof Event) return true;
+  return (err as { type?: unknown } | null | undefined)?.type === 'error';
+}
+
 /** v1 auth_required: the JSON-RPC code RequestError.authRequired mints. */
 function isAuthRequired(err: unknown): boolean {
   return err instanceof RequestError && err.code === -32000;
@@ -360,6 +372,9 @@ export class LiveAcpClient {
    */
   private connectionGeneration = 0;
   private disconnectReported = false;
+  /** True once a connect finished (onConnected fired) — a close before that
+   * is a connect failure, not a disconnect (#217). */
+  private linkEstablished = false;
 
   constructor(handlers: LiveClientHandlers, options: LiveClientOptions = {}) {
     this.handlers = handlers;
@@ -451,11 +466,20 @@ export class LiveAcpClient {
         .connect(stream);
       this.connection = connection;
       // Only an *unexpected* close reports a disconnect — a replaced or already
-      // cleaned-up connection no longer owns `this.connection`.
+      // cleaned-up connection no longer owns `this.connection`. A close
+      // BEFORE the link finished establishing is a connect failure (#217):
+      // the browser collapses refused/unreachable/rejected handshakes into
+      // close code 1006, and "the server closed the connection" pointed the
+      // user at the wrong cause (a dead agent is the usual truth).
       connection.closed
         .catch(() => {})
-        .then(() => {
-          if (this.connection === connection) this.reportDisconnect(t('acp.disconnected'));
+        .then(async () => {
+          if (!connection || this.connection !== connection) return;
+          if (this.linkEstablished) {
+            this.reportDisconnect(t('acp.disconnected'));
+            return;
+          }
+          await this.attributePreEstablishmentClose(connection);
         });
 
       const init: InitializeResponse = await this.controlRequest(
@@ -537,6 +561,7 @@ export class LiveAcpClient {
         discardSuperseded('session established');
         return;
       }
+      this.linkEstablished = true;
       this.handlers.onConnected({ agentName, protocolVersion: init.protocolVersion });
       console.info(`[panda/acp] connected: ${agentName} (protocol v${init.protocolVersion})`);
     } catch (err) {
@@ -556,9 +581,33 @@ export class LiveAcpClient {
         this.reportDisconnect(t('acp.authNoMethods'));
         return;
       }
+      if (connection && !this.linkEstablished && isSocketDeathRejection(err)) {
+        // initialize rejected with the socket's own death event — the same
+        // failure the closed handler observes from the other side. Hand it
+        // to the shared attribution; reporting the raw Event here would race
+        // that with "[object Event]" (#217).
+        await this.attributePreEstablishmentClose(connection);
+        return;
+      }
       console.error('[panda/acp] connect failed', err);
       this.reportDisconnect(t('acp.connectFailed', { error: describeError(err) }));
     }
+  }
+
+  /**
+   * Attributes a pre-establishment link death (#217): refused/unreachable
+   * handshakes collapse to close code 1006 and read very differently from a
+   * live connection dropping. The code rides the socket's close event, which
+   * on a failed handshake trails the `error` that surfaced the death — so
+   * await the transport's close-event promise (absent on transports without
+   * sockets: null). Idempotent through reportDisconnect's first-wins guard;
+   * the closed handler and the connect catch both funnel here.
+   */
+  private async attributePreEstablishmentClose(connection: ClientConnection): Promise<void> {
+    const code = await (this.transport?.closed ?? Promise.resolve(null));
+    if (this.connection !== connection) return;
+    console.info(`[panda/acp] link closed before establishment (close code ${code ?? 'n/a'})`);
+    this.reportDisconnect(code === 1006 ? t('acp.connectRefused') : t('acp.connectClosedEarly'));
   }
 
   /** Sends `session/new` on the live connection and adopts the new session. */
@@ -1629,6 +1678,7 @@ export class LiveAcpClient {
     // The era is over: every in-flight async flow of the old connection is
     // now superseded (issue #19).
     this.connectionGeneration++;
+    this.linkEstablished = false;
     // Clear the turn before settling waiters: with no prompt left, their
     // status convergence lands on idle instead of a phantom running.
     this.pendingPrompt = null;

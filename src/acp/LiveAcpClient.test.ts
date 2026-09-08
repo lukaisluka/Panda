@@ -163,6 +163,53 @@ class GatedFailingTransport implements AcpTransport {
   }
 }
 
+/**
+ * A transport whose link dies before the handshake completes (#217): reads
+ * hit EOF immediately — the SDK settles `connection.closed` — while writes
+ * are accepted but never delivered, so initialize hangs. That is the shape a
+ * browser WebSocket shows when it is refused or rejected before opening;
+ * `closeCode` stands in for what WebSocketTransport records from the
+ * socket's close event (browsers collapse every handshake failure to 1006).
+ */
+class PreHandshakeCloseTransport implements AcpTransport {
+  readonly closed: Promise<number | null>;
+  constructor(closeCode: number | null) {
+    this.closed = Promise.resolve(closeCode);
+  }
+  connect(): Promise<Stream> {
+    return Promise.resolve({
+      readable: new ReadableStream({ start: (controller) => controller.close() }),
+      writable: new WritableStream(),
+    });
+  }
+  disconnect(): void {}
+}
+
+/** All-noop handler set for standalone client tests without a fake agent. */
+function silentHandlers(onDisconnected: (reason: string | null) => void): LiveClientHandlers {
+  const noop = () => {};
+  return {
+    onUpdate: noop,
+    onConnected: noop,
+    onSessionId: noop,
+    onSessionModes: noop,
+    onSessionConfigOptions: noop,
+    onDisconnected,
+    onAuthChallenge: noop,
+    onAuthElicitation: noop,
+    onCapabilities: noop,
+    onAuthMethods: noop,
+    onAuthenticated: noop,
+    onSessions: noop,
+    onSessionInfo: noop,
+    onReplayStart: noop,
+    onSessionDeleted: noop,
+    onSessionSwitchStage: noop,
+    onSessionSwitchCommit: noop,
+    onSessionSwitchRollback: noop,
+  };
+}
+
 async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
   const records: Records = {
     updates: [],
@@ -949,9 +996,38 @@ describe('LiveAcpClient', () => {
     h.killTransport(); // the "ACP service" dies mid-turn
     await turn;
 
-    expect(h.disconnected).toEqual(['The connection to the server was closed']);
+    expect(h.disconnected).toEqual(['Connection lost — reconnect from the sidebar']);
     expect(h.statuses.at(-1)).toBe('idle');
     h.closeAll();
+  });
+
+  it('attributes a pre-handshake close with close code 1006 to a refused connect (#217)', async () => {
+    const disconnected: string[] = [];
+    const acpClient = new LiveAcpClient(silentHandlers((reason) => disconnected.push(reason ?? 'null')));
+
+    // connect() itself stays suspended: initialize hangs on the dead link
+    // exactly like a browser WebSocket refused before it ever opened. The
+    // attribution arrives through connection.closed, not the await.
+    const connecting = acpClient.connect(new PreHandshakeCloseTransport(1006), '/tmp/project');
+    await waitFor(() => disconnected.length === 1);
+
+    expect(disconnected).toEqual([
+      'Could not connect — make sure the agent is running at this address and the path points at its ACP endpoint',
+    ]);
+    acpClient.disconnect(); // ends the hanging era; the late settle is discarded
+    void connecting.catch(() => {});
+  });
+
+  it('attributes a pre-handshake close without a close code to an early closure (#217)', async () => {
+    const disconnected: string[] = [];
+    const acpClient = new LiveAcpClient(silentHandlers((reason) => disconnected.push(reason ?? 'null')));
+
+    const connecting = acpClient.connect(new PreHandshakeCloseTransport(null), '/tmp/project');
+    await waitFor(() => disconnected.length === 1);
+
+    expect(disconnected).toEqual(['The connection closed before the session could be established']);
+    acpClient.disconnect();
+    void connecting.catch(() => {});
   });
 
   it('preserves unknown update kinds as unsupported events and drops foreign sessions loudly', async () => {

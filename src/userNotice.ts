@@ -13,11 +13,20 @@
 
 export type UserNoticeKind = 'error' | 'info';
 
+/** An actionable follow-up a notice can carry (#217): one button in the
+ * toast's trailing slot. `label` is pre-rendered localized text; `run` is
+ * the retry/recovery action. */
+export interface UserNoticeAction {
+  label: string;
+  run: () => void;
+}
+
 export interface UserNotice {
   id: number;
   kind: UserNoticeKind;
   /** Pre-rendered, localized text — the publisher already resolved t(). */
   message: string;
+  action?: UserNoticeAction;
 }
 
 type Listener = (notice: UserNotice) => void;
@@ -26,9 +35,9 @@ const listeners = new Set<Listener>();
 let nextId = 1;
 
 /** Publishes one notice; with no subscriber (e.g. unit tests) it is a no-op. */
-export function notifyUser(kind: UserNoticeKind, message: string): void {
+export function notifyUser(kind: UserNoticeKind, message: string, action?: UserNoticeAction): void {
   if (listeners.size === 0) return;
-  const notice: UserNotice = { id: nextId++, kind, message };
+  const notice: UserNotice = { id: nextId++, kind, message, action };
   for (const listener of listeners) listener(notice);
 }
 

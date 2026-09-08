@@ -20,6 +20,7 @@ import {
   type SessionStorage,
 } from './liveConnections';
 import { connectionStorePort, usePanda, type SessionEntry } from './store';
+import { subscribeUserNotices, type UserNotice } from './userNotice';
 import { loadProfiles, saveProfiles, type AgentProfile } from './profiles';
 import type { AcpTransport } from './acp/transport/AcpTransport';
 import { setStdioTransportFactory, type StdioAgentConfig } from './acp/transport/stdioHost';
@@ -272,6 +273,40 @@ describe('opening sessions across connections (issue #21)', () => {
     // The settled pointer waits for the transactional commit; the load was issued.
     expect(stubs[0]!.client.loadSession).toHaveBeenCalledWith('s-a2', '/agent-a');
     expect(usePanda.getState().connections['agent-a']!.connection.sessionId).toBe('s-a');
+  });
+
+  it('#217 a failed switch rolls back, names the session in the toast, and offers Retry', async () => {
+    const stubs = installStubClients();
+    await connectedStub('agent-a', stubs, 's-a');
+    // The target session carries a title — the toast must name it, not the id.
+    const state = usePanda.getState();
+    usePanda.setState({
+      connections: {
+        ...state.connections,
+        'agent-a': {
+          ...state.connections['agent-a']!,
+          sessions: [{ sessionId: 's-a2', title: 'Refactor plan', cwd: '/agent-a', updatedAt: null }],
+        },
+      },
+    });
+    const notices: UserNotice[] = [];
+    const unsubscribe = subscribeUserNotices((notice) => notices.push(notice));
+
+    openLiveSession('agent-a', 's-a2', '/agent-a');
+    stubs[0]!.handlers.onSessionSwitchStage('s-a2', '/agent-a', 7);
+    stubs[0]!.handlers.onSessionSwitchRollback('agent exploded', 7);
+
+    const message = 'Switching to \u201cRefactor plan\u201d failed: agent exploded';
+    expect(usePanda.getState().connections['agent-a']!.connection.error).toBe(message);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]!.kind).toBe('error');
+    expect(notices[0]!.message).toBe(message);
+    expect(notices[0]!.action?.label).toBe('Retry');
+    // Retry re-issues the load for the same session.
+    notices[0]!.action!.run();
+    expect(stubs[0]!.client.loadSession).toHaveBeenCalledWith('s-a2', '/agent-a');
+    expect(stubs[0]!.client.loadSession).toHaveBeenCalledTimes(2);
+    unsubscribe();
   });
 
   it('the settled session of a background slot foregrounds without a load', async () => {

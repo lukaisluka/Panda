@@ -153,6 +153,42 @@ describe('WebSocketTransport (issue #20)', () => {
     expect(closed).not.toHaveBeenCalled();
   });
 
+  it('records the close code from the close event that follows a refused-handshake error (#217)', async () => {
+    staged = stageFakeConnection();
+    const transport = new WebSocketTransport('ws://x');
+    const errored = vi.fn();
+    transport.onError(errored);
+    await transport.connect();
+
+    // Browser order on a refused/unreachable connect: error first, close
+    // second. Handler dispatch stays with the error (first settlement), but
+    // the close code — 1006, the only trace of WHY it failed — must still
+    // be recorded for the connect-failure attribution.
+    staged.fire('error', { type: 'error' });
+    staged.fire('close', { code: 1006 });
+
+    expect(errored).toHaveBeenCalledTimes(1);
+    await expect(transport.closed).resolves.toBe(1006);
+  });
+
+  it('resolves `closed` with the code from a clean close event too (#217)', async () => {
+    staged = stageFakeConnection();
+    const transport = new WebSocketTransport('ws://x');
+    await transport.connect();
+
+    staged.fire('close', { code: 1000 });
+    await expect(transport.closed).resolves.toBe(1000);
+  });
+
+  it('settles `closed` with null on a deliberate disconnect before any close event (#217)', async () => {
+    staged = stageFakeConnection();
+    const transport = new WebSocketTransport('ws://x');
+    await transport.connect();
+
+    transport.disconnect();
+    await expect(transport.closed).resolves.toBeNull();
+  });
+
   it('wraps a DOM-Event-like socket error as "WebSocket <type>", not "[object Event]"', async () => {
     staged = stageFakeConnection();
     const transport = new WebSocketTransport('ws://x');
