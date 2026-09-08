@@ -21,10 +21,11 @@ lazily by `/domain-modeling`. See `docs/agents/domain.md`.
 ### Bilingual docs
 
 Docs are organized by language: each file is single-language prose, and the
-only bilingual pairs are explicit mirrors. Three pairs exist — `README.md`
-(English) + `README.zh-CN.md` (Chinese), the ACP contract pair, and the
-stdio→WebSocket bridge guide pair (both Chinese source of truth + English
-mirror; see "ACP agent contract" and "stdio→WebSocket bridge guide"). When
+only bilingual pairs are explicit mirrors. Four pairs exist — `README.md`
+(English) + `README.zh-CN.md` (Chinese), the ACP contract pair, the agent
+quickstart pair, and the stdio→WebSocket bridge guide pair (the last three
+are Chinese source of truth + English mirror; see "ACP agent contract",
+"stdio→WebSocket bridge guide", and `docs/agent-quickstart.md`). When
 editing one side of a pair, update the other in the same change. Everything else is
 single-language by audience: agent-facing docs (`AGENTS.md`, `docs/agents/*`,
 `desktop/README.md`, `CHANGELOG.md`) are English; human-facing docs

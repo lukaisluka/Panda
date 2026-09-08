@@ -32,7 +32,7 @@ The bar to integrate is low. With the official SDK (`@agentclientprotocol/sdk`),
 
 That's it. Every extra capability lights up another piece of the UI: push `tool_call` for tool cards with diffs, send `session/request_permission` for approval cards, `plan` for the plan dock, `usage_update` for the context meter… anything you skip degrades visibly and never blocks integration.
 
-For the full integration bar, recommendations ranked by user-visible cost, and timeout budgets, see the [agent integration contract](docs/acp-agent-requirements.md) ([English](docs/acp-agent-requirements.en.md)); for a complete reference implementation, see [test-agent/](test-agent/README.md) (Chinese). Connecting your own agent: desktop stdio is the smoothest path ([user guide](docs/user-guide.md) (Chinese)); the web app takes any ACP-over-WebSocket endpoint ([bridge guide](docs/acp-stdio-to-websocket.md) (Chinese)).
+For a ten-minute, write-it-from-scratch walkthrough see the [agent quickstart](docs/agent-quickstart.en.md); for the full integration bar, recommendations ranked by user-visible cost, and timeout budgets, see the [agent integration contract](docs/acp-agent-requirements.en.md); for a complete reference implementation, see [test-agent/](test-agent/README.md) (Chinese). Connecting your own agent: desktop stdio is the smoothest path ([user guide](docs/user-guide.md) (Chinese)); the web app takes any ACP-over-WebSocket endpoint ([bridge guide](docs/acp-stdio-to-websocket.md) (Chinese)).
 
 ## Get Panda
 
@@ -77,6 +77,7 @@ ACP is an event stream, but the UI needs a document. A pure reduction layer fold
 ## Documentation
 
 - [ACP agent integration contract](docs/acp-agent-requirements.md) ([English](docs/acp-agent-requirements.en.md)) — minimum required method set, UX-cost-ranked recommendation tiers, and timeout budgets for agent implementers
+- [Agent quickstart](docs/agent-quickstart.md) ([English](docs/agent-quickstart.en.md)) — a ten-minute tutorial: write a minimal ACP agent from scratch and connect it to Panda
 - [User guide](docs/user-guide.md) (Chinese) — quick start, connecting agents, UI guide, capability matrix, troubleshooting & FAQ
 - [Bridging stdio agents to WebSocket](docs/acp-stdio-to-websocket.md) ([English](docs/acp-stdio-to-websocket.en.md)) — frame mapping, wss/TLS setup, and security rules for exposing stdio agents to the web app, for self-hosters
 - [CHANGELOG](CHANGELOG.md)
