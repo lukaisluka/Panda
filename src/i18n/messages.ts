@@ -204,6 +204,9 @@ export const messages = {
   'mode.menu': { en: 'Session mode', zh: '会话模式' },
   'plan.dock': { en: 'Session plan', zh: '会话计划' },
   'plan.title': { en: 'Plan', zh: '计划' },
+  // Counter semantics pinned by #220: completed-count, never "current step" —
+  // the bare `N/M` read both ways, which read as progress that hadn't happened.
+  'plan.progress': { en: '{done}/{total} done', zh: '{done}/{total} 已完成' },
   'unsupported.event': { en: 'Not-yet-supported ACP event · {kind}', zh: '暂不支持的 ACP 事件 · {kind}' },
   'turn.cancelled': { en: 'Cancelled', zh: '已取消' },
   'turn.refusal': { en: 'The model refused this request', zh: '模型拒绝了本次请求' },

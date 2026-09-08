@@ -26,7 +26,7 @@ export function PlanDock({ entries }: { entries: AcpPlanEntry[] }) {
       >
         <ListTodo size={14} className="plan-dock-head-icon" />
         <span className="plan-dock-title">{t('plan.title')}</span>
-        <span className="plan-dock-progress">{done}/{entries.length}</span>
+        <span className="plan-dock-progress">{t('plan.progress', { done, total: entries.length })}</span>
         <ChevronDown size={14} className={`plan-dock-chevron ${open ? 'plan-dock-chevron--open' : ''}`} />
       </button>
       {open && (

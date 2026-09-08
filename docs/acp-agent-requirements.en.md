@@ -116,6 +116,7 @@ The complete set of client-side handlers Panda registers:
 - **Cancellation paths**: on turn cancel or disconnect, all pending permissions are answered `cancelled`; the agent may also send `$/cancel_request` to withdraw a request it no longer needs.
 - **Auto-answers are possible**: the client has a host policy and per-session `always` memory; the agent only ever sees the outcome (`selected` / `cancelled`) and need not know who chose.
 - Offer at least one reject-type option — an allow-only permission card leaves the user no way to say no.
+- The `toolCall.rawInput` rides along with the card: a write_todos-shaped payload (`{ todos: [{ content, status }] }`) renders the plan body per-step in the card; other shapes render no body for now — title only.
 
 ### 3.2 Elicitation-flow contract
 

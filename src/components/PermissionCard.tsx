@@ -1,4 +1,4 @@
-import { ShieldAlert, ShieldBan, ShieldCheck } from 'lucide-react';
+import { Check, Circle, CircleDot, ShieldAlert, ShieldBan, ShieldCheck } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import type {
   DeniedPermissionResponse,
@@ -16,6 +16,64 @@ import { useI18n } from '../i18n/context';
  * disabled instead of answering a kind the client cannot map (issue #79). */
 const ANSWERABLE_KINDS = new Set<string>(['allow_once', 'allow_always', 'reject_once', 'reject_always']);
 
+/** One plan entry extracted from a permission request's rawInput (#220). */
+export type PermissionPlanEntry = { content: string; status: string };
+
+/**
+ * The approval card's plan body source (#220): a write_todos request's
+ * rawInput is `{ todos: [{ content, status }, …] }`. Only that shape yields
+ * entries — anything else renders no body, so the title stays the card's
+ * whole text for non-plan tools. Entries missing either field are dropped
+ * rather than rendering half a step.
+ */
+export function planBodyFromRawInput(rawInput: unknown): PermissionPlanEntry[] | null {
+  if (rawInput === null || typeof rawInput !== 'object') return null;
+  const todos = (rawInput as { todos?: unknown }).todos;
+  if (!Array.isArray(todos) || todos.length === 0) return null;
+  const entries = todos.filter(
+    (entry): entry is PermissionPlanEntry =>
+      !!entry &&
+      typeof entry === 'object' &&
+      typeof (entry as { content?: unknown }).content === 'string' &&
+      typeof (entry as { status?: unknown }).status === 'string',
+  );
+  return entries.length > 0 ? entries : null;
+}
+
+/**
+ * The plan a permission asks to approve, listed in the card — status icons
+ * mirror the plan dock's so both surfaces read one vocabulary.
+ */
+function PermissionPlanBody({ entries }: { entries: PermissionPlanEntry[] }) {
+  const { t } = useI18n();
+  return (
+    <ol className="permission-plan" aria-label={t('plan.dock')}>
+      {entries.map((entry, i) => (
+        <li key={i} className="permission-plan-item">
+          {entry.status === 'completed' ? (
+            <Check size={14} className="permission-plan-icon permission-plan-icon--done" />
+          ) : entry.status === 'in_progress' ? (
+            <CircleDot size={14} className="permission-plan-icon permission-plan-icon--active" />
+          ) : (
+            <Circle size={14} className="permission-plan-icon" />
+          )}
+          <span
+            className={
+              entry.status === 'completed'
+                ? 'permission-plan-text permission-plan-text--done'
+                : entry.status === 'in_progress'
+                  ? 'permission-plan-text permission-plan-text--active'
+                  : 'permission-plan-text'
+            }
+          >
+            {entry.content}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 /**
  * Inline approval card mounted below the tool call that triggered it —
  * the UI answer to "why did the agent stop?".
@@ -25,6 +83,7 @@ export function PermissionCard({ request, onResolve }: {
   onResolve: (kind: PermissionOptionKind) => void;
 }) {
   const { t } = useI18n();
+  const plan = planBodyFromRawInput(request.rawInput);
   return (
     <div className="permission-card">
       <div className="permission-head">
@@ -32,6 +91,7 @@ export function PermissionCard({ request, onResolve }: {
         {t('perm.title')}
       </div>
       <p className="permission-title">{request.title}</p>
+      {plan && <PermissionPlanBody entries={plan} />}
       <div className="permission-options">
         {request.options.map((option) => (
           <Button
@@ -58,6 +118,7 @@ export function DeniedPermissionCard({ request, response }: {
   response: DeniedPermissionResponse;
 }) {
   const { t } = useI18n();
+  const plan = planBodyFromRawInput(request.rawInput);
   return (
     <div className="permission-card permission-card--denied">
       <div className="permission-head permission-head--denied">
@@ -65,6 +126,7 @@ export function DeniedPermissionCard({ request, response }: {
         {t('perm.deniedByPolicy')}
       </div>
       <p className="permission-title permission-title--dim">{request.title}</p>
+      {plan && <PermissionPlanBody entries={plan} />}
       <p className="permission-reason">
         {response.kind
           ? t('perm.autoAnswered', { kind: response.kind })
@@ -85,6 +147,7 @@ export function RememberedPermissionCard({ request, response }: {
   response: RememberedPermissionResponse;
 }) {
   const { t } = useI18n();
+  const plan = planBodyFromRawInput(request.rawInput);
   return (
     <div className="permission-card permission-card--remembered">
       <div className="permission-head permission-head--remembered">
@@ -92,6 +155,7 @@ export function RememberedPermissionCard({ request, response }: {
         {t('perm.byPriorChoice')}
       </div>
       <p className="permission-title permission-title--dim">{request.title}</p>
+      {plan && <PermissionPlanBody entries={plan} />}
       <p className="permission-reason">
         {response.kind === 'reject_always'
           ? t('perm.autoRejected')
@@ -113,6 +177,7 @@ export function ResolvedPermissionCard({ request, response }: {
 }) {
   const allowed = response.kind.startsWith('allow');
   const { t } = useI18n();
+  const plan = planBodyFromRawInput(request.rawInput);
   const KIND_LABEL: Record<string, 'perm.allowOnce' | 'perm.allowAlways' | 'perm.rejectOnce' | 'perm.rejectAlways'> = {
     allow_once: 'perm.allowOnce',
     allow_always: 'perm.allowAlways',
@@ -126,6 +191,7 @@ export function ResolvedPermissionCard({ request, response }: {
         {allowed ? t('perm.approved') : t('perm.rejected')} · {KIND_LABEL[response.kind] ? t(KIND_LABEL[response.kind]!) : String(response.kind)}
       </div>
       <p className="permission-title permission-title--dim">{request.title}</p>
+      {plan && <PermissionPlanBody entries={plan} />}
     </div>
   );
 }

@@ -48,15 +48,17 @@ stdio 的 stdout 只承载逐行 JSON-RPC,日志全部写到 stderr。
 
 第一轮会依次:
 
-1. 用 `write_todos` 建立三步计划;
+1. 用 `write_todos` 建立三步计划(起步 0/3);此后每个真实步骤完成后推一次
+   增量 `write_todos`,计划最终走到 3/3;
 2. 读取 `/auth.ts`;
 3. 把 `validateSession(session) == false` 改为显式取反并发送真实 diff;
 4. 执行 `cat auth.ts` 验证落盘;
 5. 流式输出包含 Markdown 和 TypeScript 代码块的总结。
 
-默认 `ask_before_edits` 模式会为计划、编辑和命令执行发起权限请求。第二轮起返回
-固定短回复,用于测试追加消息和滚动。也可以通过 ACP 会话配置切到
-`accept_edits` 或 `accept_everything`。
+默认 `ask_before_edits` 模式会为计划首落地、编辑和命令执行发起权限请求
+(计划请求携带 `rawInput`,客户端可在权限卡内渲染计划正文);进行中的计划
+增量更新自动放行,不打扰。第二轮起返回固定短回复,用于测试追加消息和滚动。
+也可以通过 ACP 会话配置切到 `accept_edits` 或 `accept_everything`。
 
 会话的首条文本消息会被压缩为最多 48 个字符的标题,并通过 ACP 的
 `session_info_update` 推送给 Panda。这个标题不额外调用模型,因此不会增加等待时间

@@ -474,6 +474,7 @@ export function toPermissionRequest(request: RequestPermissionRequest): Permissi
     toolCallId: request.toolCall.toolCallId,
     title: request.toolCall.title ?? t('wire.unnamedTool'),
     kind: request.toolCall.kind ?? undefined,
+    rawInput: request.toolCall.rawInput,
     options: request.options.map((option) => ({
       id: option.optionId,
       name: option.name,
