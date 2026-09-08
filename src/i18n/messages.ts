@@ -180,6 +180,19 @@ export const messages = {
   'tool.waitingApproval': { en: 'Waiting for approval…', zh: '等待批准后执行…' },
   'tool.waitingOutput': { en: 'Waiting for output…', zh: '等待输出…' },
   'tool.rawJson': { en: 'Raw JSON', zh: '原始 JSON' },
+  // The tool-call domain stays English on purpose (maintainer call,
+  // 2026-09-08): these labels share the row with agent-provided content —
+  // tool names (write_todos), permission option names (Approve/Reject),
+  // file paths — and translating half of that mix reads worse than keeping
+  // the verbs/labels in English. Do not "fix" the zh column to Chinese.
+  'tool.thinking': { en: 'Thinking', zh: 'Thinking' },
+  'tool.thought': { en: 'Thought', zh: 'Thought' },
+  'tool.verb.read': { en: 'Read', zh: 'Read' },
+  'tool.verb.edit': { en: 'Edit', zh: 'Edit' },
+  'tool.verb.delete': { en: 'Delete', zh: 'Delete' },
+  'tool.verb.move': { en: 'Move', zh: 'Move' },
+  'tool.input': { en: 'Input', zh: 'Input' },
+  'tool.output': { en: 'Output', zh: 'Output' },
   'diff.copyPatch': { en: 'Copy patch', zh: '复制补丁' },
   'diff.fold': { en: '⋯ {n} unchanged lines', zh: '⋯ {n} 行未变更' },
 
@@ -237,6 +250,7 @@ export const messages = {
   },
 
   // ---- Sidebar ----
+  'side.sessions': { en: 'Sessions', zh: '会话' },
   'side.newSession': { en: 'New session', zh: '新建会话' },
   'side.newSessionTooltip': {
     en: 'Pick an agent to start a new session (or use a custom address for a temporary direct connection)',

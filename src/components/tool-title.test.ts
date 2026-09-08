@@ -30,16 +30,8 @@ describe('settledToolTitle', () => {
     expect(settledToolTitle('Thinking…', 'pending')).toBe('Thinking…');
   });
 
-  it('shows think calls as the fixed kind label regardless of their placeholder title', () => {
-    expect(settledToolTitle('思考', 'in_progress', 'think')).toBe('Thinking');
-    expect(settledToolTitle('思考', 'pending', 'think')).toBe('Thinking');
-    expect(settledToolTitle('', 'in_progress', 'think')).toBe('Thinking');
-    expect(settledToolTitle('思考', 'completed', 'think')).toBe('Thought');
-    expect(settledToolTitle('Thinking…', 'completed', 'think')).toBe('Thought');
-  });
-
   it('leaves empty titles of other kinds empty', () => {
-    expect(settledToolTitle('', 'completed', 'read')).toBe('');
+    expect(settledToolTitle('', 'completed')).toBe('');
     expect(settledToolTitle('', 'in_progress')).toBe('');
   });
 });
