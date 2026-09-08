@@ -15,7 +15,7 @@ import {
   useActiveSessions,
   usePanda,
 } from './store';
-import { useForegroundLifecycle, useSessionModes } from './projector/hooks';
+import { useForegroundLifecycle, useMainView, useSessionModes } from './projector/hooks';
 import { navigate, useHashRoute } from './routes';
 import { composerDraftKey, DEMO_DRAFT_KEY } from './composerDrafts';
 import { SettingsPage, SETTINGS_SECTIONS, type SettingsSectionId } from './components/SettingsPage';
@@ -54,6 +54,7 @@ function MainScreen() {
   const doc = useActiveDoc();
   const connection = useActiveConnection();
   const activeConnectionId = usePanda((s) => s.activeConnectionId);
+  const activeSessionId = usePanda((s) => s.activeSessionId);
   const sessions = useActiveSessions();
   // The foreground connection's effective capabilities (issue #22) — the
   // single decision point, never the raw agent declaration.
@@ -68,6 +69,10 @@ function MainScreen() {
   // Status meaning comes from the lifecycle projection (#53) — busy,
   // composer gating, hint and the auth-gate branch are consumed, not derived.
   const lifecycle = useForegroundLifecycle();
+  // Which surface owns the content column (#200/#218) — projected, not
+  // derived here: onboarding is pointer-decided so a retained document stays
+  // readable after a clean disconnect.
+  const view = useMainView();
   // The mode picker's view + write channel (protocol policy, not App's to derive).
   const sessionModes = useSessionModes(controller);
   const { t } = useI18n();
@@ -77,13 +82,16 @@ function MainScreen() {
   // never sent to another), and the message stream is REMOUNTED on it (key):
   // flat-item keys (`turn-1-0`…) are identical across sessions, so without
   // the remount one session's expanded cards and scroll-follow mode would
-  // leak into the next.
+  // leak into the next. Keyed by the UI POINTER, not the connection's settled
+  // anchor (#218): offline retained-document viewing diverges the two (the
+  // anchor is null while the pointer moves between retained documents), and
+  // an anchor-keyed key would collapse every offline view onto one bucket.
   const foregroundSessionKey = liveActive
-    ? composerDraftKey(activeConnectionId ?? 'none', connection.sessionId)
+    ? composerDraftKey(activeConnectionId ?? 'none', activeSessionId)
     : DEMO_DRAFT_KEY;
 
   const activeSession = liveActive
-    ? sessions.find((entry) => entry.sessionId === connection.sessionId)
+    ? sessions.find((entry) => entry.sessionId === activeSessionId)
     : undefined;
   // On the settings route the header carries the ACTIVE SECTION's title and
   // description (#140): the page-level header inside the column is gone, so
@@ -158,7 +166,7 @@ function MainScreen() {
                 hunt #8): mid-connection re-login keeps the old session, and
                 its request-scoped OAuth card must be answerable. Without a
                 challenge the standing offer (#90) feeds the method list. */}
-            {liveActive && (lifecycle.phase === 'auth-required' || connection.authElicitation !== null) ? (
+            {view === 'auth-gate' ? (
               <AuthGate
                 methods={connection.authMethods ?? connection.availableAuthMethods}
                 message={connection.error}
@@ -167,12 +175,14 @@ function MainScreen() {
                 onResolveElicitation={controller.resolveElicitation}
                 onOpenElicitationUrl={controller.openElicitationUrl}
               />
-            ) : liveActive && connection.sessionId === null ? (
-              // First-run onboarding (#200): no foreground live session → the
-              // three ways in (demo / connect your own agent / existing
-              // agents). A connection still opening its first session
-              // (connecting, session/new in flight) passes through here
-              // briefly — the status bar narrates that phase.
+            ) : view === 'onboarding' ? (
+              // First-run onboarding (#200): no foreground session document
+              // to show → the three ways in (demo / connect your own agent /
+              // existing agents). A connection still opening its first
+              // session (connecting, session/new in flight) passes through
+              // here briefly — the status bar narrates that phase. A clean
+              // disconnect does NOT land here (#218): its retained document
+              // stays readable, so the pointer is still set.
               <EmptyState />
             ) : (
               <MessageStream key={foregroundSessionKey} onResolvePermission={controller.resolvePermission} onResolveElicitation={controller.resolveElicitation} onOpenElicitationUrl={controller.openElicitationUrl} />

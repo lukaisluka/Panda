@@ -126,6 +126,35 @@ export type ForegroundLifecycle = {
   hint: string | undefined;
 };
 
+// ---------------------------------------------------------------------------
+// Main view ownership (#200 onboarding, #218 offline reading)
+// ---------------------------------------------------------------------------
+
+/** Which of the three surfaces owns the content column (ADR 0006's
+ * meaning-vs-pixels: this is the meaning, App renders it). */
+export type MainView = 'auth-gate' | 'onboarding' | 'message-stream';
+
+/**
+ * Onboarding shows only when the foreground has NO session document to show —
+ * decided by the UI pointer (`activeSessionId`), never the connection's
+ * settled anchor (#218): a clean disconnect nulls the anchor while the
+ * retained document stays viewable read-only. The demo replay owns the stream
+ * unconditionally (no auth, no onboarding).
+ */
+export function mainView(input: {
+  mode: SessionMode;
+  phase: ConnectionPhase;
+  authElicitation: ConnectionInfo['authElicitation'];
+  activeSessionId: string | null;
+}): MainView {
+  const { mode, phase, authElicitation, activeSessionId } = input;
+  if (mode !== 'live') return 'message-stream';
+  // The auth gate comes first (App's historical branch order): a login
+  // challenge owns the view even mid-session.
+  if (phase === 'auth-required' || authElicitation !== null) return 'auth-gate';
+  return activeSessionId === null ? 'onboarding' : 'message-stream';
+}
+
 function hintFor(mode: SessionMode, phase: ConnectionPhase, error: string | null, docStatus: SessionStatus): string | undefined {
   if (mode !== 'live') {
     if (docStatus === 'requires_action') return t('lifecycle.awaitingApprovalHint');

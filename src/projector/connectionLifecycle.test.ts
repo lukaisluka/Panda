@@ -4,7 +4,9 @@ import {
   connectionPhase,
   foregroundLifecycle,
   isLinkUp,
+  mainView,
   type ForegroundLifecycleInput,
+  type MainView,
 } from './connectionLifecycle';
 import type { ConnectionInfo, ConnectionState } from '../store';
 
@@ -194,5 +196,56 @@ describe('foregroundLifecycle (live connection)', () => {
     expect(foregroundLifecycle(foreground({ docStatus: 'requires_action' })).busy).toBe(true);
     expect(foregroundLifecycle(foreground({ switching: true })).busy).toBe(true);
     expect(foregroundLifecycle(foreground({})).busy).toBe(false);
+  });
+});
+
+// -- mainView: content column ownership (#200 onboarding, #218 offline) --------
+
+type MainViewInput = Parameters<typeof mainView>[0];
+
+function view(overrides: Partial<MainViewInput> = {}): MainView {
+  return mainView({
+    mode: 'live',
+    phase: 'connected',
+    authElicitation: null,
+    activeSessionId: 's-1',
+    ...overrides,
+  });
+}
+
+describe('mainView (断连后留存文档可读, #218)', () => {
+  it('a live foreground with a session renders the stream', () => {
+    expect(view()).toBe('message-stream');
+  });
+
+  it('a clean disconnect keeps the stream while the pointer sits on a retained document — onboarding must not take over', () => {
+    // The regression: the anchor (connection.sessionId) is null after a clean
+    // disconnect; the onboarding gate keyed on it swallowed the transcript.
+    expect(view({ phase: 'disconnected', activeSessionId: 's-1' })).toBe('message-stream');
+  });
+
+  it('offline with no pointer shows onboarding (fresh app, seeded slot, offline switch to a doc-less session)', () => {
+    expect(view({ phase: 'disconnected', activeSessionId: null })).toBe('onboarding');
+  });
+
+  it('a first connect in flight passes through onboarding until a session is adopted', () => {
+    expect(view({ phase: 'connecting', activeSessionId: null })).toBe('onboarding');
+  });
+
+  it('an error disconnect keeps the stream (its anchor and pointer are retained)', () => {
+    expect(view({ phase: 'error' })).toBe('message-stream');
+  });
+
+  it('the auth gate owns the view ahead of onboarding, even without a pointer', () => {
+    expect(view({ phase: 'auth-required', activeSessionId: null })).toBe('auth-gate');
+    expect(
+      view({
+        authElicitation: { mode: 'form', id: 'e-1', toolCallId: null, title: 'Login', description: null, fields: [] },
+      }),
+    ).toBe('auth-gate');
+  });
+
+  it('the demo replay owns the stream unconditionally — no auth gate, no onboarding', () => {
+    expect(view({ mode: 'demo', phase: 'auth-required', activeSessionId: null })).toBe('message-stream');
   });
 });
