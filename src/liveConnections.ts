@@ -193,7 +193,7 @@ type LiveConnection = {
    * Snapshot of the in-flight session switch (issue #17) — captured at stage,
    * consumed by exactly one commit or rollback, era-guarded (issue #19).
    */
-  stagedSwitch: { snapshot: SessionSwitchSnapshot; era: number } | null;
+  stagedSwitch: { snapshot: SessionSwitchSnapshot; era: number; sessionId: string; cwd: string } | null;
   /** Profile targeted by the in-flight connect — consumed on success (write-back). */
   pendingProfile: { id: string; target: LiveTarget; workspace: Workspace } | null;
   /**
@@ -384,7 +384,8 @@ function wireHandlers(entry: LiveConnection) {
     onReplayStart: () => port.resetDocument(),
     onSessionDeleted: (sessionId: string) => port.removeSession(sessionId),
     onSessionSwitchStage: (sessionId: string, cwd: string, era: number) => {
-      entry.stagedSwitch = { snapshot: port.stageSession(sessionId, cwd), era };
+      // sessionId/cwd ride along for the rollback toast's Retry (#217).
+      entry.stagedSwitch = { snapshot: port.stageSession(sessionId, cwd), era, sessionId, cwd };
     },
     onSessionSwitchCommit: (era: number) => {
       const staged = entry.stagedSwitch;
@@ -413,10 +414,20 @@ function wireHandlers(entry: LiveConnection) {
       // Surface the failure on a live connection only: after a disconnect
       // a stale error banner must not linger.
       if (usePanda.getState().connections[connectionId]?.connection.status === 'connected') {
-        port.setConnection({ error: t('live.switchFailed', { reason }) });
+        // Name the target session and offer the retry right in the toast
+        // (#217): "Session switch failed: Internal error" named nobody and
+        // had no way back. The raw reason rides along — protocol errors are
+        // developer-facing diagnostics, not noise.
+        const sessions = usePanda.getState().connections[connectionId]?.sessions ?? [];
+        const title = sessions.find((entry_) => entry_.sessionId === staged.sessionId)?.title ?? staged.sessionId;
+        const message = t('live.switchFailedTitled', { title, reason });
+        port.setConnection({ error: message });
         // The status-bar banner alone proved too quiet (#160): a failed
         // session/load looks like a dead click unless a toast says why.
-        notifyUser('error', t('live.switchFailed', { reason }));
+        notifyUser('error', message, {
+          label: t('live.retrySwitch'),
+          run: () => openLiveSession(connectionId, staged.sessionId, staged.cwd),
+        });
       }
     },
   };

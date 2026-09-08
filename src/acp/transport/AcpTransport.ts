@@ -41,4 +41,15 @@ export interface AcpTransport {
    * unsubscribe function. Optional; handlers are not replayed.
    */
   onError?(handler: (err: Error) => void): () => void;
+  /**
+   * Resolves with the socket-level close code once the socket's close event
+   * has fired — when the transport has sockets at all (WebSocket transports;
+   * omitted otherwise). Consumed for connect-failure attribution (#217):
+   * 1006 means the link never completed its handshake — refused, unreachable
+   * or rejected — which reads very differently from a live connection
+   * dropping. A promise, not a field, because browsers dispatch `error`
+   * before `close` on those failures: at error time the code has not
+   * happened yet, and only the close event carries it.
+   */
+  readonly closed?: Promise<number | null>;
 }

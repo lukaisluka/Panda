@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useToast } from '@astryxdesign/core/Toast';
+import { Button } from '@astryxdesign/core/Button';
 import { subscribeUserNotices } from '../userNotice';
 
 /**
@@ -16,6 +17,16 @@ export function UserNoticeToasts() {
         toast({
           body: notice.message,
           type: notice.kind === 'error' ? 'error' : 'info',
+          // The recovery action (#217) rides the trailing slot: a failed
+          // switch offers Retry right where the failure was announced.
+          endContent: notice.action ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              label={notice.action.label}
+              clickAction={notice.action.run}
+            />
+          ) : undefined,
         });
       }),
     // useToast returns a stable imperative fn; the subscription must bind

@@ -18,6 +18,17 @@ import type { AcpTransport } from './AcpTransport';
 export class WebSocketTransport implements AcpTransport {
   private readonly url: string;
   private stream: ReturnType<typeof createBrowserWebSocketStream> | null = null;
+  /** The `closed` promise's resolver — first resolve wins (close beats teardown). */
+  private resolveClosed!: (code: number | null) => void;
+  /**
+   * Resolves with the socket's close code when its close event fires (#217,
+   * see AcpTransport.closed). On a refused/unreachable connect the browser
+   * fires `error` first and `close` second; callers awaiting this promise
+   * always see the code, never the pre-close void.
+   */
+  readonly closed: Promise<number | null> = new Promise((resolve) => {
+    this.resolveClosed = resolve;
+  });
   /** One instance, one connection attempt — EVER, including failed ones. */
   private connected = false;
   /** First settlement wins: one close-or-error event per connection. */
@@ -53,6 +64,9 @@ export class WebSocketTransport implements AcpTransport {
     // observed via the socket's close event, never swallowed silently.
     const stream = this.stream;
     this.stream = null;
+    // Stream teardown may beat the socket's own close event; `closed` must
+    // still settle so no attribution path hangs on it (null = no code seen).
+    this.resolveClosed(null);
     void stream?.readable.cancel().catch(() => {});
     void stream?.writable.abort().catch(() => {});
   }
@@ -75,6 +89,7 @@ export class WebSocketTransport implements AcpTransport {
    */
   private observedWebSocketConstructor(): WebSocketConstructor {
     const settle = this.settle.bind(this);
+    const resolveClosed = this.resolveClosed;
     return function ObservedWebSocket(
       this: unknown,
       url: string | URL,
@@ -90,7 +105,7 @@ export class WebSocketTransport implements AcpTransport {
       // Browser WebSockets cannot carry custom headers (the SDK documents
       // them as Node-only), so only url/protocols are forwarded natively.
       const socket = new NativeWebSocket(url, protocols);
-      observeSocket(socket, settle);
+      observeSocket(socket, settle, resolveClosed);
       return socket;
     } as unknown as WebSocketConstructor;
   }
@@ -102,8 +117,7 @@ export class WebSocketTransport implements AcpTransport {
     if (err === undefined) {
       for (const handler of this.closeHandlers) handler();
     } else {
-      const error = toError(err);
-      for (const handler of this.errorHandlers) handler(error);
+      for (const handler of this.errorHandlers) handler(toError(err));
     }
   }
 }
@@ -113,7 +127,11 @@ type ObservableSocket = {
 };
 
 /** Attaches the transport's settlement to one socket's lifecycle events. */
-function observeSocket(socket: ObservableSocket, settle: (err?: unknown) => void): void {
+function observeSocket(
+  socket: ObservableSocket,
+  settle: (err?: unknown) => void,
+  resolveClosed: (code: number | null) => void,
+): void {
   if (typeof socket.addEventListener !== 'function') {
     // Not silent, but not fatal: the SDK connection layer observes closure
     // through its own stream consumption; the transport's handlers are the
@@ -121,8 +139,17 @@ function observeSocket(socket: ObservableSocket, settle: (err?: unknown) => void
     console.warn('[panda/acp] transport socket has no addEventListener — close/error handlers inert for this connection');
     return;
   }
-  socket.addEventListener('close', () => settle(undefined));
+  socket.addEventListener('close', (event) => {
+    resolveClosed(readCloseCode(event));
+    settle(undefined);
+  });
   socket.addEventListener('error', (event) => settle(event));
+}
+
+/** The WebSocket close code from a close event, when the platform exposes it. */
+function readCloseCode(event: unknown): number | null {
+  const code = (event as { code?: unknown } | undefined)?.code;
+  return typeof code === 'number' ? code : null;
 }
 
 /**
