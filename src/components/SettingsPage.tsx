@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Activity, ArrowLeft, Bot, Check, Copy, Minus, Pencil, Play, Plug, Plus, SlidersHorizontal, Trash2, WandSparkles } from 'lucide-react';
+import { Activity, ArrowLeft, Bot, Check, Copy, MessagesSquare, Minus, Pencil, Play, Plug, PlugZap, Plus, SlidersHorizontal, Trash2, WandSparkles } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { useImperativeAlertDialog } from '@astryxdesign/core/AlertDialog';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
@@ -15,6 +15,8 @@ import {
   subscribeProfiles,
   type AgentProfile,
 } from '../profiles';
+import { testLiveTarget } from '../liveConnections';
+import { useNewSessionIntent } from '../newSessionIntent';
 import { hasStdioHost } from '../acp/transport/stdioHost';
 import {
   loadMcpServers,
@@ -336,11 +338,15 @@ function FontSizeStepper({ knob }: { knob: FontSizeKnob }) {
 /** The Agent 配置 page (#117, #140): the top bar carries the section title;
  * the card's group head carries the create action (Codex puts page actions
  * on the group head, right-aligned) — hidden while creating. The card's body
- * is the avatar-row list (a row swaps for the edit form in place). */
+ * is the avatar-row list (a row swaps for the edit form in place). A
+ * successful create lands on the「开始会话」CTA (#221) instead of dead-ending
+ * back on the list. */
 function AgentsSection({ profiles }: { profiles: AgentProfile[] }) {
   const { t } = useI18n();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  // The profile a create just saved — drives the post-save CTA block (#221).
+  const [created, setCreated] = useState<AgentProfile | null>(null);
   // #160: destructive confirm used to be window.confirm.
   const deleteAlert = useImperativeAlertDialog();
 
@@ -356,6 +362,7 @@ function AgentsSection({ profiles }: { profiles: AgentProfile[] }) {
             icon={<Plus size={12} />}
             clickAction={() => {
               setEditingId(null);
+              setCreated(null);
               setCreating(true);
             }}
           />
@@ -366,16 +373,48 @@ function AgentsSection({ profiles }: { profiles: AgentProfile[] }) {
           onCancel={() => setCreating(false)}
           onSave={(profile) => {
             if (!saveProfiles([...loadProfiles(), profile])) notifyUser('error', t('settings.notice.saveFailed'));
+            else setCreated(profile);
             setCreating(false);
           }}
         />
+      ) : created ? (
+        <div className="settings-profile-saved">
+          <div className="settings-profile-saved-text">
+            <p className="settings-profile-saved-title">{t('settings.profileSavedTitle')}</p>
+            <p className="settings-profile-saved-desc">
+              {t('settings.profileSavedDesc', { name: created.name })}
+            </p>
+          </div>
+          <div className="settings-profile-saved-actions">
+            <Button
+              variant="primary"
+              size="sm"
+              label={t('settings.startSessionCtaNamed', { name: created.name })}
+              icon={<MessagesSquare size={12} />}
+              clickAction={() => {
+                // Deep link (#221): back to the session view, new-session
+                // picker open with the fresh profile preselected.
+                navigate('main');
+                useNewSessionIntent.getState().request(created.id);
+                setCreated(null);
+              }}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              label={t('settings.done')}
+              clickAction={() => setCreated(null)}
+            />
+          </div>
+        </div>
       ) : profiles.length === 0 ? (
         <div className="settings-profile-empty">
           <Bot size={22} className="settings-profile-empty-icon" />
           <p className="settings-profile-empty-title">{t('settings.noProfiles')}</p>
           <p className="settings-profile-empty-desc">{t('settings.noProfilesDesc')}</p>
         </div>
-      ) : (
+      ) : null}
+      {!creating && profiles.length > 0 && (
         <div className="settings-profile-list">
           {profiles.map((profile) =>
             editingId === profile.id ? (
@@ -914,21 +953,45 @@ function ProfileForm({ initial, onSave, onCancel }: {
   useEffect(() => subscribeMcpServers(setMcpServers), []);
   const [showErrors, setShowErrors] = useState(false);
   const errors = profileDraftErrors(draft);
+  // 测试连接 (#221): the handshake-then-drop probe's verdict. The run token
+  // drops late settles — a second click or an unmounted form must not write
+  // a stale verdict over a newer one.
+  const [test, setTest] = useState<
+    | { state: 'running' }
+    | { state: 'ok'; agentName: string; protocolVersion: number }
+    | { state: 'fail'; error: string }
+    | null
+  >(null);
+  const testRun = useRef(0);
   // Astryx TextInput surfaces errors through its status object; they appear
   // only after a rejected submit, never while the user is still typing.
   const statusOf = (field: 'name' | 'url' | 'command' | 'path') =>
     showErrors && errors[field] ? { type: 'error' as const, message: errors[field] } : undefined;
 
   const set = (patch: Partial<ProfileDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
+  const draftWorkspace = () =>
+    draft.workspace.kind === 'none'
+      ? { kind: 'none' as const }
+      : { kind: 'local-directory' as const, path: draft.workspace.path.trim() };
+  const runTest = () => {
+    const token = ++testRun.current;
+    setTest({ state: 'running' });
+    void testLiveTarget(
+      draft.type === 'stdio'
+        ? { kind: 'stdio', command: draft.command, args: draft.args }
+        : { kind: 'websocket', url: draft.url },
+      draftWorkspace(),
+    ).then((verdict) => {
+      if (testRun.current !== token) return;
+      setTest(verdict.ok ? { state: 'ok', ...verdict } : { state: 'fail', error: verdict.error });
+    });
+  };
   const submit = () => {
     if (Object.keys(errors).length > 0) {
       setShowErrors(true);
       return;
     }
-    const workspace =
-      draft.workspace.kind === 'none'
-        ? { kind: 'none' as const }
-        : { kind: 'local-directory' as const, path: draft.workspace.path.trim() };
+    const workspace = draftWorkspace();
     onSave(
       draft.type === 'stdio'
         ? { id: initial?.id ?? newProfileId(), name: draft.name.trim(), kind: 'stdio', command: draft.command.trim(), args: draft.args.trim(), workspace, mcpServerIds: draft.mcpServerIds }
@@ -1047,9 +1110,29 @@ function ProfileForm({ initial, onSave, onCancel }: {
       </div>
       {initial && <p className="settings-card-desc">{t('settings.editNote')}</p>}
       <div className="settings-form-actions">
+        {/* 测试连接 (#221): an endpoint typo should surface here, not at the
+            first session. Handshake-then-drop — no slot, no sidebar trace. */}
+        <Button
+          variant="secondary"
+          size="sm"
+          label={test?.state === 'running' ? t('settings.testConnectionRunning') : t('settings.testConnection')}
+          icon={<PlugZap size={12} />}
+          isDisabled={test?.state === 'running' || (draft.type === 'websocket' ? !draft.url.trim() : !draft.command.trim())}
+          clickAction={runTest}
+        />
         <Button variant="primary" size="sm" label={initial ? t('settings.save') : t('settings.create')} clickAction={submit} />
         <Button variant="ghost" size="sm" label={t('settings.cancel')} clickAction={onCancel} />
       </div>
+      {test?.state === 'ok' && (
+        <p className="settings-test-result settings-test-result--ok">
+          {t('settings.testOk', { agent: test.agentName, v: String(test.protocolVersion) })}
+        </p>
+      )}
+      {test?.state === 'fail' && (
+        <p className="settings-test-result settings-test-result--fail" title={test.error}>
+          {t('settings.testFailed', { error: test.error })}
+        </p>
+      )}
     </div>
   );
 }

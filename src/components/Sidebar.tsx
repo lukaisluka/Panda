@@ -21,10 +21,12 @@ import {
 } from 'lucide-react';
 import {
   orderedSessions,
-  useConnectionOrder,
   usePanda,
+  useConnectionOrder,
+  type SessionEntry,
   type SessionMode,
 } from '../store';
+import type { SessionDocument } from '../protocol/types';
 import { useConnectionLifecycle } from '../projector/hooks';
 import { isLinkUp, type AttentionReason, type ConnectionPhase } from '../projector/connectionLifecycle';
 import { isDirectConnectionId, reconcileProfileSlots } from '../liveConnections';
@@ -36,6 +38,7 @@ import { loadProfiles, newProfileId, profileEndpoint, saveProfiles, subscribePro
 import { navigate, useHashRoute } from '../routes';
 import { notifyUser } from '../userNotice';
 import { cwdToWorkspace, workspaceLabel } from '../workspace';
+import { useNewSessionIntent } from '../newSessionIntent';
 import type { LiveSessionFacade } from '../useLiveSession';
 import { NewSessionDialog } from './NewSessionDialog';
 import { SettingsSideNav, type SettingsSectionId } from './SettingsPage';
@@ -45,7 +48,7 @@ import './Sidebar.css';
  * Session-centered sidebar (IA refactor phase 3): every Agent 配置 renders as
  * a section — online ones with live sessions, offline ones as seeded
  * disconnected slots carrying the endpoint's remembered sessions (历史可见,
- * hover = 连接). Connection management lives in the settings page; the only
+ * click = 连接, #221). Connection management lives in the settings page; the
  * sidebar entry points are 新建会话 (picker dialog) and 添加 agent (settings).
  * 分组与会话行都按最后活动时间排 (#175), 切换不移动任何位置; each group row
  * subscribes narrowly to its own slot so a streaming connection only
@@ -71,6 +74,19 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose, settingsSection
     if (onSettings) navigate('main');
   };
   const [newSessionOpen, setNewSessionOpen] = useState(false);
+  // The preselect the dialog should highlight (#221): set together with the
+  // open flag by the settings page's post-create CTA, cleared when the
+  // dialog closes or its pick starts a session.
+  const [newSessionHighlight, setNewSessionHighlight] = useState<string | null>(null);
+  // The settings page's「开始会话」CTA deep-links here (#221): consume the
+  // one-shot intent by opening the picker with the new profile highlighted.
+  const intentProfileId = useNewSessionIntent((s) => s.profileId);
+  useEffect(() => {
+    if (intentProfileId === null) return;
+    setNewSessionHighlight(intentProfileId);
+    setNewSessionOpen(true);
+    useNewSessionIntent.getState().consume();
+  }, [intentProfileId]);
   const orderedIds = useConnectionOrder();
   const [profiles, setProfiles] = useState<AgentProfile[]>(() => loadProfiles());
   // The settings page also writes profiles (CRUD) — storage is the single
@@ -213,13 +229,18 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose, settingsSection
       {newSessionOpen && (
         <NewSessionDialog
           isOpen
-          onOpenChange={setNewSessionOpen}
+          onOpenChange={(open) => {
+            setNewSessionOpen(open);
+            if (!open) setNewSessionHighlight(null);
+          }}
           onStarted={() => {
+            setNewSessionHighlight(null);
             exitSettings();
             onMobileClose();
           }}
           live={live}
           profiles={profiles}
+          highlightProfileId={newSessionHighlight}
         />
       )}
     </aside>
@@ -336,18 +357,32 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
         <button
           type="button"
           onClick={() => {
-            live.foreground(connectionId);
+            // An offline 配置 row's click IS the connect (#221) — the seeded
+            // slot has nothing to foreground yet, and「点行即连」is what a
+            // first-time visitor expects. Every other phase foregrounds:
+            // connecting is already dialing, connected/auth rows have content,
+            // and an error row's affordances live in its recovery block.
+            if (offline && profile) live.connectProfile(profile);
+            else live.foreground(connectionId);
             exitSettings();
             onMobileClose();
           }}
-          title={slot.connection.url ?? title}
+          title={
+            offline && profile
+              ? t('side.connectProfileTooltip', { name: title, url: profileEndpoint(profile) })
+              : slot.connection.url ?? title
+          }
           className={`sidebar-connection-btn ${
             isActiveConnection ? 'sidebar-connection-btn--active' : ''
           } ${connected ? '' : 'sidebar-connection-btn--offline'}`}
         >
           <SlotStatusDot phase={phase} running={lifecycle.running} />
           <span className="truncate sidebar-row-title">{title}</span>
-          {isDirectConnectionId(connectionId) && <span className="sidebar-temp-badge">{t('side.temp')}</span>}
+          {isDirectConnectionId(connectionId) && (
+            <span className="sidebar-temp-badge" title={t('side.tempTooltip')}>
+              {t('side.temp')}
+            </span>
+          )}
           {slot.connection.agentName && (
             <span className="truncate sidebar-row-sub">{slot.connection.agentName}</span>
           )}
@@ -464,7 +499,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
             );
             const canDelete = effectiveCapability('delete', slot.capabilities, PANDA_HOST_CAPABILITIES);
             const canSwitch = connected ? loadSession.available && !lifecycle.busy : hasDoc;
-            const label = entry.title ?? `${workspaceLabel(entry.cwd)} · ${entry.sessionId.slice(-6)}`;
+            const label = sessionRowLabel(entry, slot.docs[entry.sessionId]);
             const updated = formatRelativeTime(entry.updatedAt, t);
             return (
               <div key={entry.sessionId} className="sidebar-session">
@@ -486,7 +521,7 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
                             ? loadSession.reason === 'unavailable-on-host'
                               ? t('side.disabled.host')
                               : t('side.disabled.agent')
-                            : entry.cwd
+                            : sessionRowMeta(entry)
                   }
                   className={`sidebar-session-btn ${
                     foregroundSession
@@ -568,4 +603,47 @@ function ConnectionGroupRow({ connectionId, profile, isActiveConnection, live, o
       </Dialog>
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Session-row labeling (#221): a session without a title used to show
+// `cwd · short-id`, which helped nobody find anything. The label prefers the
+// conversation's own opening words; the id demotes to hover meta.
+// ---------------------------------------------------------------------------
+
+/** The first user message's text, whitespace-collapsed — the conversation's
+ * own name for itself. Image-only openers yield null (nothing to show);
+ * later turns are never consulted — the FIRST message is the identity. */
+export function firstUserMessageText(doc: SessionDocument): string | null {
+  for (const turn of doc.turns) {
+    for (const block of turn.blocks) {
+      if (block.kind !== 'user_message') continue;
+      const text = block.content
+        .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+        .map((part) => part.text)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (text) return text;
+    }
+  }
+  return null;
+}
+
+/** The row's visible label: agent title → first user message (truncated) →
+ * workspace label. Only sessions loaded locally have a document, so the
+ * fallback improves as history gets read — untitled unread rows keep the
+ * workspace label until then. */
+export function sessionRowLabel(entry: SessionEntry, doc: SessionDocument | undefined, maxChars = 48): string {
+  if (entry.title) return entry.title;
+  const opening = doc ? firstUserMessageText(doc) : null;
+  if (opening) return opening.length > maxChars ? `${opening.slice(0, maxChars)}…` : opening;
+  return workspaceLabel(entry.cwd);
+}
+
+/** The row's hover meta when no agent title exists: workspace plus the
+ * session's short id — the id stays reachable (#221's「次要 meta」) without
+ * squatting the visible label. */
+export function sessionRowMeta(entry: SessionEntry): string {
+  return `${workspaceLabel(entry.cwd)} · ${entry.sessionId.slice(-6)}`;
 }

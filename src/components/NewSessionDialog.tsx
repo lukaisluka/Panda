@@ -29,12 +29,16 @@ import { t } from '../i18n';
  * it folds behind an advanced toggle (#157), in the agentless 空态 it stays
  * expanded as the only entry.
  */
-export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profiles }: {
+export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profiles, highlightProfileId }: {
   isOpen: boolean;
   onOpenChange(open: boolean): void;
   onStarted(): void;
   live: LiveSessionFacade;
   profiles: AgentProfile[];
+  /** The row to suggest (#221): the settings page's post-create CTA
+   * deep-links here with the freshly saved profile. Visual only — picking
+   * stays the user's click. */
+  highlightProfileId?: string | null;
 }) {
   const { t } = useI18n();
   // Per-profile lifecycle phase, as flat arrays of primitives so the
@@ -101,7 +105,7 @@ export function NewSessionDialog({ isOpen, onOpenChange, onStarted, live, profil
               <button
                 key={profile.id}
                 type="button"
-                className="nsd-agent"
+                className={`nsd-agent ${highlightProfileId === profile.id ? 'nsd-agent--suggested' : ''}`}
                 disabled={action === 'blocked'}
                 onClick={() =>
                   start(() =>

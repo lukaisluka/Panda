@@ -114,6 +114,7 @@ export function MessageStream({ onResolvePermission, onResolveElicitation, onOpe
   // The Scroller component is created once per instance so it can capture
   // scrollerRef/handleScroll; identity must stay stable across renders
   // (changing component types in `components` remounts the scroller).
+  const transcriptLabel = t('stream.transcript');
   const components = useMemo(() => {
     const Scroller = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
       function StreamScroller(props, ref) {
@@ -121,6 +122,12 @@ export function MessageStream({ onResolvePermission, onResolveElicitation, onOpe
         return (
           <div
             {...rest}
+            // role=log names the region for screen readers (#221): the
+            // scroller was focusable but unidentified — SRs read a bare
+            // tab-stop where the conversation lives. log's implicit
+            // aria-live="polite" announces appended turns.
+            role="log"
+            aria-label={transcriptLabel}
             className={`message-scroller ${className ?? ''}`}
             onScroll={(event) => {
               onScroll?.(event);
@@ -144,7 +151,7 @@ export function MessageStream({ onResolvePermission, onResolveElicitation, onOpe
       },
     );
     return { Scroller, Header: StreamHeader, Footer: StreamFooter };
-  }, [handleScroll, markUserScroll, markUserScrollFromInput]);
+  }, [handleScroll, markUserScroll, markUserScrollFromInput, transcriptLabel]);
 
   // Stick to the bottom on every content change (new items AND last-item
   // growth) while pinned, rate-limited so burst replays don't churn the

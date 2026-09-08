@@ -112,10 +112,19 @@ export const messages = {
   'stream.compacted': { en: 'Context compacted', zh: '上下文已压缩' },
   'stream.compactFailed': { en: 'Context compaction failed', zh: '上下文压缩失败' },
   'stream.compactFailedReason': { en: 'Context compaction failed: {error}', zh: '上下文压缩失败:{error}' },
+  // The scroller's a11y name (#221): focusable but unnamed read as a bare
+  // tab-stop to screen readers.
+  'stream.transcript': { en: 'Conversation transcript', zh: '对话记录' },
 
   // ---- PermissionCard ----
   'perm.title': { en: 'Agent requests approval', zh: 'Agent 请求批准' },
   'perm.unknownOption': { en: '{name} (unknown option type)', zh: '{name}(未知选项类型)' },
+  // What an「always」option actually remembers (#221): Panda's session-scoped
+  // memory, keyed by the action's identity — not an agent-side setting.
+  'perm.alwaysScopeTooltip': {
+    en: 'Remembered for this session only: identical requests won’t ask again. It expires when the session ends or you switch.',
+    zh: '仅本会话内记住:相同操作不再询问;会话结束或切换后失效。',
+  },
   'perm.deniedByPolicy': { en: 'Denied by policy', zh: '已由策略拒绝' },
   'perm.autoAnswered': { en: 'Auto-answered {kind} (not by you)', zh: '已代答 {kind}(非用户决定)' },
   'perm.autoCancelled': {
@@ -275,6 +284,10 @@ export const messages = {
   'side.backToSessionTooltip': { en: 'Leave settings and return to the session view', zh: '离开设置,回到会话界面' },
   'side.profileNamePrompt': { en: 'Profile name', zh: '配置名称' },
   'side.temp': { en: 'Temp', zh: '临时' },
+  'side.tempTooltip': {
+    en: 'Temporary direct connection — not saved as a profile; it ends when disconnected',
+    zh: '临时直连:未存为配置,断开即结束',
+  },
   'side.needsAttention': { en: 'Needs attention', zh: '需要关注' },
   'side.attentionTooltip': { en: 'Needs attention: {reasons}', zh: '需要关注:{reasons}' },
   'side.saveProfile': { en: 'Save as profile', zh: '存为配置' },
@@ -479,6 +492,22 @@ export const messages = {
   'settings.save': { en: 'Save', zh: '保存' },
   'settings.create': { en: 'Create', zh: '创建' },
   'settings.cancel': { en: 'Cancel', zh: '取消' },
+  // 测试连接 (#221): handshake-then-drop verdict on the profile form.
+  'settings.testConnection': { en: 'Test connection', zh: '测试连接' },
+  'settings.testConnectionRunning': { en: 'Testing…', zh: '测试中…' },
+  'settings.testOk': {
+    en: 'Reached: {agent} (protocol v{v}) — the link was closed after the handshake',
+    zh: '连通:{agent}(协议 v{v})——握手后已断开',
+  },
+  'settings.testFailed': { en: 'Failed: {error}', zh: '失败:{error}' },
+  // Post-create CTA (#221): a saved profile used to dead-end on the list.
+  'settings.profileSavedTitle': { en: 'Profile saved', zh: '配置已保存' },
+  'settings.profileSavedDesc': {
+    en: '“{name}” is ready — its slot appears in the sidebar.',
+    zh: '「{name}」已就绪,侧栏会出现它的分组。',
+  },
+  'settings.startSessionCtaNamed': { en: 'Start a session with {name}', zh: '用 {name} 开始会话' },
+  'settings.done': { en: 'Done', zh: '完成' },
   'settings.profileName': { en: 'Profile name', zh: '配置名称' },
   'settings.profileNamePlaceholder': { en: 'e.g. test-agent', zh: '如:test-agent' },
   'settings.endpoint': { en: 'Endpoint', zh: '端点地址' },
@@ -605,6 +634,10 @@ export const messages = {
     zh: 'stdio agent 需要在 Panda 桌面版中连接',
   },
   'acp.newSessionFailed': { en: 'New session failed: {error}', zh: '新建会话失败: {error}' },
+  // 测试连接 (#221) guard rails: the missing-endpoint refusal, and the
+  // never-settled sentinel — the probe's handlers must overwrite it.
+  'acp.testMissingEndpoint': { en: 'An endpoint is required to test', zh: '缺少端点,无法测试' },
+  'acp.testNoOutcome': { en: 'Test produced no result', zh: '测试未返回结果' },
   // ---- operation notices (#160): console-only guard/failure paths surfaced as toasts ----
   'acp.notice.notConnected': { en: 'Not connected to the agent — reconnect first.', zh: '尚未连接 agent,请先重连。' },
   'acp.notice.busy': { en: 'The agent is busy (a turn or a session switch is still in flight) — try again shortly.', zh: 'agent 正忙(回合或会话切换仍在进行),请稍后再试。' },

@@ -100,6 +100,15 @@ export function PermissionCard({ request, onResolve }: {
             variant={option.kind.startsWith('reject') ? 'secondary' : 'primary'}
             label={ANSWERABLE_KINDS.has(option.kind) ? option.name : t('perm.unknownOption', { name: option.name })}
             isDisabled={!ANSWERABLE_KINDS.has(option.kind)}
+            // An 'always' option's name (「Always allow `cat` commands」)
+            // promises a scope the protocol never states (#221): the memory
+            // is Panda's own, session-scoped, keyed by the action's identity.
+            // The tooltip says what「always」actually buys.
+            tooltip={
+              option.kind === 'allow_always' || option.kind === 'reject_always'
+                ? t('perm.alwaysScopeTooltip')
+                : undefined
+            }
             clickAction={() => onResolve(option.kind)}
           />
         ))}
