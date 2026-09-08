@@ -1,0 +1,35 @@
+name: PR Title
+
+# PR title 必须是 Conventional Commits(英文),规范 SSOT 在 AGENTS.md
+# 「Commit convention」一节;type/scope 集合改动时两边同步。
+# squash-merge 以 PR title 为提交主题,故只 lint title,不 lint 分支上的
+# 中间提交。
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  conventional-title:
+    runs-on: ubuntu-latest
+    steps:
+      # 纯正则校验,无第三方 action(与仓库手写传统一致,不增供应链面);
+      # 标题取自事件载荷,无需 checkout
+      - name: Lint PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|refactor|perf|test|chore|ci|build)(\((ui|acp|desktop|test-agent|docs)\))?: .+( \(#[0-9]+\))+$'
+          if [[ "$PR_TITLE" =~ $pattern ]]; then
+            echo "OK: $PR_TITLE"
+          else
+            echo "::error::PR title must match: <type>(<scope>): <imperative English subject> (#issue)"
+            echo "::error::types: feat fix docs refactor perf test chore ci build"
+            echo "::error::scopes (optional): ui acp desktop test-agent docs"
+            echo "::error::trailing issue reference required, e.g. (#227)"
+            echo "::error::got: $PR_TITLE"
+            exit 1
+          fi
