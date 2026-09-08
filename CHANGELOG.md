@@ -14,6 +14,14 @@ follow the releases published from this repository.
   link; web WebSocket + bridge guide), and a collapsed path for
   existing-agent users. Per-locale doc links target the matching mirror.
 
+### Changed
+
+- **Launch facade repositioning (#229)** — the OG/share card and page meta
+  now speak to agent developers ("your agent speaks ACP, Panda is its UI").
+  The card's chips carry the integration bar itself (`initialize`,
+  `session/new`, `session/prompt`, `session/update`) instead of ready-made
+  agent names, and its source lives in `branding/og-card.html`.
+
 ## [0.1.1] - 2026-09-07
 
 Bug-hunt hardening (18 confirmed fixes from #182/#183) plus the MCP config

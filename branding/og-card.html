@@ -1,0 +1,102 @@
+<!doctype html>
+<!-- Panda OG / social card source (#229). Render the .card element into
+     public/og-image.png at exactly 1200×630 device pixels — e.g. Playwright
+     `page.locator('#card').screenshot({ path: 'public/og-image.png' })` from
+     a context with deviceScaleFactor 1 (on a 2× display the shot comes out
+     2400×1260; downsample to 1200×630, e.g. `sips -Z 1200`). The background
+     gradient stops are the retro badge's own corner pixels (sampled from
+     branding/clean/concept-retro-badge.png), kept pinned here so the card no
+     longer depends on re-sampling. The chips are the ACP integration bar
+     itself — three requests plus one notification — per
+     docs/agent-quickstart.md, replacing the old card's ready-made agent name
+     chips after the agent-developer repositioning (#198). -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Panda OG card</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #f6e6c3;
+      }
+      .card {
+        box-sizing: border-box;
+        width: 1200px;
+        height: 630px;
+        padding: 44px 120px 76px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        text-align: center;
+        color: #16130e;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial,
+          sans-serif;
+        background: linear-gradient(
+          135deg,
+          #f5e2c0 0%,
+          #f9e7bb 50%,
+          #f6e6c3 100%
+        );
+        position: relative;
+      }
+      .badge {
+        width: 200px;
+        height: 200px;
+      }
+      .tagline {
+        margin: 0;
+        font-size: 60px;
+        line-height: 1.14;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .chips {
+        display: flex;
+        gap: 14px;
+        font-family:
+          ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 23px;
+      }
+      .chips span {
+        padding: 9px 18px;
+        border-radius: 999px;
+        background: rgba(22, 19, 14, 0.07);
+        border: 1.5px solid rgba(22, 19, 14, 0.16);
+        white-space: nowrap;
+      }
+      .caption {
+        margin: 0;
+        font-size: 24px;
+        color: rgba(22, 19, 14, 0.62);
+      }
+      .site {
+        position: absolute;
+        bottom: 24px;
+        left: 0;
+        right: 0;
+        font-family:
+          ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 19px;
+        color: rgba(22, 19, 14, 0.5);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card" id="card">
+      <img class="badge" src="clean/concept-retro-badge.png" alt="" />
+      <p class="tagline">Your agent speaks ACP.<br />Panda is its UI.</p>
+      <div class="chips">
+        <span>initialize</span>
+        <span>session/new</span>
+        <span>session/prompt</span>
+        <span>session/update</span>
+      </div>
+      <p class="caption">3 requests + 1 notification — the whole integration</p>
+      <p class="site">github.com/lukaisluka/Panda</p>
+    </div>
+  </body>
+</html>
