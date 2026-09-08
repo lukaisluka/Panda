@@ -82,7 +82,8 @@
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.05em; /* tracking-wider */
-  color: var(--color-faint);
+  /* 分组标签是导航信息,faint 装饰档过不了 AA(#212) */
+  color: var(--color-muted);
 }
 
 .sidebar-sessions {
@@ -266,7 +267,8 @@
 .sidebar-empty {
   padding: 8px 12px; /* px-3 py-2 */
   font-size: var(--panda-size-chrome);
-  color: var(--color-faint);
+  /* 首启引导是必读信息,faint 装饰档过不了 AA(#212) */
+  color: var(--color-muted);
   display: flex;
   flex-direction: column;
   align-items: flex-start;

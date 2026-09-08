@@ -37,7 +37,7 @@ export function StatusBar({ doc, connection, mode, onAuthenticate }: {
               {lifecycle.phase === 'connecting' ? (
                 <>
                   <Spinner size="sm" />
-                  <span className="statusbar-faint">{t('status.connecting')}</span>
+                  <span className="statusbar-muted">{t('status.connecting')}</span>
                 </>
               ) : lifecycle.phase === 'error' ? (
                 <span className="truncate statusbar-error" title={lifecycle.error ?? undefined}>
@@ -48,11 +48,11 @@ export function StatusBar({ doc, connection, mode, onAuthenticate }: {
                   {t('conn.authRequired')}
                 </span>
               ) : lifecycle.phase === 'disconnected' ? (
-                <span className="statusbar-faint">{t('conn.disconnected')}</span>
+                <span className="statusbar-muted">{t('conn.disconnected')}</span>
               ) : lifecycle.phase === 'switching-session' ? (
                 <>
                   <Spinner size="sm" />
-                  <span className="statusbar-faint">{t('status.switching')}</span>
+                  <span className="statusbar-muted">{t('status.switching')}</span>
                 </>
               ) : lifecycle.phase === 'connected-degraded' ? (
                 // A failed switch (or similar non-fatal failure) leaves the
@@ -135,7 +135,7 @@ export function StatusBar({ doc, connection, mode, onAuthenticate }: {
               ) : (
                 <>
                   <CircleDot size={13} className="statusbar-accent-icon" />
-                  <span className="statusbar-faint">{t('status.ready')}</span>
+                  <span className="statusbar-muted">{t('status.ready')}</span>
                 </>
               )}
             </span>
