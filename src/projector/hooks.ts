@@ -14,7 +14,7 @@ import { useActiveConnection, useActiveDoc, useActiveSwitching, usePanda } from 
 import type { ForegroundSessionController } from '../session-controller';
 import { modeStateFromConfigOptions } from '../protocol/modes';
 import { projectMessageStream, type FlatItem } from './messageStream';
-import { connectionLifecycle, foregroundLifecycle, type ConnectionLifecycle, type ForegroundLifecycle } from './connectionLifecycle';
+import { connectionLifecycle, connectionPhase, foregroundLifecycle, mainView, type ConnectionLifecycle, type ForegroundLifecycle, type MainView } from './connectionLifecycle';
 
 /** The virtualized stream's item list; item identities survive unrelated churn. */
 export function useMessageStreamItems(): FlatItem[] {
@@ -60,4 +60,24 @@ export function useForegroundLifecycle(): ForegroundLifecycle {
 export function useConnectionLifecycle(connectionId: string): ConnectionLifecycle | null {
   const slot = usePanda((s) => s.connections[connectionId]);
   return useMemo(() => (slot ? connectionLifecycle(slot) : null), [slot]);
+}
+
+/** Which surface owns the content column: auth gate, first-run onboarding
+ * (#200), or the message stream. Onboarding is pointer-decided (#218): a
+ * retained document stays readable after a clean disconnect. */
+export function useMainView(): MainView {
+  const mode = usePanda((s) => s.mode);
+  const connection = useActiveConnection();
+  const switching = useActiveSwitching() !== null;
+  const activeSessionId = usePanda((s) => s.activeSessionId);
+  return useMemo(
+    () =>
+      mainView({
+        mode,
+        phase: connectionPhase(connection.status, connection.error, switching),
+        authElicitation: connection.authElicitation,
+        activeSessionId,
+      }),
+    [mode, connection, switching, activeSessionId],
+  );
 }
