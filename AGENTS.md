@@ -13,6 +13,23 @@ Five canonical triage roles plus this repo's sixth role `claimed`
 (issue claimed, work in flight; claim comment names the worktree/branch).
 Label strings are identical to role names. See `docs/agents/triage-labels.md`.
 
+### Commit convention
+
+Commit subjects and PR titles follow Conventional Commits in English:
+
+```
+<type>(<scope>): <imperative English subject> (#issue) (#pr)
+```
+
+Types: `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `chore`, `ci`,
+`build`. Scope is optional and names a repo area: `ui`, `acp`, `desktop`,
+`test-agent`, `docs`. Keep the trailing issue/PR references — they are the
+audit trail back to the tracker (squash-merge appends the PR number
+automatically). Only the subject line is constrained; body and footer stay
+free-form. Not retroactive: history predating this section is left as-is.
+Enforcement is by convention (this file), not tooling — no commitlint/husky;
+a CI PR-title lint may follow later (#225).
+
 ### Domain docs
 
 Single-context: `CONTEXT.md` and `docs/adr/` at the repo root, created
