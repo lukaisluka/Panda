@@ -2,7 +2,7 @@
   "name": "panda",
   "private": true,
   "version": "0.1.1",
-  "description": "Panda — a universal ACP (Agent Client Protocol) client with a meticulously crafted message stream",
+  "description": "Panda — a ready-made client for agent developers: your agent speaks ACP, Panda is its UI",
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {

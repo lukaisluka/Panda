@@ -99,7 +99,7 @@ function MainScreen() {
     ? (settingsSectionMeta ? t(settingsSectionMeta.descKey) : null)
     : liveActive
       ? (connection.url ?? 'acp')
-      : 'acp://claude-code · demo replay';
+      : 'acp://demo-agent · demo replay';
 
   return (
     <div className="app-shell">

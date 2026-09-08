@@ -184,7 +184,7 @@ export function Sidebar({ mode, live, mobileOpen, onMobileClose, settingsSection
               ? footerAgent
                 ? `${footerAgent} · live`
                 : 'acp · live'
-              : 'claude-code · replay'}
+              : 'demo-agent · replay'}
           </span>
           <IconButton
             variant="ghost"

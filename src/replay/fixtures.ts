@@ -577,7 +577,7 @@ export function mainScenario(): ReplayStep[] {
 
 export function followUpScenario(userContent: AcpContentBlock[]): ReplayStep[] {
   const reply =
-    '（demo 回放）Phase 0 还没有接真 agent——你的消息已经走完整条链路：composer → `user_message` 事件 → reducer → 消息流渲染。Phase 1 接上 claude-agent-acp 之后，这里会是 Claude Code 的真实回复。';
+    '（demo 回放）这是一段剧本回放——你的消息已经走完整条链路：composer → `user_message` 事件 → reducer → 消息流渲染。连上你自己的 agent 后，这里会是它的真实回复。';
   return [
     updateStep({ sessionUpdate: 'user_message', content: userContent }, 120),
     statusStep('running', 200),

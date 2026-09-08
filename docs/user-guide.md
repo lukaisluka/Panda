@@ -1,6 +1,8 @@
 # Panda 使用指南
 
-Panda 是一个 ACP（Agent Client Protocol）通用客户端：连接任何说 ACP 的 agent 服务（Claude Code、Gemini CLI、Codex、Goose……经 bridge 暴露后），以对话为核心体验。Panda 是**纯协议客户端**——它从不安装、启动或管理 agent 进程，你连的必须是一个已在运行的服务（桌面版的 stdio 直连是唯一例外：由本机命令当场拉起）。
+Panda 是给 agent 开发者的现成客户端：你在 agent 侧实现 [ACP（Agent Client Protocol）](https://agentclientprotocol.com)，Panda 就是它的界面——流式对话、工具调用卡片、diff、权限征询一应俱全，前端一行不用写（最小接入见[快速入门](agent-quickstart.md)）。Panda 是**纯协议客户端**——它从不安装、启动或管理 agent 进程，你连的必须是一个已在运行的服务（桌面版的 stdio 直连是唯一例外：由本机命令当场拉起）。
+
+不开发自己的 agent 也能用：Claude Code、Gemini CLI 等 40+ 主流 coding agent 说 ACP 或可经 bridge 暴露，见 [README](../README.zh-CN.md) 的「顺带支持现成 agent」一节。
 
 ## 1. 快速上手
 

@@ -21,6 +21,12 @@ follow the releases published from this repository.
   The card's chips carry the integration bar itself (`initialize`,
   `session/new`, `session/prompt`, `session/update`) instead of ready-made
   agent names, and its source lives in `branding/og-card.html`.
+- **Positioning residue sweep (#232)** — the scripted demo no longer
+  masquerades as a claude-code endpoint (header/sidebar labels, follow-up
+  script line); the stdio command example now points at your own agent
+  (`node your-agent.mjs`); the user guide and CONTEXT openings and package
+  metadata drop the "universal client" framing; ADR 0008 records the
+  agent-developer positioning decision.
 
 ## [0.1.1] - 2026-09-07
 

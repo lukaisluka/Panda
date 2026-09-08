@@ -443,8 +443,8 @@ export const messages = {
     zh: '仅 Panda 桌面版可用(在本机拉起进程)',
   },
   'settings.agentCommandPlaceholder': {
-    en: 'e.g. npx -y @agentclientprotocol/claude-agent-acp',
-    zh: '如:npx -y @agentclientprotocol/claude-agent-acp',
+    en: 'e.g. node your-agent.mjs (see the agent quickstart)',
+    zh: '如:node your-agent.mjs(见 agent 快速入门)',
   },
   'settings.commandRequired': {
     en: 'stdio needs an executable command',
