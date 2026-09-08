@@ -44,6 +44,13 @@
   border-color: var(--color-border);
 }
 
+/* The settings page's post-create CTA deep-links here (#221): the fresh
+ * profile's row wears a one-time accent ring so「预选」reads at a glance. */
+.nsd-agent--suggested {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
 .nsd-agent-status {
   display: flex;
   align-items: center;

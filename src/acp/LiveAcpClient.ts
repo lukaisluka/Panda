@@ -391,8 +391,17 @@ export class LiveAcpClient {
    * transport-level ones — are reported through `onDisconnected`, never
    * thrown; the connection state in the store is the source of truth for
    * the UI.
+   *
+   * `opts.probe` (#221) stops after the initialize handshake: no session
+   * establishment, no session list — the caller (the profile form's
+   * test-connection button) learns the endpoint's viability through
+   * `onConnected` / `onDisconnected` and the link drops cleanly.
    */
-  async connect(transport: AcpTransport, cwd: string, resume?: { sessionId: string }): Promise<void> {
+  async connect(
+    transport: AcpTransport,
+    cwd: string,
+    opts?: { sessionId?: string; probe?: boolean },
+  ): Promise<void> {
     // Replace any prior connection silently — its close handler is muted by
     // the connection-identity check below, and its era by the generation
     // counter (issue #19).
@@ -519,21 +528,30 @@ export class LiveAcpClient {
       this.lastCwd = cwd;
       this.handlers.onCapabilities(this.capabilities);
       this.handlers.onAuthMethods(this.authMethods);
+      if (opts?.probe) {
+        // The handshake answered the question (#221) — settle as connected
+        // and drop the link; no session is ever established.
+        this.linkEstablished = true;
+        this.handlers.onConnected({ agentName, protocolVersion: init.protocolVersion });
+        console.info(`[panda/acp] probe ok: ${agentName} (protocol v${init.protocolVersion})`);
+        this.disconnect();
+        return;
+      }
       if (this.can('list')) await this.fetchSessionList(connection, generation);
       if (!isCurrent()) {
         discardSuperseded('session list');
         return;
       }
 
-      if (resume?.sessionId) {
+      if (opts?.sessionId) {
         if (this.can('resume')) {
           // Transcript stays as-is: the agent context resumes without replay.
-          this.sessionId = resume.sessionId;
-          this.handlers.onSessionId(resume.sessionId, cwd);
+          this.sessionId = opts.sessionId;
+          this.handlers.onSessionId(opts.sessionId, cwd);
           await this.controlRequest(
             'session/resume',
             connection.agent.request(methods.agent.session.resume, {
-              sessionId: resume.sessionId,
+              sessionId: opts.sessionId,
               cwd,
             }),
           );
@@ -541,14 +559,14 @@ export class LiveAcpClient {
             discardSuperseded('resume');
             return;
           }
-          console.info(`[panda/acp] resumed session ${resume.sessionId} (transcript kept)`);
+          console.info(`[panda/acp] resumed session ${opts.sessionId} (transcript kept)`);
         } else if (this.can('loadSession')) {
-          await this.loadSessionInternal(connection, resume.sessionId, cwd, generation);
+          await this.loadSessionInternal(connection, opts.sessionId, cwd, generation);
           if (!isCurrent()) {
             discardSuperseded('load');
             return;
           }
-          console.info(`[panda/acp] reconnected via session/load replay: ${resume.sessionId}`);
+          console.info(`[panda/acp] reconnected via session/load replay: ${opts.sessionId}`);
         } else {
           console.warn('[panda/acp] agent 不支持会话恢复（resume/loadSession 均未声明）— 已新建会话');
           await this.establishSession(connection, cwd, generation);

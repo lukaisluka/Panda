@@ -109,6 +109,8 @@ type FakeAgentOptions = {
   newSessionIds?: string[];
   /** Reconnect target passed to LiveAcpClient.connect. */
   resume?: { sessionId: string };
+  /** Connect with the probe flag (#221): handshake only, no session. */
+  probe?: boolean;
   /** Sees every JSON-RPC message the fake agent sends (wire-level assertions). */
   spyAgentOutgoing?: (message: AnyMessage) => void;
   onPrompt?: PromptHandler;
@@ -367,7 +369,7 @@ async function setup(opts: FakeAgentOptions = {}): Promise<Harness> {
       ...(opts.mcpServers ? { mcpServers: opts.mcpServers } : {}),
     },
   );
-  await acpClient.connect(new StreamTransport(clientStream), '/tmp/project', opts.resume);
+  await acpClient.connect(new StreamTransport(clientStream), '/tmp/project', opts.probe ? { probe: true } : opts.resume);
 
   return {
     ...records,
@@ -1026,6 +1028,39 @@ describe('LiveAcpClient', () => {
     await waitFor(() => disconnected.length === 1);
 
     expect(disconnected).toEqual(['The connection closed before the session could be established']);
+    acpClient.disconnect();
+    void connecting.catch(() => {});
+  });
+
+  it('probe (#221) answers the handshake and never establishes a session', async () => {
+    const h = await setup({ probe: true, capabilities: { list: true, loadSession: true } });
+
+    // The verdict is the initialize identity — capabilities handlers fired,
+    // but no session/list, no session/new, no adoption, no document writes.
+    expect(h.connected).toEqual([{ agentName: 'Fake Agent', protocolVersion: PROTOCOL_VERSION }]);
+    expect(h.agentState.initializeParams).toHaveLength(1);
+    expect(h.sessions).toEqual([]);
+    expect(h.agentState.newSessionParams).toEqual([]);
+    expect(h.sessionIds).toEqual([]);
+    expect(h.updates).toEqual([]);
+
+    // The link drops CLEANLY after the verdict — a probe success is never a
+    // disconnect report.
+    await waitFor(() => h.disconnected.length === 1);
+    expect(h.disconnected).toEqual([null]);
+    h.closeAll();
+  });
+
+  it('probe (#221) surfaces the same refused-connect attribution as a real connect', async () => {
+    const disconnected: string[] = [];
+    const acpClient = new LiveAcpClient(silentHandlers((reason) => disconnected.push(reason ?? 'null')));
+
+    const connecting = acpClient.connect(new PreHandshakeCloseTransport(1006), '/tmp/project', { probe: true });
+    await waitFor(() => disconnected.length === 1);
+
+    expect(disconnected).toEqual([
+      'Could not connect — make sure the agent is running at this address and the path points at its ACP endpoint',
+    ]);
     acpClient.disconnect();
     void connecting.catch(() => {});
   });

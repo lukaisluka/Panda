@@ -531,6 +531,59 @@
   gap: 8px;
 }
 
+/* --- Post-create CTA (#221) --- */
+
+.settings-profile-saved {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 10px;
+  border-radius: var(--panda-radius-lg);
+  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+}
+
+.settings-profile-saved-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-profile-saved-title {
+  font-size: var(--panda-size-chrome);
+  color: var(--color-fg);
+}
+
+.settings-profile-saved-desc {
+  font-size: var(--panda-size-micro);
+  color: var(--color-muted);
+}
+
+.settings-profile-saved-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* --- 测试连接 verdict (#221) --- */
+
+.settings-test-result {
+  margin: 0;
+  font-size: var(--panda-size-micro);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-test-result--ok {
+  color: var(--color-accent);
+}
+
+.settings-test-result--fail {
+  color: var(--color-danger);
+}
+
 /* --- Colophon --- */
 
 .settings-colophon {

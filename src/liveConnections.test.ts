@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PROTOCOL_VERSION, agent, methods, type AnyMessage } from '@agentclientprotocol/sdk';
 import type { LiveAcpClient, LiveClientHandlers } from './acp/LiveAcpClient';
 import {
   __liveConnectionIds,
   __resetLiveConnections,
   __setDefaultClientFactory,
+  __setTestTransportFactory,
   connectLiveConnection,
   deleteLiveSession,
   disconnectLiveConnection,
@@ -17,9 +19,19 @@ import {
   removeLiveConnection,
   restoreEndpointSessions,
   seedProfileSlots,
+  sweepFailedDirectSlots,
+  testLiveTarget,
   type SessionStorage,
 } from './liveConnections';
-import { connectionStorePort, usePanda, type SessionEntry } from './store';
+import {
+  connectionStorePort,
+  emptyConnectionState,
+  usePanda,
+  type ConnectionState,
+  type SessionEntry,
+} from './store';
+import { emptySession } from './protocol/reducer';
+import { StreamTransport } from './acp/transport/StreamTransport';
 import { subscribeUserNotices, type UserNotice } from './userNotice';
 import { loadProfiles, saveProfiles, type AgentProfile } from './profiles';
 import type { AcpTransport } from './acp/transport/AcpTransport';
@@ -791,5 +803,138 @@ describe('stdio targets (#121)', () => {
     expect(slot.connection.status).toBe('disconnected');
     expect(slot.connection.url).toBe('stdio: node');
     expect(slot.connection.cwd).toBe(WORKSPACE_NONE_CWD);
+  });
+});
+
+describe('temp slot sweep (#221: failed temp rows must not accumulate)', () => {
+  it('a fresh direct dial retires the endpoint\'s earlier pure-failure temp slots', async () => {
+    const stubs = installStubClients();
+    const url = 'ws://dead:1/acp';
+    const workspace = { kind: 'local-directory', path: '/w' } as const;
+
+    // Two failed attempts against the same dead address.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await connectLiveConnection(newDirectConnectionId(), { kind: 'websocket', url }, workspace);
+      stubs.at(-1)!.handlers.onDisconnected('refused');
+    }
+
+    // Each dial swept its predecessor: one error row, not a pile.
+    const ids = Object.keys(usePanda.getState().connections);
+    expect(ids).toHaveLength(1);
+    expect(usePanda.getState().connections[ids[0]!]!.connection.status).toBe('error');
+  });
+
+  it('sweeping keeps everything that carries state — resumable slots, documents, other endpoints, profile slots', () => {
+    const keep = newDirectConnectionId();
+    const pureFailure = newDirectConnectionId();
+    const otherEndpoint = newDirectConnectionId();
+    const resumable = newDirectConnectionId();
+    const withDoc = newDirectConnectionId();
+    const base = emptyConnectionState().connection;
+    const slot = (connection: Partial<typeof base>, extra: Partial<ConnectionState> = {}): ConnectionState => ({
+      ...emptyConnectionState(),
+      connection: { ...base, ...connection },
+      ...extra,
+    });
+
+    usePanda.setState({
+      connections: {
+        [pureFailure]: slot({ status: 'error', url: 'ws://x/acp', error: 'refused' }),
+        [otherEndpoint]: slot({ status: 'error', url: 'ws://other/acp', error: 'refused' }),
+        // Errored after a session lived: resume is still offered (#75).
+        [resumable]: slot({ status: 'error', url: 'ws://x/acp', sessionId: 's-1', error: 'dropped' }),
+        // Errored, sessionless, but a retained document survives the sweep.
+        [withDoc]: slot({ status: 'error', url: 'ws://x/acp', error: 'dropped' }, { docs: { 's-2': emptySession() } }),
+        // An errored PROFILE slot is never a temp row.
+        'profile-a': slot({ status: 'error', url: 'ws://x/acp', error: 'refused' }),
+        [keep]: slot({ status: 'error', url: 'ws://x/acp', error: 'refused' }),
+      },
+    });
+
+    sweepFailedDirectSlots('ws://x/acp', keep);
+
+    const survivors = Object.keys(usePanda.getState().connections).sort();
+    expect(survivors).toEqual(
+      [otherEndpoint, resumable, withDoc, 'profile-a', keep].sort(),
+    );
+  });
+});
+
+describe('testLiveTarget (#221: handshake-then-drop probe)', () => {
+  afterEach(() => {
+    __setTestTransportFactory(null);
+  });
+
+  it('refuses to dial without an endpoint', async () => {
+    const verdict = await testLiveTarget({ kind: 'websocket', url: '  ' }, { kind: 'none' });
+    expect(verdict).toEqual({ ok: false, error: 'An endpoint is required to test' });
+  });
+
+  it('reports a stdio probe on a host that cannot spawn', async () => {
+    const verdict = await testLiveTarget({ kind: 'stdio', command: 'node', args: '' }, { kind: 'none' });
+    expect(verdict).toEqual({ ok: false, error: 'stdio agents require the Panda desktop app' });
+  });
+
+  it('answers a live handshake with the agent identity and leaves no store footprint', async () => {
+    // An in-memory fake agent answering initialize.
+    const c2s = new TransformStream<AnyMessage>();
+    const s2c = new TransformStream<AnyMessage>();
+    const newSessions: unknown[] = [];
+    const server = agent({ name: 'probe-agent' })
+      .onRequest(methods.agent.initialize, () => ({
+        protocolVersion: PROTOCOL_VERSION,
+        agentInfo: { name: 'probe-agent', title: 'Probe Agent', version: '0.0.0' },
+        agentCapabilities: { sessionCapabilities: { list: {} } },
+      }))
+      .onRequest(methods.agent.session.list, () => ({ sessions: [] }))
+      .onRequest(methods.agent.session.new, (ctx) => {
+        newSessions.push(ctx.params);
+        return { sessionId: 'never' };
+      })
+      .connect({ writable: s2c.writable, readable: c2s.readable });
+    __setTestTransportFactory(() => new StreamTransport({ writable: c2s.writable, readable: s2c.readable }));
+
+    const verdict = await testLiveTarget({ kind: 'websocket', url: 'ws://probe:1/acp' }, { kind: 'none' });
+
+    expect(verdict).toEqual({ ok: true, agentName: 'Probe Agent', protocolVersion: PROTOCOL_VERSION });
+    // A probe never establishes a session and never touches the store.
+    expect(newSessions).toEqual([]);
+    expect(usePanda.getState().connections).toEqual({});
+    server.close();
+  });
+
+  it('carries a refused handshake through the connect-failure copy (#217)', async () => {
+    // A transport whose stream acquisition dies — the shape a refused dial
+    // takes below the WebSocket seam.
+    const failing: AcpTransport = {
+      connect: () => Promise.reject(new Error('boom')),
+      disconnect: () => {},
+    };
+    __setTestTransportFactory(() => failing);
+    const verdict = await testLiveTarget({ kind: 'websocket', url: 'ws://dead:9/acp' }, { kind: 'none' });
+    expect(verdict).toEqual({ ok: false, error: 'Connection failed: boom' });
+  });
+
+  it('settles even when the handshake hangs on a dead link (refused dial, #217 shape)', async () => {
+    // Pre-handshake close: reads hit EOF immediately (connection.closed
+    // settles) but initialize never answers — connect() stays suspended,
+    // exactly like a browser WebSocket refused before it opened (browsers
+    // collapse every handshake failure to close code 1006). The probe must
+    // resolve through the onDisconnected attribution anyway.
+    const preHandshakeClose: AcpTransport = {
+      closed: Promise.resolve(1006),
+      connect: () =>
+        Promise.resolve({
+          readable: new ReadableStream({ start: (controller) => controller.close() }),
+          writable: new WritableStream(),
+        }),
+      disconnect: () => {},
+    };
+    __setTestTransportFactory(() => preHandshakeClose);
+    const verdict = await testLiveTarget({ kind: 'websocket', url: 'ws://refused:1/acp' }, { kind: 'none' });
+    expect(verdict).toEqual({
+      ok: false,
+      error: 'Could not connect — make sure the agent is running at this address and the path points at its ACP endpoint',
+    });
   });
 });

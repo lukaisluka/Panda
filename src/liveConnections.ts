@@ -529,6 +529,10 @@ export async function connectLiveConnection(
   // list (if any) merges on top. A replacing connect replaces the old
   // endpoint's visible list rather than combining unrelated histories.
   restoreEndpointSessions(endpoint, entry.port.replaceSessions);
+  // A fresh direct dial retires this endpoint's earlier pure-failure temp
+  // slots (#221): without the sweep, every retry against a dead address
+  // piles one more「Temp」error row onto the sidebar.
+  if (isDirectConnectionId(connectionId)) sweepFailedDirectSlots(endpoint, connectionId);
   // A replacing connect ends the previous connection era (issue #19): its
   // in-flight switch can never settle — roll it back stale BEFORE the new
   // era begins staging/adopting anything.
@@ -549,6 +553,130 @@ export async function connectLiveConnection(
     cwd,
     resumeSessionId ? { sessionId: resumeSessionId } : undefined,
   );
+}
+
+/**
+ * Retires the 临时直连 slots a dead endpoint left behind (#221): a slot
+ * qualifies only as a PURE failure — errored, never held a session, no
+ * retained documents — so live, connecting, resumable or history-carrying
+ * slots are never swept. Called at the start of a fresh direct dial to the
+ * same endpoint; the dialing slot itself is exempt.
+ */
+export function sweepFailedDirectSlots(endpoint: string, keepConnectionId: string): void {
+  const stale = Object.entries(usePanda.getState().connections).filter(([id, slot]) =>
+    id !== keepConnectionId &&
+    isDirectConnectionId(id) &&
+    slot.connection.url === endpoint &&
+    slot.connection.status === 'error' &&
+    slot.connection.sessionId === null &&
+    Object.keys(slot.docs).length === 0,
+  );
+  for (const [id] of stale) {
+    console.info(`[panda/acp] sweeping failed temp slot ${id} (${endpoint})`);
+    removeLiveConnection(id);
+  }
+}
+
+/** A test-connection's verdict (#221): the handshake either answered with
+ * the agent's identity, or failed with connect-chain copy — the same
+ * attribution (#217) the sidebar error block shows on a real connect. */
+export type LiveTargetProbe =
+  | { ok: true; agentName: string; protocolVersion: number }
+  | { ok: false; error: string };
+
+/** Test seam: overrides the probe's transport construction (node has no
+ * WebSocket — tests inject an in-memory stream transport). Null restores
+ * the real derivation. */
+let testTransportFactory: ((target: LiveTarget, cwd: string) => import('./acp/transport/AcpTransport').AcpTransport) | null = null;
+
+/** For tests: install/clear the probe transport factory. */
+export function __setTestTransportFactory(
+  factory: ((target: LiveTarget, cwd: string) => import('./acp/transport/AcpTransport').AcpTransport) | null,
+): void {
+  testTransportFactory = factory;
+}
+
+/**
+ * Dials an endpoint, runs the initialize handshake, and drops the link —
+ * the profile form's「测试连接」. No store slot, no session, no sidebar
+ * footprint: the verdict arrives through the return value only. Runs the
+ * same connect chain as a real connect, so transport failures, protocol
+ * mismatches and timeouts surface with their established copy.
+ *
+ * The connect is RACED against the verdict: a refused handshake leaves
+ * connect() suspended forever (initialize hangs on the dead link — the
+ * #217 attribution arrives through onDisconnected instead of the await),
+ * and a test button must always settle.
+ */
+export async function testLiveTarget(target: LiveTarget, workspace: Workspace): Promise<LiveTargetProbe> {
+  const normalizedTarget: LiveTarget =
+    target.kind === 'websocket'
+      ? { kind: 'websocket', url: target.url.trim() }
+      : { kind: 'stdio', command: target.command.trim(), args: canonicalArgs(target.args) };
+  const endpoint = liveTargetEndpoint(normalizedTarget);
+  const cwd = workspaceToCwd(
+    workspace.kind === 'local-directory' ? { kind: 'local-directory', path: workspace.path.trim() } : workspace,
+  );
+  if (!endpoint || !cwd) return { ok: false, error: t('acp.testMissingEndpoint') };
+  const stdioFactory = normalizedTarget.kind === 'stdio' ? getStdioTransportFactory() : null;
+  if (normalizedTarget.kind === 'stdio' && !stdioFactory) {
+    return { ok: false, error: t('acp.stdioHostMissing') };
+  }
+  // The outcome lands through the same handlers a real connect reports on —
+  // onConnected settles success, onDisconnected(reason) the failure copy.
+  let outcome: LiveTargetProbe = { ok: false, error: t('acp.testNoOutcome') };
+  let settled!: () => void;
+  const verdictArrived = new Promise<void>((resolve) => {
+    settled = resolve;
+  });
+  const record = (verdict: LiveTargetProbe) => {
+    outcome = verdict;
+    settled();
+  };
+  const probe = new LiveAcpClient({
+    onUpdate: () => {},
+    onConnected: (info) => {
+      record({ ok: true, agentName: info.agentName, protocolVersion: info.protocolVersion });
+    },
+    onSessionId: () => {},
+    onSessionModes: () => {},
+    onSessionConfigOptions: () => {},
+    onDisconnected: (reason) => {
+      if (reason) record({ ok: false, error: reason });
+    },
+    onAuthChallenge: (challenge) => {
+      record({ ok: false, error: challenge.message });
+    },
+    onAuthElicitation: () => {},
+    onCapabilities: () => {},
+    onAuthMethods: () => {},
+    onAuthenticated: () => {},
+    onSessions: () => {},
+    onSessionInfo: () => {},
+    onReplayStart: () => {},
+    onSessionDeleted: () => {},
+    onSessionSwitchStage: () => {},
+    onSessionSwitchCommit: () => {},
+    onSessionSwitchRollback: () => {},
+  });
+  try {
+    const transport: import('./acp/transport/AcpTransport').AcpTransport = testTransportFactory
+      ? testTransportFactory(normalizedTarget, cwd)
+      : normalizedTarget.kind === 'websocket'
+        ? new WebSocketTransport(normalizedTarget.url)
+        : stdioFactory!({ program: normalizedTarget.command, args: splitArgs(normalizedTarget.args), cwd });
+    await Promise.race([probe.connect(transport, cwd, { probe: true }), verdictArrived]);
+  } catch (err) {
+    // connect() reports failures through onDisconnected and never throws —
+    // anything escaping here is a programming error, surfaced not swallowed.
+    console.error('[panda/acp] test connection threw', err);
+    return { ok: false, error: t('acp.connectFailed', { error: String(err) }) };
+  } finally {
+    // Tearing down settles every leftover shape: a hanging refused-dial era,
+    // and a half-open wire after a mid-handshake failure.
+    probe.disconnect();
+  }
+  return outcome;
 }
 
 /**
