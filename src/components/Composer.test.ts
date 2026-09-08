@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isImeComposition } from './Composer';
+import { imageHintState, isImeComposition } from './Composer';
 
 describe('isImeComposition (bug hunt #2: IME Enter must not submit)', () => {
   it('flags the live composition marker', () => {
@@ -14,5 +14,19 @@ describe('isImeComposition (bug hunt #2: IME Enter must not submit)', () => {
   it('passes through ordinary keys, including plain Enter', () => {
     expect(isImeComposition({ isComposing: false, keyCode: 13 })).toBe(false);
     expect(isImeComposition({})).toBe(false);
+  });
+});
+
+describe('imageHintState (#214: no agent, no capability claims)', () => {
+  it('renders no hint while no agent is connected or connecting', () => {
+    expect(imageHintState(undefined)).toBeNull();
+  });
+
+  it('names a negotiated agent that lacks image input', () => {
+    expect(imageHintState(false)).toBe('unavailable');
+  });
+
+  it('shows the paste-or-attach hint once image input is negotiated', () => {
+    expect(imageHintState(true)).toBe('available');
   });
 });

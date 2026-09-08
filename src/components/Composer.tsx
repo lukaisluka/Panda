@@ -39,6 +39,18 @@ export function isImeComposition(e: { isComposing?: boolean; keyCode?: number })
   return e.isComposing === true || e.keyCode === 229;
 }
 
+/**
+ * The composer's image-hint decision (#214): a verdict ('available' /
+ * 'unavailable') only when the foreground agent's capabilities are
+ * negotiated; `undefined` (no agent, still connecting) renders no hint at
+ * all — the misleading "this agent does not declare image input" line used
+ * to greet a first run with zero agents.
+ */
+export function imageHintState(canAttachImages: boolean | undefined): 'available' | 'unavailable' | null {
+  if (canAttachImages === undefined) return null;
+  return canAttachImages ? 'available' : 'unavailable';
+}
+
 export function Composer({ onSend, disabled, inputLocked, hint, canAttachImages, canStop, onStop, modes, onSetMode, commands, configOptions, onSetConfigOption, sessionKey }: {
   onSend: (content: AcpContentBlock[]) => void;
   /** Sends and popovers are closed (turn running, link down, switching). */
@@ -48,7 +60,13 @@ export function Composer({ onSend, disabled, inputLocked, hint, canAttachImages,
    * next message can be drafted, sending is still held back by disabled. */
   inputLocked: boolean;
   hint?: string;
-  canAttachImages: boolean;
+  /**
+   * Image attachment verdict for the foreground agent (#214): true/false
+   * only once capabilities are negotiated; `undefined` = no agent connected
+   * (or still connecting) — the attach stays inert and NO hint renders,
+   * because a nonexistent agent cannot "fail to declare" anything.
+   */
+  canAttachImages: boolean | undefined;
   /** True while a live turn runs — the send button becomes a stop button. */
   canStop?: boolean;
   onStop?: () => void;
@@ -265,7 +283,7 @@ export function Composer({ onSend, disabled, inputLocked, hint, canAttachImages,
                 label={t('composer.attach')}
                 isDisabled={attachmentDisabled}
                 tooltip={
-                  !canAttachImages
+                  canAttachImages === false
                     ? t('composer.attachUnavailable')
                     : disabled
                       ? t('composer.attachDisabled')
@@ -313,11 +331,11 @@ export function Composer({ onSend, disabled, inputLocked, hint, canAttachImages,
         </div>
         {attachmentError ? (
           <p className="composer-hint composer-hint--danger">{attachmentError}</p>
-        ) : !canAttachImages ? (
+        ) : imageHintState(canAttachImages) === 'unavailable' ? (
           <p className="composer-hint composer-hint--muted">{t('composer.attachUnavailable')}</p>
-        ) : (
+        ) : imageHintState(canAttachImages) === 'available' ? (
           <p className="composer-hint composer-hint--muted">{t('composer.hintImages')}</p>
-        )}
+        ) : null}
     </ContentColumn>
   );
 }
