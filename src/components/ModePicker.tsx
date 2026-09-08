@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Check, ChevronUp } from 'lucide-react';
 import type { AcpSessionModeState } from '../protocol/types';
 import './ModePicker.css';
 import { useI18n } from '../i18n/context';
+import { usePopoverDismiss } from './usePopoverDismiss';
 
 /**
  * Session-mode picker for the composer's bottom-left slot (protocol/v1
@@ -18,26 +19,11 @@ export function ModePicker({ modes, onSetMode }: {
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const current = modes.availableModes.find((mode) => mode.id === modes.currentModeId);
-
   // The menu opens upward from the composer's bottom row; outside clicks and
-  // Escape close it. Listeners mount only while open.
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
+  // Escape close it (shared dismiss hook, #215 — same behavior as every
+  // other anchored popover in the composer).
+  const rootRef = usePopoverDismiss(open, () => setOpen(false));
+  const current = modes.availableModes.find((mode) => mode.id === modes.currentModeId);
 
   return (
     <div className="mode-picker" ref={rootRef}>
