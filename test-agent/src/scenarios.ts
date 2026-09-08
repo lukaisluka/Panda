@@ -43,20 +43,25 @@ const EDIT_NEW = '  if (!validateSession(session)) {';
 // 映射到沙箱目录),因此剧本里的 file_path 都写成规范的虚拟绝对路径。
 const AUTH = '/auth.ts';
 
+// 计划三步的内容常量:首份与后续增量更新共用,只有 status 在变。
+const PLAN_STEPS = ['通读 auth.ts 现有校验逻辑', '收紧 authorize 的布尔判断', '用命令验证改动后的文件'];
+
+/** 三步计划在指定完成数下的快照:第 doneCount 步之前全部完成、其后待办;
+ * 全部完成时(doneCount = 3)无进行中步骤。 */
+function planTodos(doneCount: number): { content: string; status: string }[] {
+  return PLAN_STEPS.map((content, i) => ({
+    content,
+    status: i < doneCount ? 'completed' : i === doneCount ? 'in_progress' : 'pending',
+  }));
+}
+
 const TURN_1: Step[] = [
   step(
     '用户要重构 auth 校验。我先列个计划,再读实现、做最小改动,最后用一条命令验证,避免一次改太多。',
-    [
-      toolCall('write_todos', {
-        todos: [
-          { content: '通读 auth.ts 现有校验逻辑', status: 'completed' },
-          { content: '收紧 authorize 的布尔判断', status: 'in_progress' },
-          { content: '用命令验证改动后的文件', status: 'pending' },
-        ],
-      }),
-    ],
+    [toolCall('write_todos', { todos: planTodos(0) })],
   ),
   step('先读一下 auth.ts 的现状,确认要改的位置。', [toolCall('read_file', { file_path: AUTH })]),
+  step('现状读完了,第一步完成,推进计划。', [toolCall('write_todos', { todos: planTodos(1) })]),
   step('找到了,`validateSession(...) == false` 是多余的宽松比较,改成显式取反。', [
     toolCall('edit_file', {
       file_path: AUTH,
@@ -64,7 +69,9 @@ const TURN_1: Step[] = [
       new_string: EDIT_NEW,
     }),
   ]),
+  step('改动落盘,第二步完成,推进计划。', [toolCall('write_todos', { todos: planTodos(2) })]),
   step('改动完成,跑一条命令确认最终文件内容。', [toolCall('execute', { command: 'cat auth.ts' })]),
+  step('验证通过,三步全部完成,计划收尾。', [toolCall('write_todos', { todos: planTodos(3) })]),
   step(
     '改动验证过了,总结一下。',
     [],

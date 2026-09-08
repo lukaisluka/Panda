@@ -642,6 +642,9 @@ export type PermissionRequest = {
   title: string;
   /** Tool kind from the wire's toolCall, for placeholder tool records. */
   kind?: AcpToolKind;
+  /** The tool's raw input parameters when the agent sent them — a
+   * write_todos request renders its plan body from here (#220). */
+  rawInput?: unknown;
   options: PermissionOption[];
 };
 

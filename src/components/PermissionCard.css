@@ -50,3 +50,46 @@
   gap: 8px;
   margin-top: 12px; /* mt-3 */
 }
+
+/* The plan body of a write_todos approval (#220) — status vocabulary mirrors
+ * the plan dock (done=faint+strike, active=accent+fg, pending=muted) so both
+ * surfaces read as one widget. */
+.permission-plan {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.permission-plan-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: var(--panda-size-content);
+}
+
+.permission-plan-icon {
+  margin-top: 3px; /* optically centers the 14px glyph on the first text line */
+  flex-shrink: 0;
+  color: var(--color-faint);
+}
+
+.permission-plan-icon--done,
+.permission-plan-icon--active {
+  color: var(--color-accent);
+}
+
+.permission-plan-text {
+  color: var(--color-muted);
+}
+
+.permission-plan-text--active {
+  color: var(--color-fg);
+}
+
+.permission-plan-text--done {
+  color: var(--color-faint);
+  text-decoration: line-through;
+}

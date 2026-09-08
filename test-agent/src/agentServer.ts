@@ -457,23 +457,23 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
     return plan.length === 0 || plan.every((todo) => todo.status === 'completed');
   }
 
-  function permissionTitle(name: string, args: Record<string, unknown>): { title: string; planLog?: string } {
+  function permissionTitle(name: string, args: Record<string, unknown>): string {
+    // write_todos 的计划正文不再以消息流注入的方式转述(#220):权限请求
+    // 自带 rawInput,客户端在权限卡内渲染计划列表。
     if (name === 'write_todos') {
-      const todos = (Array.isArray(args.todos) ? args.todos : []) as Todo[];
-      const planText = todos.map((todo, i) => `${i + 1}. ${todo.content}`).join('\n');
-      return { title: 'Review Plan', planLog: `## Plan\n\n${planText}\n` };
+      return 'Review Plan';
     }
     if (name === 'edit_file' && typeof args.file_path === 'string') {
-      return { title: `Edit \`${args.file_path}\`` };
+      return `Edit \`${args.file_path}\``;
     }
     if (name === 'write_file' && typeof args.file_path === 'string') {
-      return { title: `Write \`${args.file_path}\`` };
+      return `Write \`${args.file_path}\``;
     }
     if (name === 'execute') {
       const command = typeof args.command === 'string' ? args.command : '';
-      return { title: command ? `Execute: \`${truncateExecuteCommandForDisplay(command)}\`` : 'Execute command' };
+      return command ? `Execute: \`${truncateExecuteCommandForDisplay(command)}\`` : 'Execute command';
     }
-    return { title: name };
+    return name;
   }
 
   function optionLabel(name: string, args: Record<string, unknown>): string {
@@ -581,10 +581,7 @@ export function createAgentHandler(conn: AgentSideConnection, deps: AgentServerD
           }
         }
 
-        const { title, planLog } = permissionTitle(name, args);
-        if (planLog) {
-          await send(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: planLog } });
-        }
+        const title = permissionTitle(name, args);
         const toolCallId = findToolCallIdForAction(name, args) ?? interrupt.id;
         if (toolCallId === interrupt.id) {
           deps.log(`[permission] 未找到 ${name} 的工具卡,回退 interrupt.id: ${interrupt.id}`);

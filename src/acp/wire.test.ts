@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { client } from '@agentclientprotocol/sdk';
-import type { SessionNotification, SessionUpdate } from '@agentclientprotocol/sdk';
+import type { RequestPermissionRequest, SessionNotification, SessionUpdate } from '@agentclientprotocol/sdk';
 import {
   parseSessionNotification,
   removeSdkStrictSessionUpdateRouter,
@@ -9,6 +9,7 @@ import {
   toAvailableCommands,
   toElicitationFormRequest,
   toElicitationUrlRequest,
+  toPermissionRequest,
 } from './wire';
 
 /** Loose constructor: unknown-kind payloads need to bypass the SDK's closed union. */
@@ -678,3 +679,25 @@ describe('toConfigOptions (session config whitelisting)', () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('rawInput'));
     warnSpy.mockRestore();
   });
+
+describe('toPermissionRequest (#220: rawInput rides along for the card plan body)', () => {
+  const base = {
+    sessionId: 's-1',
+    toolCall: { toolCallId: 't-1', title: 'Review Plan' },
+    options: [{ optionId: 'approve', name: 'Approve', kind: 'allow_once' }],
+  };
+
+  it('passes a todos-shaped rawInput through — the card renders its plan body from it', () => {
+    const todos = { todos: [{ content: '通读 auth.ts 现有校验逻辑', status: 'in_progress' }] };
+    const mapped = toPermissionRequest({
+      ...base,
+      toolCall: { ...base.toolCall, rawInput: todos },
+    } as RequestPermissionRequest);
+    expect(mapped.rawInput).toEqual(todos);
+  });
+
+  it('leaves rawInput undefined when the agent sent none — non-plan tools keep a title-only card', () => {
+    const mapped = toPermissionRequest(base as RequestPermissionRequest);
+    expect(mapped.rawInput).toBeUndefined();
+  });
+});

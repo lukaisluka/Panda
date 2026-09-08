@@ -116,6 +116,7 @@ Panda 注册的 client 侧 handler 全集:
 - **取消路径**:回合取消或断连时,所有挂起权限被统一答 `cancelled`;agent 也可以主动发 `$/cancel_request` 撤回不再需要的请求。
 - **可能被自动应答**:客户端侧有 host policy 与会话内 `always` 记忆,agent 只会看到结果(`selected` / `cancelled`),无需感知是谁点的。
 - 至少提供一个拒绝类 option——纯 allow 的权限卡让用户无法拒绝。
+- 请求中的 `toolCall.rawInput` 会随权限卡保留:呈 write_todos 形状(`{ todos: [{ content, status }] }`)时,卡内逐条渲染计划正文与状态;其余形状暂不渲染正文,只留标题。
 
 ### 3.2 Elicitation 流行为契约
 
