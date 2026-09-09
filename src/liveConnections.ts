@@ -710,7 +710,10 @@ export type ReconnectOptions = {
 /**
  * Reconnects one slot by id. Everything the target remembers (endpoint,
  * workspace) is reused unless overridden — same establishment chain as a
- * fresh connect (`connectLiveConnection`).
+ * fresh connect (`connectLiveConnection`). Every ignored exit answers the
+ * click with a toast (#238): an ignored REQUEST is an operation-level
+ * failure, while the dial's own failure keeps its error card — the console
+ * warn alone read as a dead button.
  */
 export function reconnectLiveConnection(
   connectionId: string | null,
@@ -718,6 +721,7 @@ export function reconnectLiveConnection(
 ): void {
   if (connectionId === null) {
     console.warn('[panda/acp] reconnect ignored: no target connection');
+    notifyUser('error', t('acp.notice.reconnectNoConnection'));
     return;
   }
   const state = usePanda.getState();
@@ -727,6 +731,7 @@ export function reconnectLiveConnection(
   const remembered = reconnectTargetFor(connectionId);
   if (!remembered) {
     console.warn(`[panda/acp] reconnect ignored: slot "${connectionId}" has no remembered target`);
+    notifyUser('error', t('acp.notice.reconnectNoTarget'));
     return;
   }
   const target: LiveTarget =
@@ -741,6 +746,7 @@ export function reconnectLiveConnection(
   const workspace = opts?.workspace ?? (slot?.connection.cwd != null ? cwdToWorkspace(slot.connection.cwd) : null);
   if (!workspace) {
     console.warn(`[panda/acp] reconnect ignored: slot "${connectionId}" has no remembered workspace`);
+    notifyUser('error', t('acp.notice.reconnectNoWorkspace'));
     return;
   }
   const profileId = isDirectConnectionId(connectionId) ? null : connectionId;
