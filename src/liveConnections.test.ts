@@ -255,6 +255,68 @@ describe('row-level action routing (bug hunt #1/#5)', () => {
   });
 });
 
+describe('ignored reconnects answer with a toast (#238)', () => {
+  it('a direct slot with no remembered target toasts the recovery instead of dead-clicking', () => {
+    const notices: UserNotice[] = [];
+    const unsubscribe = subscribeUserNotices((notice) => notices.push(notice));
+
+    reconnectLiveConnection('direct:ghost');
+
+    expect(notices).toHaveLength(1);
+    expect(notices[0]!.kind).toBe('error');
+    expect(notices[0]!.message).toBe(
+      'This session has no remembered connection target — connect again from New session.',
+    );
+    // The console trace stays — the toast answers the user, the warn answers the next diagnosis.
+    expect(console.warn).toHaveBeenCalledWith('[panda/acp] reconnect ignored: slot "direct:ghost" has no remembered target');
+    unsubscribe();
+  });
+
+  it('a reconnect with no target connection (null id) toasts the pick-an-agent copy', () => {
+    const notices: UserNotice[] = [];
+    const unsubscribe = subscribeUserNotices((notice) => notices.push(notice));
+
+    reconnectLiveConnection(null);
+
+    expect(notices).toHaveLength(1);
+    expect(notices[0]!.kind).toBe('error');
+    expect(notices[0]!.message).toBe('No connection selected — pick an agent in the sidebar first.');
+    expect(console.warn).toHaveBeenCalledWith('[panda/acp] reconnect ignored: no target connection');
+    unsubscribe();
+  });
+
+  it('a slot that lost its store row toasts the no-workspace recovery', async () => {
+    const stubs = installStubClients();
+    await connectedStub('agent-a', stubs, 's-a');
+    // Entry (with remembered target) alive, store row gone — the drift shape exit 3 defends against.
+    usePanda.getState().closeConnection('agent-a');
+    const notices: UserNotice[] = [];
+    const unsubscribe = subscribeUserNotices((notice) => notices.push(notice));
+
+    reconnectLiveConnection('agent-a');
+
+    expect(notices).toHaveLength(1);
+    expect(notices[0]!.kind).toBe('error');
+    expect(notices[0]!.message).toBe('This session has no remembered workspace — connect again from New session.');
+    expect(console.warn).toHaveBeenCalledWith('[panda/acp] reconnect ignored: slot "agent-a" has no remembered workspace');
+    expect(stubs[0]!.client.connect).toHaveBeenCalledTimes(1); // no redial happened
+    unsubscribe();
+  });
+
+  it('a proceeding reconnect stays silent — the dial failure owns the error card, no double toast', async () => {
+    const stubs = installStubClients();
+    await connectedStub('agent-a', stubs, 's-a');
+    const notices: UserNotice[] = [];
+    const unsubscribe = subscribeUserNotices((notice) => notices.push(notice));
+
+    reconnectLiveConnection('agent-a');
+    await vi.waitFor(() => expect(stubs[0]!.client.connect).toHaveBeenCalledTimes(2));
+
+    expect(notices).toHaveLength(0);
+    unsubscribe();
+  });
+});
+
 describe('opening sessions across connections (issue #21)', () => {
   it('offline slot: points the UI at the retained document (查看历史)', async () => {
     const stubs = installStubClients();

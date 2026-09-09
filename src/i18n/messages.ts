@@ -640,6 +640,20 @@ export const messages = {
   'acp.testNoOutcome': { en: 'Test produced no result', zh: '测试未返回结果' },
   // ---- operation notices (#160): console-only guard/failure paths surfaced as toasts ----
   'acp.notice.notConnected': { en: 'Not connected to the agent — reconnect first.', zh: '尚未连接 agent,请先重连。' },
+  // Ignored-reconnect exits (#238): the request itself was dropped, so the
+  // click must still answer — plain cause + remedy copy, one per exit.
+  'acp.notice.reconnectNoConnection': {
+    en: 'No connection selected — pick an agent in the sidebar first.',
+    zh: '未选择连接——请先在侧栏选择一个 agent。',
+  },
+  'acp.notice.reconnectNoTarget': {
+    en: 'This session has no remembered connection target — connect again from New session.',
+    zh: '该会话槽没有记住的连接目标——请从「新建会话」重新连接。',
+  },
+  'acp.notice.reconnectNoWorkspace': {
+    en: 'This session has no remembered workspace — connect again from New session.',
+    zh: '该会话槽没有记住的工作区——请从「新建会话」重新连接。',
+  },
   'acp.notice.busy': { en: 'The agent is busy (a turn or a session switch is still in flight) — try again shortly.', zh: 'agent 正忙(回合或会话切换仍在进行),请稍后再试。' },
   'acp.notice.loadUnsupported': {
     en: 'This agent does not support session/load — switching to another session is unavailable.',
