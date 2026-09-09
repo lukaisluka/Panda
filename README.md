@@ -43,7 +43,11 @@ Pick by scenario — the desktop build connects stdio agents you develop; the we
   - macOS: `Panda_<ver>_aarch64.dmg`
   - Windows: `Panda_<ver>_x64-setup.exe` (installer), or `Panda_<ver>_x64-portable.zip` (no install; the app is the same either way — user data stays in the per-user data directory, it does not travel with the exe)
 
-  Notes: connecting stdio agents directly needs the desktop build ([guide](docs/user-guide.md) (Chinese)). Windows needs WebView2 (preinstalled on Windows 11 and updated Windows 10; the installer downloads it when missing). Builds are **unsigned**: SmartScreen / first-run Gatekeeper prompts are expected.
+  Notes: connecting stdio agents directly needs the desktop build ([guide](docs/user-guide.md) (Chinese)). Windows needs WebView2 (preinstalled on Windows 11 and updated Windows 10; the installer downloads it when missing). Builds are **unsigned**: Windows SmartScreen prompts are expected, and on macOS Gatekeeper may refuse the app with "'Panda' is damaged and can't be opened" — the app is not damaged, that is Gatekeeper's wording for an unsigned download. Clear the quarantine flag and open it:
+
+  ```bash
+  xattr -cr /Applications/Panda.app
+  ```
 - **From source** — see [Development](#development).
 
 ## Features
