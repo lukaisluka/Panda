@@ -4,7 +4,11 @@ All notable changes to Panda are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning will
 follow the releases published from this repository.
 
-## [Unreleased]
+## [0.2.0] - 2026-09-09
+
+The positioning pivot to "a ready-made UI for agent developers" — README
+rewrite, bilingual quickstart, first-run onboarding, launch facade — plus
+plan-aware approvals and the first UX polish batch.
 
 ### Added
 
@@ -13,9 +17,27 @@ follow the releases published from this repository.
   `#/demo` entry), connecting your own agent (desktop stdio + quickstart
   link; web WebSocket + bridge guide), and a collapsed path for
   existing-agent users. Per-locale doc links target the matching mirror.
+- **Developer quickstart (#199)** — a bilingual tutorial (`docs/agent-quickstart.md`
+  + mirror) writing a minimal ACP agent from scratch — one stdio file on the
+  `@agentclientprotocol/sdk`, no framework — and getting Panda's full UI for
+  it: streaming, tool cards, plans, permissions, usage.
+- **Demo facade (#196)** — `#/demo` is a production entry (not a dev-only
+  route), both READMEs embed the demo GIF inline, and shared links unfurl an
+  OG card.
+- **Plan-aware approvals (#220)** — a permission request carrying a
+  `write_todos`-shaped payload now renders the plan per-step inside the
+  approval card (in every card state), so approving a plan is no longer
+  blind; the dock counter reads `N/M done` instead of the ambiguous `N/M`;
+  the scripted demo walks its plan 0/3 → 3/3 instead of pre-completing
+  step one.
 
 ### Changed
 
+- **README rewrite (#198)** — both READMEs now lead with the
+  agent-developer story ("your agent speaks ACP, Panda is its UI"), quantify
+  the integration bar up front (the contract's minimum method set), and move
+  ready-made agents to an explicitly secondary section; the integration
+  contract and quickstart are linked from the first screen.
 - **Launch facade repositioning (#229)** — the OG/share card and page meta
   now speak to agent developers ("your agent speaks ACP, Panda is its UI").
   The card's chips carry the integration bar itself (`initialize`,
@@ -27,6 +49,41 @@ follow the releases published from this repository.
   (`node your-agent.mjs`); the user guide and CONTEXT openings and package
   metadata drop the "universal client" framing; ADR 0008 records the
   agent-developer positioning decision.
+- **UX polish batch (#221)** — offline sidebar rows connect on click; the
+  profile form gains a Test connection probe (full initialize handshake,
+  zero store/session footprint, verdicts reuse the #217 attribution copy);
+  saving a profile offers a "start a session" CTA that opens the picker with
+  the new row highlighted; a fresh direct connect sweeps older pure-failure
+  slots at the same address; untitled sessions fall back to their first
+  user message; the transcript is a `role="log"` and the mode menu implements
+  APG keyboard navigation; the "always allow" tooltip states its real scope
+  (remembered session-wide for identical requests, expires with the session).
+- **Conventional Commits (#225, #227)** — commit subjects and PR titles now
+  follow Conventional Commits in English, with the PR title linted in CI.
+
+### Fixed
+
+- **Scroll follow (#210)** — approving a permission no longer counts as user
+  scrolling; follow mode never detaches silently during an approval.
+- **Status bar wording (#211)** — Ready/Working labels go through the i18n
+  dictionary, so a broken link no longer shows a contradictory "ready".
+- **Contrast (#212)** — `--color-muted` now derives to an AA ratio; faint
+  informational sites were moved up a step (light theme 2.12/3.06 → 4.78).
+- **i18n leftovers (#213)** — leftover chrome strings are translated and
+  Astryx component locale is bridged to the app language.
+- **Session-settings popover (#215)** — closes on Escape and outside click,
+  and collapses when its session is gone.
+- **Composer hint (#216)** — the awaiting-approval hint points at the stream
+  instead of blocking the composer; drafting stays open.
+- **Connection failures (#217)** — failure attribution copy is human-readable
+  (DNS vs refused vs timeout); a failed session switch surfaces a retryable
+  toast instead of a dead end.
+- **Retained documents (#218, #240)** — documents kept after a disconnect
+  stay readable, and foregrounding an offline slot keeps them in view.
+- **Demo banner (#219)** — the scripted replay banner is visually distinct
+  from the live session list.
+- **Reconnect races (#238)** — a reconnect request the UI cannot accept is
+  answered with a toast instead of being silently ignored.
 
 ## [0.1.1] - 2026-09-07
 
@@ -173,6 +230,7 @@ and a macOS/Windows desktop shell with stdio support.
 - Desktop build: `frontendDist` resolved relative to `src-tauri`, so the
   previous `../dist` pointed inside `desktop/` and broke release bundling.
 
-[Unreleased]: https://github.com/lukaisluka/Panda/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/lukaisluka/Panda/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/lukaisluka/Panda/releases/tag/v0.2.0
 [0.1.1]: https://github.com/lukaisluka/Panda/releases/tag/v0.1.1
 [0.1.0]: https://github.com/lukaisluka/Panda/releases/tag/v0.1.0
