@@ -43,7 +43,11 @@
   - macOS:`Panda_<ver>_aarch64.dmg`
   - Windows:`Panda_<ver>_x64-setup.exe`(安装版),或 `Panda_<ver>_x64-portable.zip`(免安装;两者是同一个应用——用户数据留在各平台的用户数据目录,不随 exe 走)
 
-  注意:直连 stdio agent 需要桌面版([指南](docs/user-guide.md))。Windows 需要 WebView2(Windows 11 预装,较新的 Windows 10 亦自带;缺失时安装器会自动下载)。产物**未签名**:SmartScreen / 首次运行 Gatekeeper 提示属预期。
+  注意:直连 stdio agent 需要桌面版([指南](docs/user-guide.md))。Windows 需要 WebView2(Windows 11 预装,较新的 Windows 10 亦自带;缺失时安装器会自动下载)。产物**未签名**:Windows 的 SmartScreen 提示属预期;macOS 首次打开可能报「"Panda" 已损坏,无法打开」——并非真损坏,这是 Gatekeeper 拦截无签名下载的文案,清掉隔离属性即可打开:
+
+  ```bash
+  xattr -cr /Applications/Panda.app
+  ```
 - **从源码运行**——见[开发](#开发)。
 
 ## 功能
